@@ -186,8 +186,26 @@ Favoriten, **Gesehen-Markierung**, private Notizen, **Bewertung von 1 bis 5**
 hell/dunkel/Systemvorgabe, Offline-Betrieb per Service Worker, installierbar
 als PWA.
 
-Im Menue oben rechts: Auswahl sichern (JSON), Datei laden, und die
-**Gesehen-Liste als CSV** - mit Tag, Zeit, Spielort, eigener Note und Notiz,
+Filter: Favoriten, Bewertet, **Gesehen**, **Beide** (nur mit Partner-Datei),
+Genre, Spielort - alle kombinierbar.
+
+## Team ohne Server
+
+Beide Seiten exportieren ihre Auswahl ("Auswahl sichern") und laden die Datei
+der anderen ueber **"Datei von Partner:in laden"**. Danach stehen die
+Markierungen nebeneinander: die eigene Note gefuellt, die der Partner:in
+umrandet in derselben Farbe. Der Filter **"Beide"** zeigt, wo sich beide einig
+sind (beide Favorit oder beide Note 1-2) - die Frage, die ein Team wirklich
+hat.
+
+Der Aufbau ist absichtlich so gewaehlt, dass **jede Seite ausschliesslich ihre
+eigene Datei schreibt**. Damit kann beim Zusammenfuehren nichts kollidieren -
+es gibt keine Konflikte, die man aufloesen muesste. Genau dieses Modell laesst
+sich spaeter ohne Aenderung an der Logik auf eine Online-Ablage heben; nur der
+Dateitransport wird dann automatisch.
+
+Im Menue oben rechts: Auswahl sichern (JSON), Datei laden, Partner-Datei, und
+die **Gesehen-Liste als CSV** - mit Tag, Zeit, Spielort, eigener Note und Notiz,
 also als Mitschrift des Festivals und nicht als reine Namensliste.
 
 Die Note steht in der Liste als **Zahl** und nicht nur als Farbe - Farbe

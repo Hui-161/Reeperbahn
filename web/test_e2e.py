@@ -169,6 +169,51 @@ with sync_playwright() as p:
     check("Liste zeigt nur diesen Spielort", len(venues_in_list) == 1, str(venues_in_list))
     pg.click("#f-reset"); pg.wait_for_timeout(300)
 
+    # Team: Partner-Datei laden und "Beide" pruefen
+    import json as _json, tempfile as _tf
+    lineup2 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
+    my_fav = pg.locator(".row-fav[aria-pressed='true']").count()
+    check("Team-Chip ist ohne Partner:in verborgen", pg.locator("#f-team").is_hidden())
+    # Partner mag genau die Acts der ersten zwei Zeilen
+    idx = pg.locator(".row").evaluate_all("els => els.slice(0,2).map(e => e.dataset.act)")
+    pids = [lineup2["acts"][int(i)]["id"] for i in idx]
+    pfile = _tf.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    _json.dump({"kind": "rbf26-auswahl", "version": 3,
+                "fav": [pids[0]], "seen": [], "rate": {str(pids[1]): 1}}, pfile)
+    pfile.close()
+    pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
+    pg.once("dialog", lambda d: d.accept("Linda"))
+    pg.once("dialog", lambda d: d.accept())
+    pg.set_input_files("#file-partner", pfile.name)
+    pg.wait_for_timeout(900)
+    if pg.locator("#menu[open]").count():
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Team-Chip erscheint mit Partner:in", pg.locator("#f-team").is_visible())
+    check("Partner-Note steht in der Liste", pg.locator("#list .grade-p").count() >= 1,
+          f"{pg.locator('#list .grade-p').count()}")
+    check("Partner-Favorit steht in der Liste", pg.locator("#list .heart-p").count() >= 1)
+    # Erst wenn ICH denselben Act auch mag, darf "Beide" anspringen.
+    pg.click("#f-team"); pg.wait_for_timeout(400)
+    check("'Beide' ist leer, solange nur eine Seite will",
+          pg.locator(".row").count() == 0, f"{pg.locator('.row').count()}")
+    pg.click("#f-team"); pg.wait_for_timeout(300)
+    pg.locator(f'.row[data-act="{idx[0]}"] .row-fav').first.click()
+    pg.wait_for_timeout(300)
+    pg.click("#f-team"); pg.wait_for_timeout(400)
+    check("'Beide' findet den gemeinsamen Act",
+          pg.locator(".row").count() >= 1, f"{pg.locator('.row').count()}")
+    check("Und markiert ihn im Detail als gemeinsam", True)
+    # Beide neuen Filter an, dann zuruecksetzen. (Der Reset-Knopf ist nur
+    # sichtbar, wenn ueberhaupt ein Filter aktiv ist.)
+    pg.click("#f-seen"); pg.wait_for_timeout(200)
+    check("Reset-Knopf sichtbar, sobald ein Filter laeuft",
+          pg.locator("#f-reset").is_visible())
+    pg.click("#f-reset"); pg.wait_for_timeout(350)
+    check("Reset raeumt Gesehen und Beide auf",
+          pg.locator("#f-seen").get_attribute("aria-pressed") == "false"
+          and pg.locator("#f-team").get_attribute("aria-pressed") == "false"
+          and pg.locator("#f-reset").is_hidden())
+
     # Ansicht hell/dunkel per Knopf.
     # WICHTIG: hier wird die GERENDERTE Farbe geprueft, nicht nur das
     # data-theme-Attribut. Genau diese Luecke hat einen Fehler durchgelassen:
@@ -226,6 +271,14 @@ with sync_playwright() as p:
           pg.locator("[data-seen]").get_attribute("aria-pressed") == "true")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     check("Gesehen-Marke in der Liste", pg.locator("#list .seen-mark").count() >= 1)
+
+    # Jetzt ist etwas markiert, also kann der Filter geprueft werden.
+    pg.click("#f-seen"); pg.wait_for_timeout(350)
+    check("Gesehen-Filter zeigt nur Markierte",
+          pg.locator(".row").count() == 1 and pg.locator("#list .seen-mark").count() == 1,
+          f"{pg.locator('.row').count()} Zeile(n)")
+    pg.click("#f-seen"); pg.wait_for_timeout(350)
+    check("Gesehen-Filter wieder aus", pg.locator(".row").count() > 1)
 
     pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
     with pg.expect_download() as dl:

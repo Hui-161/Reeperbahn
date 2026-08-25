@@ -43,6 +43,10 @@ const anchor = store.get('anchor', {});
 /* Vorschlaege aus taste.py. Getrennt von "rate": die eigene Bewertung
    gewinnt immer, der Vorschlag ist nur eine Vorbelegung. */
 let hint = store.get('hint', {});
+/* Auswahl der Partner:in - nur gelesen, niemals veraendert. Getrennt zu
+   halten ist der ganze Trick: jede Seite schreibt ausschliesslich ihre eigene
+   Datei, damit kann beim Zusammenfuehren nichts kollidieren. */
+let partner = store.get('partner', null);
 
 const saveFav = () => store.set('fav', [...fav]);
 const saveSeen = () => store.set('seen', [...seen]);
@@ -104,6 +108,8 @@ const S = {
   rateOnly: false,
   genres: new Set(),
   venues: new Set(),
+  seenOnly: false,
+  teamOnly: false,
   mapOn: false,
 };
 
@@ -117,6 +123,7 @@ const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
   genrebox: $('#genrebox'), venuebox: $('#venuebox'),
   detail: $('#detail'), menu: $('#menu'), meta: $('#meta'),
+  filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
 };
 
@@ -124,6 +131,16 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const hhmm = (iso) => iso ? iso.slice(11, 16) : '';
+const pRate = (id) => (partner && partner.rate ? +partner.rate[id] || 0 : 0);
+const pFav = (id) => !!(partner && partner.fav && partner.fav.includes(id));
+const pSeen = (id) => !!(partner && partner.seen && partner.seen.includes(id));
+/* "Beide": ein Act, den beide als Favorit haben oder beide mit 1-2 bewerten.
+   Das ist die Frage, die ein Team wirklich hat - wo wollen wir zusammen hin. */
+const bothWant = (id) => {
+  const mine = fav.has(id) || (+rate[id] > 0 && +rate[id] <= 2);
+  const theirs = pFav(id) || (pRate(id) > 0 && pRate(id) <= 2);
+  return mine && theirs;
+};
 const fold = (s) => String(s ?? '').toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/ø/g, 'o').replace(/ß/g, 'ss');
@@ -215,6 +232,8 @@ function visibleShows() {
 
     if (S.favOnly && !fav.has(act.id)) continue;
     if (S.rateOnly && !rate[act.id]) continue;
+    if (S.seenOnly && !seen.has(act.id)) continue;
+    if (S.teamOnly && !bothWant(act.id)) continue;
 
     if (S.venues.size && (sh.v == null || !S.venues.has(sh.v))) continue;
 
@@ -240,11 +259,12 @@ function visibleShows() {
 /* ---------- Liste ---------- */
 
 function render() {
-  const anyFilter = S.favOnly || S.rateOnly || S.genres.size > 0
-    || S.venues.size > 0 || S.q.trim() !== '';
+  const anyFilter = S.favOnly || S.rateOnly || S.seenOnly || S.teamOnly
+    || S.genres.size > 0 || S.venues.size > 0 || S.q.trim() !== '';
   $('#f-reset').hidden = !anyFilter;
   $('#f-genre').classList.toggle('on', S.genres.size > 0);
   $('#f-genre').textContent = S.genres.size ? `Genres (${S.genres.size})` : 'Genres';
+  $('#f-team').hidden = !partner;
   $('#f-venue').classList.toggle('on', S.venues.size > 0);
   $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
 
@@ -293,7 +313,11 @@ function row(sh, act) {
         seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${
         r ? `<span class="grade grade-${r}" title="Meine Note: ${r}">${r}</span>`
           : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
-              title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : '')}</span>
+              title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : '')}${
+        pRate(act.id) ? `<span class="grade grade-p grade-p-${pRate(act.id)}"
+          title="${esc(partnerName())}: Note ${pRate(act.id)}">${pRate(act.id)}</span>` : ''}${
+        pFav(act.id) ? `<span class="heart-p"
+          title="${esc(partnerName())}: Favorit">♥</span>` : ''}</span>
       <span class="row-sub">${venue
         ? `<span class="venue" data-venue="${sh.v}">${esc(venue.n)}</span>` : 'Spielort offen'}
         ${act.c ? ' · ' + esc(act.c) : ''}</span>
@@ -356,6 +380,17 @@ function openDetail(ai) {
       </div>
       <button class="icon-btn d-close" data-close aria-label="Schließen">✕</button>
     </div>
+
+    ${partner ? `<div class="d-section">
+      <h3>Team</h3>
+      <div class="suggestion">
+        <span>${esc(partnerName())}:
+        ${pRate(act.id) ? `<b>Note ${pRate(act.id)}</b>` : 'keine Note'}${
+          pFav(act.id) ? ' · <b>Favorit</b>' : ''}${
+          pSeen(act.id) ? ' · gesehen' : ''}${
+          bothWant(act.id) ? ' — <b>ihr wollt beide hin</b>' : ''}</span>
+      </div>
+    </div>` : ''}
 
     ${hint[act.id] ? `<div class="d-section">
       <div class="suggestion">
@@ -658,6 +693,18 @@ $('#f-rate').addEventListener('click', (e) => {
   render();
 });
 
+$('#f-seen').addEventListener('click', (e) => {
+  S.seenOnly = !S.seenOnly;
+  e.currentTarget.setAttribute('aria-pressed', String(S.seenOnly));
+  render();
+});
+
+$('#f-team').addEventListener('click', (e) => {
+  S.teamOnly = !S.teamOnly;
+  e.currentTarget.setAttribute('aria-pressed', String(S.teamOnly));
+  render();
+});
+
 $('#f-genre').addEventListener('click', () => {
   const open = el.genrebox.hidden;
   el.genrebox.hidden = !open;
@@ -673,10 +720,13 @@ $('#f-venue').addEventListener('click', () => {
 });
 
 $('#f-reset').addEventListener('click', () => {
-  S.favOnly = S.rateOnly = false; S.genres.clear(); S.venues.clear(); S.q = '';
+  S.favOnly = S.rateOnly = S.seenOnly = S.teamOnly = false;
+  S.genres.clear(); S.venues.clear(); S.q = '';
   el.q.value = ''; el.searchbar.hidden = true;
   $('#f-fav').setAttribute('aria-pressed', 'false');
   $('#f-rate').setAttribute('aria-pressed', 'false');
+  $('#f-seen').setAttribute('aria-pressed', 'false');
+  $('#f-team').setAttribute('aria-pressed', 'false');
   renderGenres();
   renderVenues();
   render();
@@ -729,7 +779,7 @@ function download(name, text, type) {
 
 function exportChoice() {
   download('reeperbahn-auswahl.json', JSON.stringify({
-    kind: 'rbf26-auswahl', version: 2,
+    kind: 'rbf26-auswahl', version: 3,
     fav: [...fav], seen: [...seen], note, rate, hint,
   }, null, 2), 'application/json');
 }
@@ -832,6 +882,7 @@ $('#btn-menu').addEventListener('click', () => {
     `${fav.size} Favoriten · ${rated} bewertet · ${seen.size} gesehen · `
     + `${Object.keys(note).length} Notizen`;
   applyTheme();
+  partnerInfo();
   el.menu.showModal();
 });
 
@@ -842,6 +893,66 @@ el.menu.addEventListener('click', (e) => {
 $('#m-export').addEventListener('click', () => { el.menu.close(); exportChoice(); });
 $('#m-import').addEventListener('click', () => { el.menu.close(); el.file.click(); });
 $('#m-seen').addEventListener('click', () => { el.menu.close(); exportSeen(); });
+$('#m-partner').addEventListener('click', () => el.filePartner.click());
+$('#m-partner-clear').addEventListener('click', () => {
+  partner = null;
+  store.set('partner', null);
+  S.teamOnly = false;
+  $('#f-team').setAttribute('aria-pressed', 'false');
+  partnerInfo();
+  render();
+});
+
+function partnerName() {
+  return (partner && partner.name) || 'Partner:in';
+}
+
+function partnerInfo() {
+  const note = $('#m-partner-note');
+  const clear = $('#m-partner-clear');
+  if (!note) return;
+  if (!partner) {
+    clear.hidden = true;
+    note.textContent = 'Noch keine Partner-Datei geladen. Beide exportieren ihre '
+      + 'Auswahl über „Auswahl sichern“ und schicken sie sich zu — danach stehen '
+      + 'die Markierungen beider Seiten nebeneinander.';
+    return;
+  }
+  clear.hidden = false;
+  const both = S.data
+    ? S.data.acts.filter((a) => bothWant(a.id)).length : 0;
+  note.textContent = `${partnerName()}: ${(partner.fav || []).length} Favoriten, `
+    + `${Object.keys(partner.rate || {}).length} bewertet, `
+    + `${(partner.seen || []).length} gesehen · ${both} Acts wollt ihr beide sehen.`;
+}
+
+el.filePartner.addEventListener('change', async () => {
+  const f = el.filePartner.files && el.filePartner.files[0];
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); }
+  catch (err) { alert('Die Datei ist kein gültiges JSON.'); return; }
+  el.filePartner.value = '';
+  if (data.kind !== 'rbf26-auswahl') {
+    alert('Das ist kein Export dieser App. Die Partner:in muss im Menü '
+        + '„Auswahl sichern“ verwenden.');
+    return;
+  }
+  // Der Name wird erfragt, nicht geraten - die Datei enthaelt keinen.
+  const name = (prompt('Wie soll die Person heißen?', data.name || 'Partner:in')
+    || 'Partner:in').slice(0, 24);
+  partner = {
+    name,
+    fav: (data.fav || []).map(Number),
+    seen: (data.seen || []).map(Number),
+    rate: data.rate || {},
+    loaded_at: new Date().toISOString().slice(0, 16).replace('T', ' '),
+  };
+  store.set('partner', partner);
+  partnerInfo();
+  render();
+  alert(`${name} übernommen. Der Filter „Beide“ zeigt jetzt, wo ihr euch einig seid.`);
+});
 
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

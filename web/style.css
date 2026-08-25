@@ -310,6 +310,21 @@ main { min-height: 60vh; }
   vertical-align: .05em;
   color: var(--on-scale);
 }
+/* Partner-Note: gleiche Farbe, aber umrandet statt gefuellt. So ist auf einen
+   Blick klar, wessen Einschaetzung man sieht - Farbe allein wuerde beide
+   verwechselbar machen. */
+.grade-p {
+  background: transparent;
+  border: 2px solid currentColor;
+  font-size: .62rem;
+}
+.grade-p-1 { color: var(--r1); }
+.grade-p-2 { color: var(--r2); }
+.grade-p-3 { color: var(--r3); }
+.grade-p-4 { color: var(--r4); }
+.grade-p-5 { color: var(--r5); }
+.heart-p { margin-left: .3rem; font-size: .8rem; color: var(--accent); opacity: .75; }
+
 .grade-1 { background: var(--r1); }
 .grade-2 { background: var(--r2); }
 .grade-3 { background: var(--r3); }

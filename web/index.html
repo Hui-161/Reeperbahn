@@ -52,6 +52,8 @@
     <button id="f-rate" class="chip" aria-pressed="false">
       <span class="grade grade-1" aria-hidden="true">1</span> Bewertet
     </button>
+    <button id="f-seen" class="chip" aria-pressed="false">✓ Gesehen</button>
+    <button id="f-team" class="chip" aria-pressed="false" hidden>Beide</button>
     <button id="f-genre" class="chip">Genres</button>
     <button id="f-venue" class="chip">Spielorte</button>
     <button id="f-reset" class="chip chip-ghost" hidden>Zurücksetzen</button>
@@ -94,12 +96,26 @@
       </div>
       <p class="menu-note" id="m-stats"></p>
     </div>
+
+    <div class="d-section">
+      <h3>Team</h3>
+      <div class="menu-list">
+        <button type="button" id="m-partner">Datei von Partner:in laden</button>
+        <button type="button" id="m-partner-clear" hidden>Partner:in entfernen</button>
+      </div>
+      <p class="menu-note" id="m-partner-note">
+        Noch keine Partner-Datei geladen. Beide exportieren ihre Auswahl über
+        „Auswahl sichern“ und schicken sie sich zu — danach stehen die
+        Markierungen beider Seiten nebeneinander.
+      </p>
+    </div>
   </div>
 </dialog>
 
 <footer class="foot">
   <span id="meta"></span>
   <input id="file" type="file" accept="application/json,.json" hidden>
+<input id="file-partner" type="file" accept="application/json,.json" hidden>
   <span class="foot-note">Private Auswahl, nur auf diesem Gerät gespeichert.</span>
 </footer>
 
