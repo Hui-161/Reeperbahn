@@ -100,9 +100,15 @@
     <div class="d-section">
       <h3>Team</h3>
       <div class="menu-list">
+        <button type="button" id="m-sync" hidden>Jetzt abgleichen</button>
+        <button type="button" id="m-team-new" >Team einrichten (online)</button>
+        <button type="button" id="m-team-join">Einem Team beitreten</button>
+        <button type="button" id="m-team-share" hidden>Beitrittslink kopieren</button>
+        <button type="button" id="m-team-leave" hidden>Team verlassen</button>
         <button type="button" id="m-partner">Datei von Partner:in laden</button>
         <button type="button" id="m-partner-clear" hidden>Partner:in entfernen</button>
       </div>
+      <p class="menu-note" id="m-team-note"></p>
       <p class="menu-note" id="m-partner-note">
         Noch keine Partner-Datei geladen. Beide exportieren ihre Auswahl über
         „Auswahl sichern“ und schicken sie sich zu — danach stehen die
@@ -121,6 +127,7 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/leaflet/leaflet.markercluster.js"></script>
+<script src="team.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

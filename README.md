@@ -189,7 +189,26 @@ als PWA.
 Filter: Favoriten, Bewertet, **Gesehen**, **Beide** (nur mit Partner-Datei),
 Genre, Spielort - alle kombinierbar.
 
-## Team ohne Server
+## Team online (verschluesselt)
+
+Ueber das Menue: **Team einrichten** erzeugt eine zufaellige Team-ID, dazu
+waehlt man eine Passphrase. Die Partner:in tritt mit Beitrittslink und
+derselben Passphrase bei. Danach gleicht sich alles automatisch ab - nach jeder
+eigenen Aenderung verzoegert um vier Sekunden, beim Start, und beim Wegwechseln
+der Seite.
+
+Der Server (`worker/index.js`, Cloudflare KV) sieht **nie Klartext**: die App
+verschluesselt im Browser mit AES-GCM, der Schluessel kommt per PBKDF2 aus der
+Passphrase. Aus derselben Passphrase entsteht ein Schreib-Token, von dem nur
+der SHA-256-Hash abgelegt wird.
+
+Das ist **keine Anmeldung**: wer Team-ID und Passphrase hat, ist im Team. Fuer
+zwei Personen und Konzertnoten ist das angemessen - Link und Passphrase aber
+ueber getrennte Kanaele austauschen.
+
+Einrichtung des KV-Namespace: [`DEPLOY.md`](DEPLOY.md).
+
+## Team ohne Server (Datei-Variante)
 
 Beide Seiten exportieren ihre Auswahl ("Auswahl sichern") und laden die Datei
 der anderen ueber **"Datei von Partner:in laden"**. Danach stehen die

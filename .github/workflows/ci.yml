@@ -29,6 +29,10 @@ jobs:
           pip install --quiet playwright
           python3 -m playwright install --with-deps chromium
 
+      - name: Worker-Syntax pruefen
+        run: node --check worker/index.js && node --check web/app.js
+             && node --check web/team.js && node --check web/sw.js
+
       - name: Web-App im Browser testen (mit echten Headern)
         run: |
           python3 web/serve_local.py &
@@ -37,3 +41,6 @@ jobs:
             sleep 1
           done
           python3 web/test_e2e.py
+
+      - name: Team-Abgleich zwischen zwei Geraeten testen
+        run: BASE_URL=http://127.0.0.1:8898 python3 web/test_team.py

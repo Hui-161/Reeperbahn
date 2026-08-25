@@ -99,6 +99,41 @@ Nach dem ersten Deploy ist die Seite unter `<projektname>.pages.dev`
 erreichbar. Damit erst pruefen, ob alles laedt, bevor die eigene Domain
 dazukommt.
 
+## Team-Abgleich einrichten (KV-Namespace)
+
+Der Team-Abgleich braucht einen KV-Namespace. Einmalig:
+
+```bash
+npx wrangler kv namespace create TEAM
+```
+
+Der Befehl gibt eine `id` aus. Die in `wrangler.jsonc` bei
+`kv_namespaces` anstelle von `PLATZHALTER_KV_ID` eintragen und committen:
+
+```jsonc
+"kv_namespaces": [
+  { "binding": "TEAM", "id": "hier_die_ausgegebene_id" }
+]
+```
+
+Alternativ im Dashboard: **Storage & Databases → KV → Create**, dann im
+Worker unter **Settings → Bindings** als `TEAM` verknuepfen.
+
+Solange kein Namespace verknuepft ist, antwortet die API mit
+`{"error":"kv_missing"}` und die App bleibt bei der Datei-Variante nutzbar.
+
+**Was gespeichert wird:** ausschliesslich Chiffrat, Nonce und Zeitstempel. Die
+App verschluesselt im Browser (AES-GCM, Schluessel per PBKDF2 aus einer
+Passphrase, die nur das Team kennt). Cloudflare sieht keine Namen, keine
+Bewertungen, keine Notizen. Vom Schreib-Token wird nur der SHA-256-Hash
+abgelegt - wer den KV-Inhalt liest, kann damit nicht schreiben.
+
+**Was es nicht ist:** eine Anmeldung. Wer Team-ID und Passphrase hat, ist im
+Team. Deshalb: Link und Passphrase ueber **getrennte** Kanaele austauschen.
+
+Eintraege verfallen nach 180 Tagen ohne Schreibzugriff, verwaiste Teams
+raeumen sich also selbst auf.
+
 ## hui161.de anbinden
 
 Voraussetzung: `hui161.de` liegt als Zone in demselben Cloudflare-Konto, die

@@ -47,6 +47,8 @@ let hint = store.get('hint', {});
    halten ist der ganze Trick: jede Seite schreibt ausschliesslich ihre eigene
    Datei, damit kann beim Zusammenfuehren nichts kollidieren. */
 let partner = store.get('partner', null);
+const team = window.RBFTeam ? window.RBFTeam.createTeamClient(store) : null;
+let syncing = false;
 
 const saveFav = () => store.set('fav', [...fav]);
 const saveSeen = () => store.set('seen', [...seen]);
@@ -587,6 +589,7 @@ document.addEventListener('click', (e) => {
     const id = +favBtn.dataset.fav;
     fav.has(id) ? fav.delete(id) : fav.add(id);
     saveFav();
+    scheduleSync();
     const on = fav.has(id);
     // An Ort und Stelle aktualisieren, damit die Liste nicht springt.
     for (const n of document.querySelectorAll(`[data-fav="${id}"]`)) {
@@ -606,6 +609,7 @@ document.addEventListener('click', (e) => {
     const id = +seenBtn.dataset.seen;
     seen.has(id) ? seen.delete(id) : seen.add(id);
     saveSeen();
+    scheduleSync();
     const on = seen.has(id);
     for (const n of document.querySelectorAll(`[data-seen="${id}"]`)) {
       n.setAttribute('aria-pressed', String(on));
@@ -621,6 +625,7 @@ document.addEventListener('click', (e) => {
     const val = +rateBtn.dataset.r;
     if (+rate[id] === val) delete rate[id]; else rate[id] = val;
     store.set('rate', rate);
+    scheduleSync();
     for (const b of el.detail.querySelectorAll('[data-r]')) {
       b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
     }
@@ -883,6 +888,7 @@ $('#btn-menu').addEventListener('click', () => {
     + `${Object.keys(note).length} Notizen`;
   applyTheme();
   partnerInfo();
+  teamInfo();
   el.menu.showModal();
 });
 
@@ -893,6 +899,143 @@ el.menu.addEventListener('click', (e) => {
 $('#m-export').addEventListener('click', () => { el.menu.close(); exportChoice(); });
 $('#m-import').addEventListener('click', () => { el.menu.close(); el.file.click(); });
 $('#m-seen').addEventListener('click', () => { el.menu.close(); exportSeen(); });
+/* ---------- Team online ---------- */
+
+function teamInfo() {
+  const note = $('#m-team-note');
+  const c = team && team.config;
+  const on = !!c;
+  for (const [id, show] of [['m-sync', on], ['m-team-share', on], ['m-team-leave', on],
+                            ['m-team-new', !on], ['m-team-join', !on]]) {
+    const b = $('#' + id);
+    if (b) b.hidden = !show;
+  }
+  if (!note) return;
+  if (!on) {
+    note.textContent = 'Kein Online-Team. Ohne Team funktioniert der Austausch '
+      + 'auch über Dateien.';
+    return;
+  }
+  note.textContent = `Team aktiv als „${c.name}“. Ende-zu-Ende verschlüsselt — `
+    + 'der Server sieht nur Chiffrat. Wer Link und Passphrase hat, ist im Team.';
+}
+
+function myTeamDoc() {
+  return { fav: [...fav], seen: [...seen], rate, at: new Date().toISOString() };
+}
+
+/* Mehrere Mitglieder werden zu EINER Partneransicht zusammengefasst: fuer zwei
+   Personen ist das genau richtig, bei mehr sieht man die Vereinigung. */
+function adoptOthers(others) {
+  const usable = others.filter((o) => !o.undecryptable);
+  if (!usable.length) return 0;
+  const merged = { name: usable.map((o) => o.name || 'Team').join(', '),
+                   fav: [], seen: [], rate: {} };
+  for (const o of usable) {
+    for (const id of (o.fav || [])) merged.fav.push(+id);
+    for (const id of (o.seen || [])) merged.seen.push(+id);
+    for (const [id, v] of Object.entries(o.rate || {})) {
+      // Bei mehreren Personen gewinnt die bessere Note.
+      if (!merged.rate[id] || +v < +merged.rate[id]) merged.rate[id] = +v;
+    }
+  }
+  partner = merged;
+  store.set('partner', partner);
+  return usable.length;
+}
+
+/* Automatischer Abgleich nach eigenen Aenderungen. Ohne das muesste man
+   mitten im Konzert daran denken, "Jetzt abgleichen" zu druecken - und genau
+   das passiert nicht. Verzoegert, damit schnelles Durchtippen nicht jedes Mal
+   einen Schreibzugriff ausloest (KV erlaubt ohnehin nur einen pro Sekunde und
+   Schluessel). */
+const SYNC_DEBOUNCE_MS = 4000;
+let syncTimer = null;
+
+function scheduleSync() {
+  if (!team || !team.config) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => runSync(true), SYNC_DEBOUNCE_MS);
+}
+
+async function runSync(quiet) {
+  if (!team || !team.config || syncing) return;
+  syncing = true;
+  const note = $('#m-team-note');
+  if (note) note.textContent = 'Abgleich läuft …';
+  try {
+    const others = await team.sync(myTeamDoc());
+    const n = adoptOthers(others);
+    const undec = others.filter((o) => o.undecryptable).length;
+    teamInfo();
+    partnerInfo();
+    render();
+    if (!quiet) {
+      alert(n
+        ? `Abgeglichen. ${n} weitere Person(en) im Team.`
+        + (undec ? ` ${undec} Eintrag/Einträge nicht lesbar — dort weicht die `
+                 + 'Passphrase ab.' : '')
+        : 'Abgeglichen. Noch niemand sonst im Team.');
+    }
+  } catch (err) {
+    const msg = err.code === 'token_invalid'
+      ? 'Die Passphrase passt nicht zu diesem Team.'
+      : `Abgleich fehlgeschlagen: ${err.message}`;
+    if (note) note.textContent = msg;
+    if (!quiet) alert(msg);
+  } finally {
+    syncing = false;
+  }
+}
+
+$('#m-team-new').addEventListener('click', async () => {
+  const name = (prompt('Wie sollen die anderen dich sehen?', 'Ich') || '').trim();
+  if (!name) return;
+  const pass = (prompt('Passphrase für das Team. Beide brauchen genau dieselbe.\n'
+    + 'Mindestens 12 Zeichen, gern ein Satz.') || '').trim();
+  if (pass.length < 12) { alert('Zu kurz — mindestens 12 Zeichen.'); return; }
+  team.create(name, pass);
+  teamInfo();
+  el.menu.close();
+  await runSync(false);
+});
+
+$('#m-team-join').addEventListener('click', async () => {
+  const raw = (prompt('Beitrittslink oder Team-ID einfügen:') || '').trim();
+  const m = raw.match(/[A-Za-z0-9_-]{16,40}$/);
+  if (!m) { alert('Darin steckt keine Team-ID.'); return; }
+  const name = (prompt('Wie sollen die anderen dich sehen?', 'Ich') || '').trim();
+  if (!name) return;
+  const pass = (prompt('Passphrase des Teams:') || '').trim();
+  if (pass.length < 12) { alert('Zu kurz — mindestens 12 Zeichen.'); return; }
+  team.join(m[0], name, pass);
+  teamInfo();
+  el.menu.close();
+  await runSync(false);
+});
+
+$('#m-team-share').addEventListener('click', async () => {
+  const c = team.config;
+  const link = `${location.origin}${location.pathname}#team=${c.teamId}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    alert('Link kopiert. Die Passphrase NICHT über denselben Kanal schicken — '
+        + 'sonst hat ein Mitlesender beides.');
+  } catch (e) {
+    prompt('Link zum Kopieren:', link);
+  }
+});
+
+$('#m-team-leave').addEventListener('click', () => {
+  if (!confirm('Team verlassen? Deine eigenen Daten bleiben auf diesem Gerät.')) return;
+  team.leave();
+  teamInfo();
+  el.menu.close();
+  alert('Team verlassen. Das Dokument auf dem Server bleibt bis zum Ablauf liegen.');
+});
+
+$('#m-sync').addEventListener('click', () => { el.menu.close(); runSync(false); });
+
 $('#m-partner').addEventListener('click', () => el.filePartner.click());
 $('#m-partner-clear').addEventListener('click', () => {
   partner = null;
@@ -958,4 +1101,23 @@ if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
-load();
+/* Beitrittslink: #team=... im Fragment aufgreifen, aber nichts ohne Zutun
+   speichern - die Passphrase fehlt ja noch. */
+(function fromLink() {
+  const m = location.hash.match(/team=([A-Za-z0-9_-]{16,40})/);
+  if (!m || !team || team.config) return;
+  addEventListener('load', () => {
+    if (!confirm('Dieser Link lädt dich in ein Team ein. Beitreten?')) return;
+    history.replaceState(null, '', location.pathname);
+    $('#m-team-join').click();
+  });
+})();
+
+/* Wechselt man weg, bevor die Verzoegerung abgelaufen ist, waere die
+   Aenderung sonst erst beim naechsten Start draussen. */
+addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; runSync(true); }
+});
+
+load().then(() => { if (team && team.config) runSync(true); });

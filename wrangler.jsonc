@@ -8,6 +8,16 @@
   "name": "reeperbahn",
   "compatibility_date": "2026-08-25",
 
+  // Fallback fuer alles, was auf kein statisches Asset passt: die Team-API.
+  // run_worker_first bleibt AUS (Standard) - Assets gehen also am Worker
+  // vorbei, und die Regeln aus web/_headers gelten weiter fuer sie.
+  "main": "worker/index.js",
+
+  "kv_namespaces": [
+    // id wird beim Anlegen des Namespace eingesetzt, siehe DEPLOY.md
+    { "binding": "TEAM", "id": "PLATZHALTER_KV_ID" }
+  ],
+
   "assets": {
     // <- Hier steht "web". Pfad relativ zu dieser Datei.
     "directory": "./web",

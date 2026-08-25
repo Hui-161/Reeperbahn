@@ -14,10 +14,11 @@
  * fetch sofort fehl und der Cache greift; bei schlechtem Empfang bricht der
  * Timeout nach 2,5 s ab.
  */
-const V = 'rbf26-v3';
+const V = 'rbf26-v4';
 const TIMEOUT_MS = 2500;
 const SHELL = [
-  './', 'index.html', 'style.css', 'app.js', 'icon.svg', 'manifest.webmanifest',
+  './', 'index.html', 'style.css', 'app.js', 'team.js', 'icon.svg',
+  'manifest.webmanifest',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/leaflet.markercluster.js',
   'vendor/leaflet/MarkerCluster.css', 'vendor/leaflet/MarkerCluster.Default.css',
@@ -66,6 +67,10 @@ self.addEventListener('fetch', (e) => {
 
   // Fremde Hosts (Kuenstlerbilder) gehen direkt ans Netz.
   if (url.origin !== location.origin) return;
+
+  // Die Team-API niemals cachen: dort geht es um den aktuellen Stand, und ein
+  // zwischengespeicherter Abgleich waere schlimmer als keiner.
+  if (url.pathname.startsWith('/api/')) return;
 
   e.respondWith(networkFirst(req));
 });
