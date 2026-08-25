@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reeperbahn 2026</title>
+<meta name="description" content="Eigener Timetable für das Reeperbahn Festival 2026 — Genre-Filter, Favoriten, private Notizen, Karte.">
+<meta name="theme-color" content="#12111a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-row">
+    <h1>Reeperbahn <span>2026</span></h1>
+    <div class="top-actions">
+      <button id="btn-search" class="icon-btn" aria-label="Suche" title="Suche">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+      </button>
+      <button id="btn-map" class="icon-btn" aria-label="Karte" title="Karte" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <form id="searchbar" class="searchbar" hidden role="search" onsubmit="return false">
+    <input id="q" type="search" placeholder="Künstler:in, Genre, Spielort…"
+           autocomplete="off" autocorrect="off" spellcheck="false"
+           enterkeyhint="search" aria-label="Suchen">
+    <button type="button" id="q-clear" class="icon-btn" aria-label="Suche schließen">✕</button>
+  </form>
+
+  <nav id="days" class="days" aria-label="Festivaltage"></nav>
+
+  <div class="filters">
+    <button id="f-fav" class="chip chip-fav" aria-pressed="false">
+      <span class="heart" aria-hidden="true">♥</span> Favoriten
+    </button>
+    <button id="f-rate" class="chip" aria-pressed="false">
+      <span class="dot dot-gruen" aria-hidden="true"></span> Bewertet
+    </button>
+    <button id="f-genre" class="chip">Genres</button>
+    <button id="f-reset" class="chip chip-ghost" hidden>Zurücksetzen</button>
+  </div>
+
+  <div id="genrebox" class="genrebox" hidden></div>
+</header>
+
+<main>
+  <p id="status" class="status" role="status">Lade Programm…</p>
+  <div id="list" class="list"></div>
+  <div id="map" class="map" hidden></div>
+</main>
+
+<dialog id="detail" class="detail" aria-label="Details"></dialog>
+
+<footer class="foot">
+  <span id="meta"></span>
+  <span class="foot-note">Private Auswahl, nur auf diesem Gerät gespeichert.</span>
+</footer>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

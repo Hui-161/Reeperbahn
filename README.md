@@ -155,7 +155,12 @@ aendern. Also: privat nutzen, nicht publizieren.
 | `sync.py` | ein Befehl: holen, Snapshot, Aenderungen melden |
 | `fetch_venues.py` | Spielorte mit Koordinaten, Adresse, Kapazitaet, Barrierefreiheit |
 | `discover.py` | Discovery-Probe — nur noetig, wenn die Seite umgebaut wird |
+| `build_web.py` | baut `web/data/lineup.json` fuer die App |
+| `web/` | die Web-App: statisch, kein Build-Schritt |
+| `web/serve_local.py` | lokaler Server, sendet die echten Cloudflare-Header |
+| `web/test_e2e.py` | Browser-Regressionstest (22 Pruefungen) |
 | `BACKLOG.md` | Verbesserungswuensche, bewertet gegen die Datenlage |
+| `DEPLOY.md` | Cloudflare Pages + eigene Domain |
 | `data/snapshots/` | Historie — **gehoert ins Repository**, dagegen laeuft der Diff |
 | `.github/workflows/lineup-check.yml` | taeglicher Check, Issue bei Aenderungen |
 
@@ -165,6 +170,33 @@ sie sind die Historie.
 
 Alles laeuft mit der **Python-Standardbibliothek**, kein `pip install`.
 Getestet mit Python 3.11.
+
+## Die Web-App
+
+Statische Seite, **kein Build-Schritt**: kein npm, kein Bundler, keine
+Node-Version, die in zwei Jahren nicht mehr baut. Leaflet liegt versioniert
+im Repo, sonst gibt es keine Abhaengigkeiten.
+
+Enthalten: Timetable nach Festivaltag, Genre-Filter (mit eigenem Eimer fuer
+Acts *ohne* Genre-Angabe), Favoriten, private Notizen und Ampelbewertung pro
+Act, Volltextsuche ueber alle Tage, Karte mit allen Spielorten, Offline-Betrieb
+per Service Worker, installierbar als PWA.
+
+Eigener Zustand (Favoriten, Notizen, Ampel) bleibt im Browser des Geraets —
+kein Server, kein Konto.
+
+**Festivaltag statt Kalendertag:** ein Auftritt um 00:30 zaehlt zur Nacht des
+Vortags (Grenze 05:00). Ohne das entsteht ein Tages-Tab mit zwei Auftritten,
+und wer Samstagnacht sucht, findet sie unter Sonntag. Betrifft aktuell 12
+Auftritte.
+
+Aufsetzen und Deployment: [`DEPLOY.md`](DEPLOY.md).
+
+```bash
+python3 build_web.py             # Daten fuer die App bauen
+python3 web/serve_local.py       # lokal ansehen, mit echten Headern
+python3 web/test_e2e.py          # Browsertest
+```
 
 ## Nutzung
 

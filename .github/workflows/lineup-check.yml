@@ -1,7 +1,7 @@
 name: lineup-check
 
-# Taeglicher Abruf des Line-ups. Bei Aenderungen wird ein Issue angelegt und
-# der neue Snapshot committet. Ohne Aenderungen passiert nichts.
+# Taeglicher Abruf. Bei Aenderungen: Issue anlegen, Snapshot und Web-Daten
+# committen. Der Commit loest das Cloudflare-Pages-Deployment aus.
 on:
   schedule:
     - cron: "30 5 * * *"
@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Eigene Tests
+        run: python3 rbf_core.py selftest
+
       - name: Line-up abrufen und vergleichen
         id: sync
         run: |
@@ -39,6 +42,12 @@ jobs:
             exit 1
           fi
           exit 0
+
+      - name: Spielorte pruefen
+        run: python3 fetch_venues.py --check
+
+      - name: Web-Daten neu bauen
+        run: python3 build_web.py
 
       - name: Aenderungen in die Job-Zusammenfassung
         if: steps.sync.outputs.code == '10'
@@ -60,14 +69,14 @@ jobs:
             --title "Line-up-Aenderungen $(date -u +%F)" \
             --body-file diff.txt
 
-      - name: Neuen Snapshot committen
+      - name: Snapshot und Web-Daten committen
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/snapshots
+          git add data/snapshots web/data
           if git diff --staged --quiet; then
-            echo "Kein neuer Snapshot."
+            echo "Nichts zu committen."
           else
-            git commit -m "Line-up-Snapshot $(date -u +%F)"
+            git commit -m "Line-up-Aktualisierung $(date -u +%F)"
             git push
           fi

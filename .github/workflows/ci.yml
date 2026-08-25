@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Datenschicht testen
+        run: python3 rbf_core.py selftest
+
+      - name: Web-Daten aus dem eingecheckten Snapshot bauen
+        run: python3 build_web.py --offline || python3 build_web.py
+
+      - name: Browser installieren
+        run: |
+          pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Web-App im Browser testen (mit echten Headern)
+        run: |
+          python3 web/serve_local.py &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8898/ >/dev/null && break
+            sleep 1
+          done
+          python3 web/test_e2e.py

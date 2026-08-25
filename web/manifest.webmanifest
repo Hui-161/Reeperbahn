@@ -1,0 +1,13 @@
+{
+  "name": "Reeperbahn 2026 — eigener Timetable",
+  "short_name": "Reeperbahn 26",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#12111a",
+  "theme_color": "#12111a",
+  "lang": "de",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
