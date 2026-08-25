@@ -23,7 +23,60 @@ reeperbahn.hui161.de
 sich den Code ueber die GitHub-App-Verknuepfung, und der Workflow braucht nur
 das ohnehin vorhandene `GITHUB_TOKEN`.
 
-## Schritt 1: Cloudflare Pages verbinden
+## Zwei Wege: Workers oder Pages
+
+Cloudflare bietet fuer dasselbe Ziel zwei Produkte an, und die Oberflaechen
+sehen unterschiedlich aus. **Welches man hat, erkennt man an der
+Build-Konfiguration:**
+
+| Man sieht | Produkt | Wo steht das Asset-Verzeichnis? |
+|---|---|---|
+| `npx wrangler deploy` als *Deploy command* | **Workers** | in `wrangler.jsonc` im Repo |
+| Feld *Build output directory* | **Pages** | im Dashboard |
+
+Bei **Workers** gibt es das Feld "Build output directory" **nicht**. Wer es dort
+sucht, sucht vergeblich - das ist der haeufigste Stolperstein.
+
+## Weg A: Workers (aktuell eingerichtet)
+
+Die Datei `wrangler.jsonc` im Repo-Wurzelverzeichnis erledigt alles:
+
+```jsonc
+{
+  "name": "reeperbahn",
+  "compatibility_date": "2026-08-25",
+  "assets": { "directory": "./web", "html_handling": "auto-trailing-slash" }
+}
+```
+
+`assets.directory` ist die Stelle, an der `web` steht. Bewusst **ohne**
+`main`-Eintrag: ohne Worker-Skript verlassen Requests den Asset-Pfad nicht,
+es gibt also keinen Cold Start und keine CPU-Abrechnung.
+
+Im Dashboard bleiben dann:
+
+| Feld | Wert |
+|---|---|
+| Build command | leer (`None`) |
+| Deploy command | `npx wrangler deploy` |
+| Root directory | `/` |
+| Production branch | `main` |
+
+**`_headers` gilt auch hier.** Workers mit Static Assets unterstuetzt
+`_headers` und `_redirects` genauso wie Pages, solange die Antwort aus dem
+Asset-Pfad kommt - und das ist bei uns immer der Fall, weil es kein
+Worker-Skript gibt. Kaeme spaeter eines dazu, muessten die Header dort
+gesetzt werden.
+
+**Was noch fehlt:** Workers Builds braucht ein API-Token, um deployen zu
+duerfen. Steht im Dashboard *"Configured API token unavailable"*, schlaegt
+der Deploy fehl. Das Token wird unter **Manage → API token** hinterlegt;
+Cloudflare kann eines mit den passenden Rechten selbst anlegen. Das Token
+gehoert ins Cloudflare-Dashboard und in keine Datei im Repo.
+
+## Weg B: Pages (Alternative)
+
+Nur noetig, wenn statt Workers ein Pages-Projekt verwendet werden soll.
 
 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** →
 **Connect to Git** → dieses Repository auswaehlen.
@@ -46,14 +99,15 @@ Nach dem ersten Deploy ist die Seite unter `<projektname>.pages.dev`
 erreichbar. Damit erst pruefen, ob alles laedt, bevor die eigene Domain
 dazukommt.
 
-## Schritt 2: hui161.de anbinden
+## hui161.de anbinden
 
 Voraussetzung: `hui161.de` liegt als Zone in demselben Cloudflare-Konto, die
 Nameserver der Domain zeigen also auf Cloudflare. Steht die Domain noch bei
 einem anderen Anbieter, muss sie zuerst als Zone hinzugefuegt und die
 Nameserver umgestellt werden.
 
-Im Pages-Projekt → **Custom domains** → **Set up a custom domain**.
+Im Projekt → **Custom domains** (bei Workers: **Settings → Domains & Routes**)
+→ Domain hinzufuegen.
 
 **Empfehlung: eine Subdomain.**
 
@@ -78,7 +132,7 @@ gestellt, greifen die Regeln aus `web/_headers` nicht.
 Das TLS-Zertifikat stellt Cloudflare selbst aus; das dauert nach dem
 Anlegen ein paar Minuten.
 
-## Schritt 3: Rechte fuer den Workflow
+## Rechte fuer den GitHub-Workflow
 
 Damit der taegliche Lauf den Snapshot committen und ein Issue anlegen kann:
 

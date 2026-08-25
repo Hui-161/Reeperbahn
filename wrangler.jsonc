@@ -1,0 +1,22 @@
+{
+  // Cloudflare Workers mit Static Assets. Es gibt bewusst KEIN Worker-Skript
+  // (kein "main"): die Seite ist statisch, damit bleiben Cold Start und
+  // CPU-Abrechnung komplett aus dem Spiel.
+  //
+  // Das Dashboard-Feld "Build output directory" gibt es bei Workers nicht -
+  // das Asset-Verzeichnis steht hier:
+  "name": "reeperbahn",
+  "compatibility_date": "2026-08-25",
+
+  "assets": {
+    // <- Hier steht "web". Pfad relativ zu dieser Datei.
+    "directory": "./web",
+    "html_handling": "auto-trailing-slash"
+    // not_found_handling bleibt auf dem Standard: die App hat kein
+    // clientseitiges Routing, unbekannte Pfade sollen ein echtes 404 sein.
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}
