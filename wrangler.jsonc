@@ -1,10 +1,13 @@
 {
-  // Cloudflare Workers mit Static Assets. Es gibt bewusst KEIN Worker-Skript
-  // (kein "main"): die Seite ist statisch, damit bleiben Cold Start und
-  // CPU-Abrechnung komplett aus dem Spiel.
+  // Cloudflare Workers mit Static Assets.
   //
   // Das Dashboard-Feld "Build output directory" gibt es bei Workers nicht -
-  // das Asset-Verzeichnis steht hier:
+  // das Asset-Verzeichnis steht weiter unten unter "assets".
+  //
+  // Die Seite selbst ist statisch: das Worker-Skript ist nur der Fallback fuer
+  // Anfragen, die auf kein Asset passen (die Team-API). Fuer Asset-Treffer
+  // laeuft es also nicht - kein Cold Start, keine CPU-Abrechnung, und die
+  // Regeln aus web/_headers gelten dort weiter.
   "name": "reeperbahn",
   "compatibility_date": "2026-08-25",
 
@@ -13,19 +16,13 @@
   // vorbei, und die Regeln aus web/_headers gelten weiter fuer sie.
   "main": "worker/index.js",
 
-  // Team-Abgleich: erst nach dem Anlegen des KV-Namespace einkommentieren.
-  // Eine erfundene id laesst "wrangler deploy" fehlschlagen - dann waere die
-  // ganze Seite unten, nicht nur der Abgleich. Ohne Binding antwortet die API
-  // mit {"error":"kv_missing"} und die App bleibt ueber die Datei-Variante
-  // vollstaendig nutzbar.
-  //
-  //   npx wrangler kv namespace create TEAM --update-config
-  //
-  // Der Befehl traegt die id hier selbst ein. Siehe DEPLOY.md.
-  //
-  // "kv_namespaces": [
-  //   { "binding": "TEAM", "id": "HIER_DIE_ECHTE_ID" }
-  // ],
+  // Team-Abgleich: KV-Namespace fuer die verschluesselten Team-Dokumente.
+  // Die id ist eine Kennung, kein Zugangsschluessel - ohne authentifiziertes
+  // Konto laesst sich damit nichts abrufen. Sie darf im Repo stehen.
+  // Angelegt mit: npx wrangler kv namespace create TEAM
+  "kv_namespaces": [
+    { "binding": "TEAM", "id": "701e0d0db10049ce8a1118e7a05566d1" }
+  ],
 
   "assets": {
     // <- Hier steht "web". Pfad relativ zu dieser Datei.
