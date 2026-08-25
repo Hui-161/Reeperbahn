@@ -93,7 +93,15 @@ query ActDetails($nids: [String]!) {
         fieldYoutube { uri { path } }
         fieldWebsite { uri { path } }
         fieldBiography
-        fieldImage { fieldMediaImage { alt entity { url { path } } } }
+        # R3_2 ist ein serverseitiges Derivat: 900x600 statt Original.
+        # Beim Test 75 KB statt 2124 KB - Faktor 28 auf Festival-WLAN.
+        fieldImage {
+          fieldMediaImage {
+            alt
+            entity { url { path } }
+            derivative(style: R3_2) { urlPath width height }
+          }
+        }
         url { path }
         fieldAppearances {
           nid
@@ -151,6 +159,26 @@ def link(value) -> str | None:
     return uri.get("path") if isinstance(uri, dict) else uri
 
 
+SITE = "https://www.reeperbahnfestival.com"
+
+
+def image_url(field) -> str | None:
+    """Bevorzugt das kleine Derivat; das Original ist teils ueber 2 MB gross."""
+    item = first(field)
+    if not isinstance(item, dict):
+        return None
+    media = first(item.get("fieldMediaImage"))
+    if not isinstance(media, dict):
+        return None
+    url = (first(media.get("derivative")) or {}).get("urlPath")
+    if not url:
+        entity = first(media.get("entity")) or {}
+        url = (first(entity.get("url")) or {}).get("path")
+    if url and url.startswith("/"):
+        url = SITE + url
+    return url or None
+
+
 def path_of(value) -> str | None:
     item = first(value)
     return item.get("path") if isinstance(item, dict) else None
@@ -194,9 +222,7 @@ def to_shows(acts: list[dict]) -> tuple[list[dict], list[dict]]:
             "genres": names(act.get("fieldGenre")),
             "description": act.get("fieldBiography") or None,
             "url": path_of(act.get("url")),
-            "image": (((first(act.get("fieldImage")) or {})
-                       .get("fieldMediaImage") or {}).get("entity") or {})
-                     .get("url", {}).get("path") if act.get("fieldImage") else None,
+            "image": image_url(act.get("fieldImage")),
             "source": "graphql:entityQuery",
             "extra": {
                 "nid": act.get("nid"),

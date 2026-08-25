@@ -164,6 +164,15 @@ def main() -> int:
     print(f"  Spielorte mit Koordinaten: {sum(1 for v in venues if v['lat'])}/{len(venues)}"
           + (f"  OHNE: {unlocated}" if unlocated else ""))
     print(f"  Auftritte mit offener Uhrzeit: {sum(1 for s in shows if s['tbd'])}")
+
+    # Wache gegen stillen Datenverlust: bricht ein Feld weg, weil sich das
+    # Schema geaendert hat, faellt das hier auf und nicht erst in der App.
+    for label, key, floor in (("Bild", "img", 0.5), ("Genre", "g", 0.8),
+                              ("Spotify", "sp", 0.7), ("Biografie", "bio", 0.4)):
+        have = sum(1 for a in acts if a.get(key))
+        share = have / len(acts) if acts else 0
+        flag = "  <-- PRUEFEN" if share < floor else ""
+        print(f"  Acts mit {label}: {have}/{len(acts)} ({share:.0%}){flag}")
     nightly = [s for s in shows if s["t"] and s["d"] != s["t"][:10]]
     if nightly:
         print(f"  Nachtauftritte dem Vortag zugeordnet: {len(nightly)}  "

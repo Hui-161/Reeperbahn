@@ -291,7 +291,7 @@ function openDetail(ai) {
 
     ${act.img ? `<div class="d-section">
       <img class="d-img" src="${esc(act.img)}" alt="${esc(act.n)}"
-           loading="lazy" decoding="async" width="640" height="427">
+           decoding="async" width="900" height="600">
     </div>` : ''}
 
     ${act.bio ? `<div class="d-section"><h3>Über</h3>
