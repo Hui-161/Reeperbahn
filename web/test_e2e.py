@@ -496,6 +496,49 @@ with sync_playwright() as p:
           pg2.locator("#list .hint").count() == before - 1)
     ctx2.close()
 
+    # --- Format 2: taste.py liefert die Begruendungen selbst mit ---
+    # Die App darf sie dann nicht mehr aus Punktzahlen ableiten, sondern muss
+    # den Text uebernehmen - auch den Hinweis "bereits in Playlist entfernt",
+    # den nur die Playlist kennt und die App sonst nie erfaehrt.
+    ctx3 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg3 = ctx3.new_page()
+    pg3.goto(BASE + "/", wait_until="load")
+    pg3.wait_for_selector(".row", timeout=15000)
+    idx3 = pg3.locator(".row").evaluate_all(
+        "els => els.slice(0,2).map(e => e.dataset.act)")
+    p3 = [lineup["acts"][int(i)]["id"] for i in idx3]
+    fixture2 = {
+        "format": 2,
+        # Absichtlich widerspruechlich zu den Punktzahlen: die Punktzahl des
+        # ersten Acts wuerde in Format 1 ein "nein" ergeben. Wenn trotzdem
+        # "ja" erscheint, hat die App wirklich die hints benutzt.
+        "suggested": {str(p3[0]): 0.99, str(p3[1]): 0.99},
+        "evidence": {str(p3[0]): 10, str(p3[1]): 10},
+        "hints": {
+            str(p3[0]): {"v": "ja", "why": "Bio nennt aus deiner Playlist: Interpol"},
+            str(p3[1]): {"v": "nein", "why": "bereits in Playlist entfernt"},
+        },
+        "known": {},
+    }
+    fp2 = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+                                      encoding="utf-8")
+    json.dump(fixture2, fp2); fp2.close()
+    pg3.once("dialog", lambda d: d.accept())
+    pg3.set_input_files("#file", fp2.name)
+    pg3.wait_for_timeout(800)
+    check("Format 2: hints schlagen Punktzahlen",
+          pg3.locator("#list .hint-ja").count() == 1
+          and pg3.locator("#list .hint-nein").count() == 1,
+          f"ja={pg3.locator('#list .hint-ja').count()} "
+          f"nein={pg3.locator('#list .hint-nein').count()}")
+    pg3.locator(".row").nth(1).click()
+    pg3.wait_for_selector(".suggestion")
+    check("Format 2: Playlist-Hinweis steht im Detail",
+          "bereits in Playlist entfernt"
+          in pg3.locator(".suggestion").inner_text(),
+          pg3.locator(".suggestion").inner_text()[:80])
+    ctx3.close()
+
     # Der Fall, der auf dem Handy schiefging: Systemvorgabe DUNKEL, Nutzer
     # waehlt ausdruecklich hell. Vorher blieb es dunkel (altes CSS aus dem
     # Cache), das Attribut allein sah aber richtig aus.

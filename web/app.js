@@ -1195,8 +1195,18 @@ el.file.addEventListener('change', async () => {
   render();
 });
 
-/* Aus taste/suggestions.json ableiten, was in der App angezeigt wird. */
+/* Aus taste/suggestions.json ableiten, was in der App angezeigt wird.
+   Format 2 bringt die Begruendungen schon mit - dort steht auch, was in der
+   offiziellen Playlist bereits entfernt wurde. Aeltere Dateien haben nur
+   Punktzahlen, die werden wie bisher umgerechnet. */
 function buildHints(data) {
+  if (data.hints && Object.keys(data.hints).length) {
+    const out = {};
+    for (const [id, h] of Object.entries(data.hints)) {
+      if (h && h.v) out[id] = { v: h.v, why: String(h.why || '') };
+    }
+    return out;
+  }
   const out = {};
   const refs = data.bio_refs || {};
   const hits = new Set((data.profile_hits || []).map(String));
