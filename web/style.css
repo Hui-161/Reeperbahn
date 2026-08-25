@@ -755,7 +755,7 @@ body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
    und keine eigene Stufe im Filter sind. */
 .rate {
   display: grid;
-  grid-template-columns: 1fr .68fr 1fr .68fr 1fr 1fr 1fr;
+  grid-template-columns: 1fr .34fr 1fr .34fr 1fr 1fr 1fr;
   gap: .25rem;
 }
 .rate-note {
@@ -784,24 +784,41 @@ body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
 .rate button[data-r="4"][aria-pressed="true"] { background: var(--r4); border-color: var(--r4); }
 .rate button[data-r="5"][aria-pressed="true"] { background: var(--r5); border-color: var(--r5); }
 
-/* Zwischennoten: nur die Zahl, gestrichelter Rand. Der Text steht im
-   aria-label und im Titel - auf 68 % Spaltenbreite waere "sehr gut bis gut"
-   ohnehin nicht lesbar. */
+/* Zwischennoten klein DAZWISCHEN: die Flaeche des Knopfes verschwindet, nur
+   eine kleine Zahl bleibt zwischen den ganzen Noten stehen.
+
+   Der Knopf behaelt trotzdem die volle Hoehe der Reihe - sichtbar klein,
+   aber mit der ganzen Spalte als Trefferflaeche. Ein Knopf, der nur so gross
+   ist wie die Zahl, waere auf dem Handy nicht zu treffen. Der Text
+   ("sehr gut bis gut") steht im aria-label und im Titel; auf dieser Breite
+   waere er ohnehin nicht lesbar. */
 .rate button.is-half {
+  place-items: center;
+  padding: 0;
   background: transparent;
-  border-style: dashed;
+  border-color: transparent;
 }
 .rate button.is-half small { display: none; }
-.rate button.is-half b { font-size: .85rem; }
-.rate button[data-r="1.5"][aria-pressed="true"] {
+.rate button.is-half b {
+  padding: .1rem .16rem;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: .6rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.rate button.is-half[aria-pressed="true"] b {
+  border-style: solid;
+  color: var(--on-scale);
+}
+.rate button[data-r="1.5"][aria-pressed="true"] b {
   background: color-mix(in srgb, var(--r1), var(--r2));
   border-color: color-mix(in srgb, var(--r1), var(--r2));
-  border-style: solid;
 }
-.rate button[data-r="2.5"][aria-pressed="true"] {
+.rate button[data-r="2.5"][aria-pressed="true"] b {
   background: color-mix(in srgb, var(--r2), var(--r3));
   border-color: color-mix(in srgb, var(--r2), var(--r3));
-  border-style: solid;
 }
 
 .pop-actions { margin-top: .5rem; }

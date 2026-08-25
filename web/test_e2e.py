@@ -112,6 +112,30 @@ with sync_playwright() as p:
     check("Zwischennoten mit deutschem Komma",
           pg.locator('.rate button[data-r="1.5"] b').inner_text() == "1,5",
           pg.locator('.rate button[data-r="1.5"] b').inner_text())
+    # Klein DAZWISCHEN, aber ohne die Trefferflaeche zu verlieren: sichtbar
+    # deutlich schmaler und kleiner gesetzt als eine ganze Note, in der Hoehe
+    # aber gleich - ein Knopf von der Groesse der Zahl waere auf dem Handy
+    # nicht zu treffen.
+    geo = pg.evaluate("""() => {
+      const g = (sel) => {
+        const b = document.querySelector(sel);
+        const r = b.getBoundingClientRect();
+        return { w: r.width, h: r.height,
+                 fs: parseFloat(getComputedStyle(b.querySelector('b')).fontSize) };
+      };
+      return { half: g('.rate button[data-r="1.5"]'),
+               full: g('.rate button[data-r="1"]') };
+    }""")
+    check("Zwischennote ist schmaler als die halbe ganze Note",
+          geo["half"]["w"] < geo["full"]["w"] / 2,
+          f"{geo['half']['w']:.0f}px gegen {geo['full']['w']:.0f}px")
+    check("Zwischennote ist deutlich kleiner gesetzt",
+          geo["half"]["fs"] < geo["full"]["fs"] * 0.7,
+          f"{geo['half']['fs']}px gegen {geo['full']['fs']}px")
+    check("Trefferflaeche behaelt die volle Hoehe",
+          abs(geo["half"]["h"] - geo["full"]["h"]) < 1
+          and geo["half"]["h"] >= 44,
+          f"{geo['half']['h']:.0f}px gegen {geo['full']['h']:.0f}px")
     pg.screenshot(path="/tmp/shot-detail.png")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     check("Note faerbt Zeile", pg.locator(".row.rated-1").count() >= 1)
