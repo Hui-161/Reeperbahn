@@ -958,13 +958,27 @@ function scheduleSync() {
   syncTimer = setTimeout(() => runSync(true), SYNC_DEBOUNCE_MS);
 }
 
-async function runSync(quiet) {
+/* Regelmaessig NUR lesen. Wegen der KV-Verzoegerung erscheint ein frisch
+   beigetretenes Mitglied sonst bis zu einer Minute lang nicht - was wie ein
+   Defekt aussieht. Lesen ist billig (100.000/Tag), Schreiben nicht. */
+const PULL_INTERVAL_MS = 90000;
+let pullTimer = null;
+
+function startPulling() {
+  clearInterval(pullTimer);
+  if (!team || !team.config) return;
+  pullTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') runSync(true, true);
+  }, PULL_INTERVAL_MS);
+}
+
+async function runSync(quiet, pullOnly) {
   if (!team || !team.config || syncing) return;
   syncing = true;
   const note = $('#m-team-note');
-  if (note) note.textContent = 'Abgleich läuft …';
+  if (note && !quiet) note.textContent = 'Abgleich läuft …';
   try {
-    const others = await team.sync(myTeamDoc());
+    const others = pullOnly ? await team.pull() : await team.sync(myTeamDoc());
     const n = adoptOthers(others);
     const undec = others.filter((o) => o.undecryptable).length;
     teamInfo();
@@ -975,7 +989,10 @@ async function runSync(quiet) {
         ? `Abgeglichen. ${n} weitere Person(en) im Team.`
         + (undec ? ` ${undec} Eintrag/Einträge nicht lesbar — dort weicht die `
                  + 'Passphrase ab.' : '')
-        : 'Abgeglichen. Noch niemand sonst im Team.');
+        // Nicht "niemand da" behaupten: der Speicher braucht bis zu einer
+        // Minute, bis ein neuer Eintrag im Verzeichnis auftaucht.
+        : 'Abgeglichen. Noch niemand sonst sichtbar — ein neuer Beitritt '
+          + 'braucht bis zu einer Minute. Die App lädt von selbst nach.');
     }
   } catch (err) {
     const msg = err.code === 'token_invalid'
@@ -998,6 +1015,7 @@ $('#m-team-new').addEventListener('click', async () => {
   teamInfo();
   el.menu.close();
   await runSync(false);
+  startPulling();
 });
 
 $('#m-team-join').addEventListener('click', async () => {
@@ -1012,6 +1030,7 @@ $('#m-team-join').addEventListener('click', async () => {
   teamInfo();
   el.menu.close();
   await runSync(false);
+  startPulling();
 });
 
 $('#m-team-share').addEventListener('click', async () => {
@@ -1029,6 +1048,7 @@ $('#m-team-share').addEventListener('click', async () => {
 $('#m-team-leave').addEventListener('click', () => {
   if (!confirm('Team verlassen? Deine eigenen Daten bleiben auf diesem Gerät.')) return;
   team.leave();
+  clearInterval(pullTimer);
   teamInfo();
   el.menu.close();
   alert('Team verlassen. Das Dokument auf dem Server bleibt bis zum Ablauf liegen.');
@@ -1116,8 +1136,14 @@ if ('serviceWorker' in navigator) {
 /* Wechselt man weg, bevor die Verzoegerung abgelaufen ist, waere die
    Aenderung sonst erst beim naechsten Start draussen. */
 addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'hidden') return;
-  if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; runSync(true); }
+  if (document.visibilityState === 'hidden') {
+    // Ausstehende eigene Aenderung noch mitnehmen.
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; runSync(true); }
+  } else {
+    runSync(true, true);   // zurueck im Bild: nur lesen
+  }
 });
 
-load().then(() => { if (team && team.config) runSync(true); });
+load().then(() => {
+  if (team && team.config) { runSync(true); startPulling(); }
+});

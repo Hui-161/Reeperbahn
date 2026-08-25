@@ -166,6 +166,20 @@ Team. Deshalb: Link und Passphrase ueber **getrennte** Kanaele austauschen.
 Eintraege verfallen nach 180 Tagen ohne Schreibzugriff, verwaiste Teams
 raeumen sich also selbst auf.
 
+**KV ist eventual consistent.** Gemessen auf der Live-Instanz: ein frisch
+geschriebenes Dokument taucht im Verzeichnis-Listing erst nach etwa
+30 Sekunden auf. Das ist kein Fehler, sondern die Bauart. Deshalb
+
+* trennt die App Schreiben und Lesen: geschrieben wird nur nach eigenen
+  Aenderungen, gelesen alle 90 Sekunden waehrend die Seite sichtbar ist und
+  jedes Mal beim Zurueckwechseln. Lesen ist billig (100.000/Tag frei),
+  Schreiben nicht (1.000/Tag).
+* behauptet die App nach dem Beitreten nicht "niemand sonst im Team", sondern
+  nennt die Verzoegerung und laedt selbst nach.
+
+Zwei Personen kommen damit nicht in die Naehe der Freigrenzen: geschrieben
+wird nur bei Aenderungen, gelesen etwa 500-mal am Tag.
+
 ## hui161.de anbinden
 
 Voraussetzung: `hui161.de` liegt als Zone in demselben Cloudflare-Konto, die

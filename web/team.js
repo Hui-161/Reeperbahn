@@ -107,9 +107,14 @@ function createTeamClient(storage) {
 
     leave() { storage.set('team', null); keys = null; keyFor = null; },
 
-    /** Eigenes Dokument hochladen und die der anderen holen.
-        Rueckgabe: Liste der anderen Mitglieder (entschluesselt). */
-    async sync(myDoc) {
+    /* Schreiben und Lesen sind absichtlich getrennt.
+       KV ist eventual consistent: ein Verzeichnis-Listing sieht einen frisch
+       geschriebenen Eintrag erst nach etwa 30 Sekunden (gemessen). Die App muss
+       also nachladen - aber Nachladen darf nichts schreiben, sonst brennt es
+       das Schreib-Budget durch (1.000/Tag gratis) fuer nichts. */
+
+    /** Eigenes Dokument hochladen. Nur nach eigenen Aenderungen aufrufen. */
+    async push(myDoc) {
       const c = conf();
       const { key, token } = await ensureKeys();
       await apiFetch(`${c.teamId}/${c.memberId}`, token, {
@@ -117,6 +122,12 @@ function createTeamClient(storage) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(await seal(key, { name: c.name, ...myDoc })),
       });
+    },
+
+    /** Die Dokumente der anderen holen. Guenstig, darf oft laufen. */
+    async pull() {
+      const c = conf();
+      const { key, token } = await ensureKeys();
       const data = await apiFetch(c.teamId, token);
       const others = [];
       for (const m of (data.members || [])) {
@@ -129,6 +140,11 @@ function createTeamClient(storage) {
         }
       }
       return others;
+    },
+
+    async sync(myDoc) {
+      await this.push(myDoc);
+      return this.pull();
     },
   };
 }
