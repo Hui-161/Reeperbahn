@@ -43,6 +43,7 @@ const S = {
   favOnly: false,
   rateOnly: false,
   genres: new Set(),
+  venues: new Set(),
   mapOn: false,
 };
 
@@ -51,7 +52,8 @@ let map = null, markers = [];
 const $ = (sel) => document.querySelector(sel);
 const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
-  genrebox: $('#genrebox'), detail: $('#detail'), meta: $('#meta'),
+  genrebox: $('#genrebox'), venuebox: $('#venuebox'),
+  detail: $('#detail'), meta: $('#meta'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
 };
 
@@ -80,6 +82,7 @@ async function load() {
   el.status.hidden = true;
   renderDays();
   renderGenres();
+  renderVenues();
   render();
   const d = new Date(S.data.generated_at);
   el.meta.textContent = `${S.data.acts.length} Acts · ${S.data.shows.length} Auftritte · ` +
@@ -115,6 +118,19 @@ function renderGenres() {
   }).join('');
 }
 
+function renderVenues() {
+  const counts = new Map();
+  for (const sh of S.data.shows) {
+    if (sh.v != null) counts.set(sh.v, (counts.get(sh.v) || 0) + 1);
+  }
+  // Nach Anzahl sortiert: die grossen Haeuser zuerst, danach alphabetisch.
+  const entries = [...counts.entries()].sort((a, b) =>
+    b[1] - a[1] || S.data.venues[a[0]].n.localeCompare(S.data.venues[b[0]].n, 'de'));
+  el.venuebox.innerHTML = entries.map(([i, n]) =>
+    `<button class="chip" data-venuefilter="${i}" aria-pressed="${S.venues.has(i)}"
+      >${esc(S.data.venues[i].n)} <span class="tag">${n}</span></button>`).join('');
+}
+
 /* ---------- Auswahl ---------- */
 
 function visibleShows() {
@@ -130,6 +146,8 @@ function visibleShows() {
 
     if (S.favOnly && !fav.has(act.id)) continue;
     if (S.rateOnly && !rate[act.id]) continue;
+
+    if (S.venues.size && (sh.v == null || !S.venues.has(sh.v))) continue;
 
     if (S.genres.size) {
       const g = act.g;
@@ -153,10 +171,13 @@ function visibleShows() {
 /* ---------- Liste ---------- */
 
 function render() {
-  const anyFilter = S.favOnly || S.rateOnly || S.genres.size > 0 || S.q.trim() !== '';
+  const anyFilter = S.favOnly || S.rateOnly || S.genres.size > 0
+    || S.venues.size > 0 || S.q.trim() !== '';
   $('#f-reset').hidden = !anyFilter;
   $('#f-genre').classList.toggle('on', S.genres.size > 0);
   $('#f-genre').textContent = S.genres.size ? `Genres (${S.genres.size})` : 'Genres';
+  $('#f-venue').classList.toggle('on', S.venues.size > 0);
+  $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
 
   if (S.mapOn) { el.list.hidden = true; el.mapBox.hidden = false; sizeMap(); return; }
   el.mapBox.hidden = true;
@@ -387,6 +408,7 @@ function showVenue(i) {
   if (!v || v.lat == null) return;
   if (el.detail.open) el.detail.close();
   el.genrebox.hidden = true;
+  el.venuebox.hidden = true;
   S.mapOn = true;
   $('#btn-map').setAttribute('aria-pressed', 'true');
   render();
@@ -449,6 +471,15 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  const venueFilter = t.closest('[data-venuefilter]');
+  if (venueFilter) {
+    const i = +venueFilter.dataset.venuefilter;
+    S.venues.has(i) ? S.venues.delete(i) : S.venues.add(i);
+    venueFilter.setAttribute('aria-pressed', String(S.venues.has(i)));
+    render();
+    return;
+  }
+
   const genre = t.closest('[data-genre]');
   if (genre) {
     const i = +genre.dataset.genre;
@@ -495,22 +526,33 @@ $('#f-rate').addEventListener('click', (e) => {
 });
 
 $('#f-genre').addEventListener('click', () => {
-  el.genrebox.hidden = !el.genrebox.hidden;
+  const open = el.genrebox.hidden;
+  el.genrebox.hidden = !open;
+  if (open) el.venuebox.hidden = true;   // nur ein Kasten offen
+  sizeMap();
+});
+
+$('#f-venue').addEventListener('click', () => {
+  const open = el.venuebox.hidden;
+  el.venuebox.hidden = !open;
+  if (open) el.genrebox.hidden = true;
+  sizeMap();
 });
 
 $('#f-reset').addEventListener('click', () => {
-  S.favOnly = S.rateOnly = false; S.genres.clear(); S.q = '';
+  S.favOnly = S.rateOnly = false; S.genres.clear(); S.venues.clear(); S.q = '';
   el.q.value = ''; el.searchbar.hidden = true;
   $('#f-fav').setAttribute('aria-pressed', 'false');
   $('#f-rate').setAttribute('aria-pressed', 'false');
   renderGenres();
+  renderVenues();
   render();
 });
 
 $('#btn-map').addEventListener('click', (e) => {
   S.mapOn = !S.mapOn;
   e.currentTarget.setAttribute('aria-pressed', String(S.mapOn));
-  if (S.mapOn) el.genrebox.hidden = true;   // sonst schiebt sie die Karte aus dem Bild
+  if (S.mapOn) { el.genrebox.hidden = true; el.venuebox.hidden = true; }
   render();
   if (S.mapOn) { const m = ensureMap(); setTimeout(() => m.invalidateSize(), 60); }
 });

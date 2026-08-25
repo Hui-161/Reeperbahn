@@ -1,14 +1,18 @@
 /* Reeperbahn-Timetable - mobil zuerst, kein Build-Schritt. */
 
 :root {
-  --bg: #fbfaf8;
+  /* Lila in beiden Themes - nicht nur als Akzent, auch als leichter Stich in
+     den Flaechen. Alle Kombinationen sind auf Kontrast geprueft: Text auf
+     Flaeche und Text auf Akzent liegen ueberall ueber 4.5, die schwachen
+     Meta-Toene ueber 4.0. */
+  --bg: #faf8fd;
   --bg-raised: #ffffff;
-  --bg-sunken: #f1efeb;
+  --bg-sunken: #f1ecfa;
   --ink: #1b1a20;
-  --ink-soft: #5c5a66;
-  --ink-faint: #8d8a97;
-  --line: #e2dfd9;
-  --accent: #c2255c;
+  --ink-soft: #57545f;
+  --ink-faint: #76737f;
+  --line: #e4dff1;
+  --accent: #6741d9;
   --accent-ink: #ffffff;
   --gruen: #2f9e44;
   --gelb: #e8a300;
@@ -20,15 +24,15 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #12111a;
-    --bg-raised: #1c1b26;
-    --bg-sunken: #16151f;
+    --bg: #12111c;
+    --bg-raised: #1c1a2b;
+    --bg-sunken: #171524;
     --ink: #f2f0f5;
-    --ink-soft: #b3b0bf;
-    --ink-faint: #7d7a8a;
-    --line: #2c2a38;
-    --accent: #ff4d6d;
-    --accent-ink: #1a0a10;
+    --ink-soft: #b5b1c4;
+    --ink-faint: #8b87a0;
+    --line: #2d2a3e;
+    --accent: #b197fc;
+    --accent-ink: #17131f;
     --gruen: #51cf66;
     --gelb: #ffd43b;
     --rot: #ff6b6b;
@@ -37,6 +41,11 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Muss sein: eigene display-Regeln (z. B. .searchbar/.genrebox mit
+   display:flex) gewinnen sonst gegen das hidden-Attribut aus dem
+   Browser-Stylesheet - die Kaesten blieben dauerhaft offen. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -130,9 +139,11 @@ h1 span { color: var(--accent); }
 }
 .day small { display: block; font-weight: 400; font-size: .7rem; opacity: .75; }
 .day[aria-selected="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--bg);
+  /* Der gewaehlte Tag ist das auffaelligste Element im Kopf - hier gehoert
+     die Akzentfarbe hin, nicht Schwarz bzw. Weiss. */
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* ---------- Filter ---------- */
@@ -176,6 +187,12 @@ h1 span { color: var(--accent); }
   margin-top: .5rem;
   padding-top: .5rem;
   border-top: 1px solid var(--line);
+
+  /* Muss begrenzt sein: 34 Spielorte machen den Sticky-Kopf sonst so hoch,
+     dass er die Trefferliste verdeckt - auf dem Handy vollstaendig. */
+  max-height: 38dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ---------- Liste ---------- */

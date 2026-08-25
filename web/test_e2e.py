@@ -57,6 +57,27 @@ with sync_playwright() as p:
     pg.click("#f-reset"); pg.wait_for_timeout(250)
     check("Reset stellt wieder her", pg.locator(".row").count() == rows0)
 
+    # Spielort-Filter
+    pg.click("#f-venue")
+    pg.wait_for_selector("#venuebox .chip")
+    check("Genre-Kasten schliesst beim Oeffnen der Spielorte",
+          pg.locator("#genrebox").is_hidden())
+    vlabels = pg.locator("#venuebox .chip").all_inner_texts()
+    check("Spielorte gelistet", len(vlabels) > 10, f"{len(vlabels)} Spielorte")
+    pg.locator("#venuebox .chip").first.click()
+    pg.wait_for_timeout(250)
+    rows_v = pg.locator(".row").count()
+    check("Spielort-Filter wirkt", 0 < rows_v < rows0, f"{rows0} -> {rows_v}")
+    check("Chip zeigt die Anzahl",
+          "(1)" in pg.locator("#f-venue").inner_text(),
+          pg.locator("#f-venue").inner_text())
+    # mit Genre kombinieren: darf nicht mehr Treffer geben
+    pg.click("#f-genre"); pg.wait_for_selector("#genrebox .chip")
+    pg.locator("#genrebox .chip").first.click(); pg.wait_for_timeout(250)
+    check("Spielort und Genre kombinieren sich", pg.locator(".row").count() <= rows_v)
+    pg.click("#f-reset"); pg.wait_for_timeout(300)
+    check("Reset raeumt auch die Spielorte auf", pg.locator(".row").count() == rows0)
+
     # Wunsch 5 + 1: Favorit und Notiz
     pg.locator(".row-fav").first.click()
     pg.wait_for_timeout(120)
