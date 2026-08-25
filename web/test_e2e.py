@@ -305,6 +305,24 @@ with sync_playwright() as p:
     if stops >= 2:
         check("Fusswege werden ausgewiesen", pg.locator("#plan .leg").count() >= 1,
               f"{pg.locator('#plan .leg').count()} Etappe(n)")
+    # Die Endzeit muss zur letzten Station passen - der Zeitzonenfehler zeigte
+    # hier zwei Stunden zu wenig.
+    summary = pg.locator(".plan-sum").inner_text()
+    stop_times = pg.locator("#plan .stop .row-time").all_inner_texts()
+    if stop_times and "bis etwa" in summary:
+        import re as _re
+        last_start = stop_times[-1].strip()
+        shown_end = _re.search(r"bis etwa (\d\d):(\d\d)", summary)
+        lh, lm = (int(x) for x in last_start.split(":"))
+        eh, em = int(shown_end.group(1)), int(shown_end.group(2))
+        diff = ((eh * 60 + em) - (lh * 60 + lm)) % (24 * 60)
+        # Spielzeit auslesen statt annehmen - sonst prueft der Test seine
+        # eigene Vermutung und nicht die App.
+        set_min = int(pg.locator("#plan-set").input_value())
+        check("Endzeit = letzter Beginn + Spielzeit", diff == set_min,
+              f"letzter Start {last_start}, Ende {eh:02d}:{em:02d}, "
+              f"Differenz {diff} min, Spielzeit {set_min} min")
+
     check("Zusammenfassung nennt den Fussweg",
           "Fußweg" in pg.locator(".plan-sum").inner_text(),
           pg.locator(".plan-sum").inner_text()[:60])

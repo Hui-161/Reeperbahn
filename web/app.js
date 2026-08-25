@@ -560,8 +560,9 @@ function renderPlan() {
   const plan = window.RBFPlan.buildPlan(items, { setMinutes: opts.setMinutes });
   lastPlan = plan;
 
-  const end = plan.stops.length
-    ? hhmm(new Date((plan.stops[plan.stops.length - 1].end) * 60000).toISOString())
+  const last = plan.stops[plan.stops.length - 1];
+  const end = last
+    ? window.RBFPlan.clockInSourceZone(last.startIso, opts.setMinutes)
     : '';
   let html = `<p class="plan-sum"><b>${plan.stops.length} Konzerte</b> aus
     ${items.length} in Frage kommenden · ${plan.walkTotal} min Fußweg gesamt
@@ -572,10 +573,15 @@ function renderPlan() {
   plan.stops.forEach((s, i) => {
     if (i > 0) {
       const tight = s.idleBefore <= 5;
-      html += `<div class="leg${tight ? ' tight' : ''}">
+      const gap = s.idleBefore >= 60;
+      const wait = s.idleBefore >= 60
+        ? `${Math.floor(s.idleBefore / 60)} h ${s.idleBefore % 60} min`
+        : `${s.idleBefore} min`;
+      html += `<div class="leg${tight ? ' tight' : ''}${gap ? ' gap' : ''}">
         ${s.walkFromPrev} min Fußweg${s.idleBefore > 0
-          ? ` · ${s.idleBefore} min Luft` : ' · direkt anschließend'}
-        ${tight ? ' — knapp' : ''}</div>`;
+          ? ` · ${wait} Luft` : ' · direkt anschließend'}
+        ${tight ? ' — knapp' : ''}${gap ? ' — große Lücke, da passt noch was rein'
+          : ''}</div>`;
     }
     const sh = S.data.shows.find((x) => x.id === s.id);
     html += `<div class="stop"><span class="stop-no">${i + 1}</span>
@@ -583,10 +589,13 @@ function renderPlan() {
   });
 
   if (plan.dropped.length) {
+    const inPlan = new Set(plan.stops.map((s) => s.actId));
     html += `<div class="plan-drop"><h3>Passt nicht mehr rein
       (${plan.dropped.length})</h3><ul>${plan.dropped.slice(0, 12).map((d) =>
-        `<li>${esc(d.name)} — ${hhmm(d.startIso)}${d.clashesWith
-          ? `, überschneidet sich mit ${esc(d.clashesWith)}` : ''}</li>`).join('')}
+        `<li>${esc(d.name)} — ${hhmm(d.startIso)}${
+          inPlan.has(d.actId) ? ' (zweiter Auftritt, steht schon im Plan)'
+            : (d.clashesWith ? `, überschneidet sich mit ${esc(d.clashesWith)}` : '')
+        }</li>`).join('')}
       </ul></div>`;
   }
   el.planBody.innerHTML = html;

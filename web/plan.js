@@ -42,6 +42,21 @@ function walkMinutes(a, b, opt = PLAN_DEFAULTS) {
   return Math.ceil((m * opt.detour) / opt.walkSpeed);
 }
 
+/** HH:MM in der Zeitzone der Quelle (die ISO-Angaben tragen +02:00).
+    Ueber new Date().getHours() ginge die Zeitzone des Geraets ein, ueber
+    getUTCHours() die von UTC - beides waere in Hamburg um zwei Stunden
+    daneben. Genau dieser Fehler stand in der Zusammenfassung des Abendplans. */
+function clockInSourceZone(iso, addMinutes = 0) {
+  const m = String(iso).match(/([+-])(\d\d):?(\d\d)$/);
+  const offset = m
+    ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]))
+    : 0;
+  const t = new Date(iso).getTime() + (addMinutes + offset) * 60000;
+  const d = new Date(t);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
 const minutesOf = (iso) => {
   const d = new Date(iso);
   return Math.round(d.getTime() / 60000);
@@ -136,4 +151,5 @@ function buildPlan(items, opt = {}) {
   };
 }
 
-window.RBFPlan = { buildPlan, walkMinutes, metersBetween, PLAN_DEFAULTS };
+window.RBFPlan = { buildPlan, walkMinutes, metersBetween, clockInSourceZone,
+                   PLAN_DEFAULTS };

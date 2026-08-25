@@ -503,6 +503,7 @@ main { min-height: 60vh; }
   background: var(--line);
 }
 .leg.tight { color: var(--r4); font-weight: 600; }
+.leg.gap { color: var(--ink-soft); }
 
 .stop { display: flex; gap: .6rem; align-items: flex-start; }
 .stop-no {

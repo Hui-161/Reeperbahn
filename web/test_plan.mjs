@@ -6,7 +6,7 @@
 globalThis.window = {};
 const src = await import('node:fs').then(fs => fs.promises.readFile('web/plan.js','utf8'));
 eval(src.replace("window.RBFPlan", "globalThis.RBFPlan"));
-const { buildPlan, walkMinutes } = globalThis.RBFPlan;
+const { buildPlan, walkMinutes, clockInSourceZone } = globalThis.RBFPlan;
 
 const A = { lat: 53.5500, lng: 9.9600, name: 'A' };
 const B = { lat: 53.5505, lng: 9.9650, name: 'B' };   // ~340 m
@@ -78,6 +78,22 @@ r = buildPlan([
 ok('Leerlauf wird ausgewiesen', r.stops[1].idleBefore > 180,
    `${r.stops[1].idleBefore} min`);
 ok('Leere Eingabe faellt nicht um', buildPlan([]).stops.length===0);
+
+// Zeitzone: die Quelle liefert +02:00. Ein Konzert um 23:15 plus 40 Minuten
+// endet um 23:55 Hamburger Zeit - NICHT um 21:55. Genau dieser Fehler stand
+// in der Zusammenfassung des Abendplans.
+ok('Endzeit in der Zone der Quelle, nicht UTC',
+   clockInSourceZone('2026-09-18T23:15:00+02:00', 40) === '23:55',
+   clockInSourceZone('2026-09-18T23:15:00+02:00', 40));
+ok('Ohne Zuschlag unveraendert',
+   clockInSourceZone('2026-09-18T20:35:00+02:00') === '20:35',
+   clockInSourceZone('2026-09-18T20:35:00+02:00'));
+ok('Tageswechsel wird richtig gerechnet',
+   clockInSourceZone('2026-09-18T23:50:00+02:00', 40) === '00:30',
+   clockInSourceZone('2026-09-18T23:50:00+02:00', 40));
+ok('Andere Zone wird respektiert',
+   clockInSourceZone('2026-09-18T12:00:00-05:00', 30) === '12:30',
+   clockInSourceZone('2026-09-18T12:00:00-05:00', 30));
 
 console.log(fails ? `\nFEHLGESCHLAGEN: ${fails}` : '\nPLAN-ALGORITHMUS: ALLE PRUEFUNGEN BESTANDEN');
 process.exit(fails ? 1 : 0);
