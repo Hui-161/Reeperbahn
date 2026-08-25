@@ -116,6 +116,7 @@ const S = {
   seenOnly: false,
   teamOnly: false,
   mapOn: false,
+  planOn: false,
 };
 
 const MAP_DETAIL_ZOOM = 17;
@@ -128,6 +129,7 @@ const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
   genrebox: $('#genrebox'), venuebox: $('#venuebox'),
   ratebox: $('#ratebox'), filterbox: $('#filterbox'),
+  plan: $('#plan'), planBody: $('#plan-body'),
   detail: $('#detail'), menu: $('#menu'), meta: $('#meta'),
   filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
@@ -374,6 +376,12 @@ function render() {
   $('#f-venue').classList.toggle('on', S.venues.size > 0);
   $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
 
+  if (S.planOn) {
+    el.list.hidden = true; el.mapBox.hidden = true; el.plan.hidden = false;
+    renderPlan();
+    return;
+  }
+  el.plan.hidden = true;
   if (S.mapOn) { el.list.hidden = true; el.mapBox.hidden = false; sizeMap(); return; }
   el.mapBox.hidden = true;
   el.list.hidden = false;
@@ -465,6 +473,166 @@ function restoreAnchor() {
   });
 }
 
+/* ---------- Abendplan ---------- */
+
+/* Wert eines Auftritts. Note 1 zaehlt am meisten, 5 am wenigsten; ein
+   Favorit ohne Note liegt in der Mitte. Der Team-Bonus ist absichtlich hoch:
+   ein Konzert, das beide wollen, ist mehr wert als zwei einzelne Wuensche. */
+function planValue(actId, opts) {
+  const r = +rate[actId] || 0;
+  let v = 0;
+  if (r) v = 6 - r;
+  else if (opts.withFav && fav.has(actId)) v = 3;
+  if (!v) return 0;
+  if (opts.teamBonus && bothWant(actId)) v += 3;
+  return v;
+}
+
+function planOptions() {
+  return {
+    maxNote: +($('#plan-max') || {}).value || 2,
+    setMinutes: +($('#plan-set') || {}).value || 40,
+    withFav: !!($('#plan-fav') || {}).checked,
+    teamBonus: !!($('#plan-team') || {}).checked && !!partner,
+  };
+}
+
+let lastPlan = null;
+
+function collectPlanItems(opts) {
+  const items = [];
+  let undated = 0;
+  for (const sh of S.data.shows) {
+    if (!sh.t) continue;
+    if (sh.tbd) {
+      // Ohne Uhrzeit nicht planbar - aber zaehlen, sonst wundert man sich,
+      // warum ein bewerteter Act fehlt.
+      const a = S.data.acts[sh.a];
+      const r = +rate[a.id] || 0;
+      if ((!S.day || sh.d === S.day)
+          && ((r && r <= opts.maxNote) || (opts.withFav && fav.has(a.id)))) undated++;
+      continue;
+    }
+    if (S.day && sh.d !== S.day) continue;
+    const act = S.data.acts[sh.a];
+    const r = +rate[act.id] || 0;
+    const eligible = (r && r <= opts.maxNote)
+      || (opts.withFav && fav.has(act.id));
+    if (!eligible) continue;
+    const value = planValue(act.id, opts);
+    if (value <= 0) continue;
+    const v = sh.v != null ? S.data.venues[sh.v] : null;
+    items.push({
+      id: sh.id, actIdx: sh.a, actId: act.id, name: act.n,
+      startIso: sh.t, value,
+      venue: v ? { lat: v.lat, lng: v.lng, name: v.n } : null,
+      venueIdx: sh.v,
+      note: r,
+    });
+  }
+  items.undatedCount = undated;
+  return items;
+}
+
+function renderPlan() {
+  const opts = planOptions();
+  $('#plan-team-wrap').hidden = !partner;
+  const items = collectPlanItems(opts);
+
+  if (!S.day) {
+    el.planBody.innerHTML = '<p class="empty"><b>Erst einen Tag wählen.</b>'
+      + 'Ein Abendplan gilt für einen Abend — oben auf Mi, Do, Fr oder Sa tippen.</p>';
+    lastPlan = null;
+    return;
+  }
+  if (!items.length) {
+    el.planBody.innerHTML = `<p class="empty"><b>Nichts zu planen.</b>
+      Für ${esc(dayLabel(S.day))} gibt es keine Acts mit Note bis ${opts.maxNote}
+      ${opts.withFav ? 'und keine Favoriten' : ''}.
+      ${items.undatedCount
+        ? `${items.undatedCount} passende Acts haben noch keine Uhrzeit und
+           lassen sich deshalb nicht einplanen.`
+        : 'Bewerte erst ein paar Acts.'}</p>`;
+    lastPlan = null;
+    return;
+  }
+
+  const plan = window.RBFPlan.buildPlan(items, { setMinutes: opts.setMinutes });
+  lastPlan = plan;
+
+  const end = plan.stops.length
+    ? hhmm(new Date((plan.stops[plan.stops.length - 1].end) * 60000).toISOString())
+    : '';
+  let html = `<p class="plan-sum"><b>${plan.stops.length} Konzerte</b> aus
+    ${items.length} in Frage kommenden · ${plan.walkTotal} min Fußweg gesamt
+    ${plan.stops.length ? `· bis etwa ${esc(end)}` : ''}
+    ${items.undatedCount ? `<br>${items.undatedCount} passende Acts haben noch
+      keine Uhrzeit und fehlen deshalb.` : ''}</p>`;
+
+  plan.stops.forEach((s, i) => {
+    if (i > 0) {
+      const tight = s.idleBefore <= 5;
+      html += `<div class="leg${tight ? ' tight' : ''}">
+        ${s.walkFromPrev} min Fußweg${s.idleBefore > 0
+          ? ` · ${s.idleBefore} min Luft` : ' · direkt anschließend'}
+        ${tight ? ' — knapp' : ''}</div>`;
+    }
+    const sh = S.data.shows.find((x) => x.id === s.id);
+    html += `<div class="stop"><span class="stop-no">${i + 1}</span>
+      ${row(sh, S.data.acts[s.actIdx])}</div>`;
+  });
+
+  if (plan.dropped.length) {
+    html += `<div class="plan-drop"><h3>Passt nicht mehr rein
+      (${plan.dropped.length})</h3><ul>${plan.dropped.slice(0, 12).map((d) =>
+        `<li>${esc(d.name)} — ${hhmm(d.startIso)}${d.clashesWith
+          ? `, überschneidet sich mit ${esc(d.clashesWith)}` : ''}</li>`).join('')}
+      </ul></div>`;
+  }
+  el.planBody.innerHTML = html;
+}
+
+function showPlan(on) {
+  S.planOn = on;
+  if (on) { S.mapOn = false; $('#btn-map').setAttribute('aria-pressed', 'false'); }
+  openBox(null);
+  render();
+  scrollTo({ top: 0, behavior: 'instant' });
+}
+
+/* Route auf der Karte: Linie durch die Stationen plus numerierte Marker.
+   Die Cluster bleiben aus, sonst verschwindet die Route in den Buendeln. */
+let routeLayer = null;
+
+function showRoute() {
+  if (!lastPlan || !lastPlan.stops.length) { alert('Es gibt noch keinen Plan.'); return; }
+  const pts = lastPlan.stops.filter((s) => s.venue && s.venue.lat != null);
+  if (!pts.length) { alert('Zu den Stationen fehlen Koordinaten.'); return; }
+  S.planOn = false;
+  S.mapOn = true;
+  $('#btn-map').setAttribute('aria-pressed', 'true');
+  render();
+  const m = ensureMap();
+  setTimeout(() => {
+    m.invalidateSize();
+    if (routeLayer) m.removeLayer(routeLayer);
+    routeLayer = L.layerGroup().addTo(m);
+    const latlngs = pts.map((s) => [s.venue.lat, s.venue.lng]);
+    L.polyline(latlngs, { weight: 4, opacity: .85, dashArray: '1 8',
+                          lineCap: 'round' }).addTo(routeLayer);
+    pts.forEach((s, i) => {
+      L.marker([s.venue.lat, s.venue.lng], {
+        icon: L.divIcon({ className: '', iconSize: [22, 22],
+                          html: `<span class="route-no">${i + 1}</span>` }),
+        zIndexOffset: 1000,
+      }).addTo(routeLayer).bindPopup(
+        `<div class="pop-title">${i + 1}. ${esc(s.name)}</div>
+         <div class="pop-meta">${hhmm(s.startIso)} · ${esc(s.venue.name)}</div>`);
+    });
+    m.fitBounds(latlngs, { padding: [40, 40] });
+  }, 80);
+}
+
 /* ---------- Detailansicht ---------- */
 
 function openDetail(ai) {
@@ -534,6 +702,12 @@ function openDetail(ai) {
     </div>
 
     ${links.length ? `<div class="d-section"><h3>Anhören</h3>
+      ${act.sp ? `<div class="embed-wrap" id="embed-slot">
+        <button class="chip" data-play="${esc(spotifyEmbed(act.sp) || '')}">
+          ▶ 30 Sekunden anspielen</button>
+        <p class="embed-note">Lädt den Spotify-Player erst auf Tippen — vorher
+        wird nichts zu Spotify übertragen.</p>
+      </div>` : ''}
       <div class="links">${links.map(([n, u]) =>
         `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${n}</a>`).join('')}
       </div></div>` : ''}
@@ -588,6 +762,17 @@ function markNote(actId, has) {
       r.querySelector('.row-name').classList.toggle('has-note', has);
     }
   }
+}
+
+/* Spotify-Künstlerlink in eine Embed-Adresse umschreiben.
+   Der offizielle Embed-Player braucht keinen API-Schlüssel und spielt für
+   alle 30 Sekunden an; volle Titel gibt es nur im Desktop-Browser mit
+   eingeloggtem Premium-Konto - auf dem Handy hat Spotify das
+   Drittanbieter-Streaming eingestellt. Die preview_url der Web-API ist fuer
+   neue Anwendungen seit Ende 2024 nicht mehr verfuegbar. */
+function spotifyEmbed(url) {
+  const m = String(url || '').match(/spotify\.com\/(?:intl-[a-z]+\/)?(artist|track|album)\/([A-Za-z0-9]+)/);
+  return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : null;
 }
 
 /* ---------- Karte (Wunsch 3 und 7) ---------- */
@@ -703,6 +888,19 @@ document.addEventListener('click', (e) => {
       else n.textContent = on ? '♥' : '♡';
     }
     if (S.favOnly) render();
+    return;
+  }
+
+  const play = t.closest('[data-play]');
+  if (play && play.dataset.play) {
+    const slot = document.getElementById('embed-slot');
+    if (slot) {
+      slot.innerHTML = `<iframe src="${esc(play.dataset.play)}"
+        title="Spotify-Player" loading="lazy" allow="encrypted-media; clipboard-write"
+        referrerpolicy="no-referrer"></iframe>
+        <p class="embed-note">Volle Titel nur im Desktop-Browser mit
+        eingeloggtem Spotify-Premium-Konto.</p>`;
+    }
     return;
   }
 
@@ -875,7 +1073,9 @@ $('#f-reset').addEventListener('click', () => {
 });
 
 $('#btn-map').addEventListener('click', (e) => {
+  if (S.planOn) S.planOn = false;
   S.mapOn = !S.mapOn;
+  if (!S.mapOn && routeLayer && map) { map.removeLayer(routeLayer); routeLayer = null; }
   e.currentTarget.setAttribute('aria-pressed', String(S.mapOn));
   if (S.mapOn) openBox(null);
   render();
@@ -1192,6 +1392,48 @@ $('#m-team-leave').addEventListener('click', () => {
 });
 
 $('#m-sync').addEventListener('click', () => { el.menu.close(); runSync(false); });
+
+$('#m-plan').addEventListener('click', () => { el.menu.close(); showPlan(true); });
+
+for (const id of ['plan-max', 'plan-set', 'plan-fav', 'plan-team']) {
+  const node = $('#' + id);
+  if (node) node.addEventListener('change', renderPlan);
+}
+$('#plan-map').addEventListener('click', showRoute);
+$('#plan-ics').addEventListener('click', () => {
+  if (!lastPlan || !lastPlan.stops.length) { alert('Es gibt noch keinen Plan.'); return; }
+  const shows = lastPlan.stops.map((s) => {
+    const sh = S.data.shows.find((x) => x.id === s.id);
+    const act = S.data.acts[sh.a];
+    return {
+      artist: act.n, start: sh.t, ext_id: sh.id,
+      venue: sh.v != null ? S.data.venues[sh.v].n : null,
+      genres: (act.g || []).map((i) => S.data.genres[i]),
+      country: act.c, url: act.url, time_tbd: false,
+    };
+  });
+  // Der ICS-Bau steckt im Python-Teil; hier die schlanke Variante.
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = (iso) => {
+    const d = new Date(iso);
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`
+      + `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  };
+  const esc2 = (t) => String(t || '').replace(/([,;\\])/g, '\\$1');
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//rbf-lineup//DE',
+                 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Reeperbahn Abendplan'];
+  const opts = planOptions();
+  for (const s of shows) {
+    const endMs = new Date(s.start).getTime() + opts.setMinutes * 60000;
+    lines.push('BEGIN:VEVENT', `UID:${s.ext_id}@rbf-plan`,
+      `DTSTAMP:${stamp(new Date().toISOString())}`,
+      `DTSTART:${stamp(s.start)}`, `DTEND:${stamp(new Date(endMs).toISOString())}`,
+      `SUMMARY:${esc2(s.artist)}`, `LOCATION:${esc2(s.venue || '')}`,
+      `DESCRIPTION:${esc2((s.genres || []).join(', '))}`, 'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  download('reeperbahn-abendplan.ics', lines.join('\r\n') + '\r\n', 'text/calendar');
+});
 
 $('#m-partner').addEventListener('click', () => el.filePartner.click());
 $('#m-partner-clear').addEventListener('click', () => {

@@ -21,6 +21,9 @@ jobs:
       - name: Datenschicht testen
         run: python3 rbf_core.py selftest
 
+      - name: Planungsalgorithmus testen
+        run: node web/test_plan.mjs
+
       - name: Web-Daten aus dem eingecheckten Snapshot bauen
         run: python3 build_web.py --offline || python3 build_web.py
 

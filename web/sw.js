@@ -14,10 +14,10 @@
  * fetch sofort fehl und der Cache greift; bei schlechtem Empfang bricht der
  * Timeout nach 2,5 s ab.
  */
-const V = 'rbf26-v4';
+const V = 'rbf26-v5';
 const TIMEOUT_MS = 2500;
 const SHELL = [
-  './', 'index.html', 'style.css', 'app.js', 'team.js', 'icon.svg',
+  './', 'index.html', 'style.css', 'app.js', 'team.js', 'plan.js', 'icon.svg',
   'manifest.webmanifest',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/leaflet.markercluster.js',

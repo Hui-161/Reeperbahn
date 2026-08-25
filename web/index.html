@@ -81,6 +81,37 @@
   <p id="status" class="status" role="status">Lade Programm…</p>
   <div id="list" class="list"></div>
   <div id="map" class="map" hidden></div>
+
+  <section id="plan" class="plan" hidden aria-label="Abendplan">
+    <div class="plan-head">
+      <div class="plan-opts">
+        <label>Noten bis
+          <select id="plan-max">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <label>Spielzeit
+          <select id="plan-set">
+            <option value="30">30 min</option>
+            <option value="40" selected>40 min</option>
+            <option value="50">50 min</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="plan-fav" checked> Favoriten mitnehmen</label>
+        <label id="plan-team-wrap" hidden><input type="checkbox" id="plan-team" checked>
+          Team-Treffer bevorzugen</label>
+      </div>
+      <div class="plan-actions">
+        <button type="button" id="plan-map" class="chip">Route auf der Karte</button>
+        <button type="button" id="plan-ics" class="chip">Als Kalender</button>
+      </div>
+    </div>
+    <div id="plan-body"></div>
+  </section>
 </main>
 
 <dialog id="detail" class="detail" aria-label="Details"></dialog>
@@ -106,6 +137,7 @@
       <div class="menu-list">
         <button type="button" id="m-export">Auswahl sichern (JSON)</button>
         <button type="button" id="m-import">Datei laden</button>
+        <button type="button" id="m-plan">Abendplan öffnen</button>
         <button type="button" id="m-seen">Gesehen-Liste exportieren (CSV)</button>
       </div>
       <p class="menu-note" id="m-stats"></p>
@@ -141,6 +173,7 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/leaflet/leaflet.markercluster.js"></script>
+<script src="plan.js"></script>
 <script src="team.js"></script>
 <script src="app.js"></script>
 </body>

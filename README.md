@@ -196,6 +196,43 @@ Filterkombination unter einem Namen ablegen, per Klick wieder anwenden, per
 der Suchbegriff bewusst nicht: ein gespeicherter Filter soll eine Sicht sein,
 kein eingefrorener Suchbegriff.
 
+## Abendplan mit Route
+
+Menue -> **Abendplan**. Aus den eigenen Noten (und optional Favoriten) baut die
+App fuer den gewaehlten Tag eine machbare Reihenfolge: Reihenfolge, Fusswege
+zwischen den Haeusern, Wartezeiten, und was nicht mehr reinpasst und warum.
+**Route auf der Karte** zeichnet die Strecke mit numerierten Stationen,
+**Als Kalender** exportiert den Abend als ICS.
+
+Der Kern steckt in `web/plan.js` und ist bewusst **exakt** geloest, nicht
+naeherungsweise: das ist "weighted interval scheduling with travel times",
+per dynamischer Programmierung ueber die nach Endzeit sortierten Auftritte.
+Ein Greedy-Verfahren ("immer den naechstbesten nehmen") verpasst regelmaessig
+die bessere Kombination - etwa wenn ein Act mit Note 1 zwei Acts mit Note 2
+blockiert, die zusammen mehr wert sind. Genau dieser Fall steht als Test in
+`web/test_plan.mjs`.
+
+Annahmen, die man einstellen kann: Spielzeit eines Slots (die Quelle nennt
+keine Endzeit), Puffer fuers Reinkommen, Gehgeschwindigkeit und ein
+Umwegfaktor gegenueber der Luftlinie. Ein Team-Treffer zaehlt mehr als zwei
+einzelne Wuensche.
+
+Auftritte **ohne Uhrzeit** (aktuell 41) lassen sich nicht einplanen; die App
+sagt, wie viele deshalb fehlen, statt sie stillschweigend zu unterschlagen.
+
+## Anhoeren: Spotify-Embed
+
+Im Detail eines Acts gibt es **30 Sekunden anspielen**. Geladen wird der
+offizielle Spotify-Embed - **erst auf Tippen**, vorher geht nichts zu Spotify.
+Kein API-Schluessel, kein Login noetig.
+
+Volle Titel gibt es nur im **Desktop-Browser mit eingeloggtem
+Premium-Konto**; auf dem Handy hat Spotify das Drittanbieter-Streaming
+eingestellt. Die `preview_url` der Web-API ist fuer neue Anwendungen seit
+November 2024 nicht mehr verfuegbar, und das Auslesen der Vorschau aus dem
+Embed-Player verstoesst gegen die Nutzungsbedingungen - deshalb der offizielle
+Weg.
+
 ## Team online (verschluesselt)
 
 Ueber das Menue: **Team einrichten** erzeugt eine zufaellige Team-ID, dazu

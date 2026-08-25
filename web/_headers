@@ -3,7 +3,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(self), camera=(), microphone=()
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://www.reeperbahnfestival.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://www.reeperbahnfestival.com; connect-src 'self'; font-src 'self'; frame-src https://open.spotify.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
 
 # Vendor-Dateien tragen KEINE Version im Namen. "immutable" waere hier eine
 # Falle: nach einer Aktualisierung haengen Besucher ein Jahr auf der alten

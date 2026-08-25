@@ -458,6 +458,95 @@ main { min-height: 60vh; }
 .pop-meta { color: #555; font-size: .8rem; }
 .leaflet-popup-content { margin: .6rem .8rem; }
 
+/* ---------- Abendplan ---------- */
+
+.plan { padding: .75rem .75rem 3rem; }
+
+.plan-head {
+  padding: .6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+}
+.plan-opts { display: flex; flex-wrap: wrap; gap: .5rem .9rem; font-size: .85rem; }
+.plan-opts label { display: inline-flex; align-items: center; gap: .3rem; }
+.plan-opts select {
+  min-height: 34px;
+  padding: 0 .3rem;
+  font: inherit;
+  font-size: .85rem;
+  color: var(--ink);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.plan-actions { display: flex; gap: .35rem; margin-top: .6rem; }
+
+.plan-sum { margin: .8rem 0 .4rem; font-size: .85rem; color: var(--ink-soft); }
+.plan-sum b { color: var(--ink); }
+
+/* Der Fussweg ist die eigentliche Information zwischen zwei Konzerten -
+   deshalb eine eigene Zeile mit Verbindungslinie, kein Nebensatz. */
+.leg {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .3rem 0 .3rem 1.4rem;
+  font-size: .8rem;
+  color: var(--ink-faint);
+}
+.leg::before {
+  content: "";
+  width: 2px;
+  align-self: stretch;
+  margin-left: -.85rem;
+  background: var(--line);
+}
+.leg.tight { color: var(--r4); font-weight: 600; }
+
+.stop { display: flex; gap: .6rem; align-items: flex-start; }
+.stop-no {
+  flex: 0 0 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: .8rem;
+  font-weight: 700;
+}
+.stop .row { flex: 1; margin-bottom: 0; }
+
+.plan-drop { margin-top: 1.4rem; }
+.plan-drop h3 {
+  margin: 0 0 .4rem;
+  font-size: .75rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.plan-drop ul { margin: 0; padding-left: 1.1rem; }
+.plan-drop li { font-size: .85rem; color: var(--ink-soft); }
+
+.route-no {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 12px/1 system-ui, sans-serif;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .4);
+}
+
+/* ---------- Spotify ---------- */
+
+.embed-wrap { margin-top: .4rem; }
+.embed-wrap iframe { width: 100%; height: 152px; border: 0; border-radius: 12px; }
+.embed-note { font-size: .75rem; color: var(--ink-faint); margin: .35rem 0 0; }
+
 /* ---------- Detail ---------- */
 
 .detail {

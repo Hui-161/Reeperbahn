@@ -275,6 +275,76 @@ with sync_playwright() as p:
     pg.click("#f-reset") if pg.locator("#f-reset").is_visible() else None
     pg.wait_for_timeout(300)
 
+    # --- Abendplan ---
+    # Ein Tag und ein paar Noten sind Voraussetzung; Noten 1 und 3 sind
+    # weiter oben schon gesetzt worden.
+    pg.locator('.day[data-day="2026-09-17"]').click(); pg.wait_for_timeout(300)
+    # Zwei Acts MIT Uhrzeit bewerten - ohne Uhrzeit ist nichts planbar, und
+    # die weiter oben bewerteten Acts stehen zufaellig auf "Zeit offen".
+    times = pg.locator(".row .row-time").all_inner_texts()
+    dated = [i for i, t in enumerate(times) if "Zeit" not in t][:2]
+    check("Es gibt Auftritte mit Uhrzeit am Donnerstag", len(dated) == 2, str(dated))
+    for k, i in enumerate(dated):
+        pg.locator(".row").nth(i).locator(".row-time").click()
+        pg.wait_for_selector("#detail .rate")
+        pg.locator(f".rate button[data-r='{k + 1}']").click()
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
+    pg.click("#m-plan"); pg.wait_for_timeout(600)
+    check("Abendplan oeffnet sich", pg.locator("#plan").is_visible()
+          and pg.locator("#list").is_hidden())
+    body = pg.locator("#plan-body").inner_text()
+    check("Plan sagt etwas Sinnvolles",
+          "Konzerte" in body or "Nichts zu planen" in body or "Tag wählen" in body,
+          body[:70].replace("\n", " "))
+
+    # Noten bis 5 -> es muss etwas planbar sein
+    pg.select_option("#plan-max", "5"); pg.wait_for_timeout(500)
+    stops = pg.locator("#plan .stop").count()
+    check("Mit Noten bis 5 entsteht ein Plan", stops >= 1, f"{stops} Station(en)")
+    if stops >= 2:
+        check("Fusswege werden ausgewiesen", pg.locator("#plan .leg").count() >= 1,
+              f"{pg.locator('#plan .leg').count()} Etappe(n)")
+    check("Zusammenfassung nennt den Fussweg",
+          "Fußweg" in pg.locator(".plan-sum").inner_text(),
+          pg.locator(".plan-sum").inner_text()[:60])
+
+    # Spielzeit aendern muss den Plan beeinflussen koennen
+    pg.select_option("#plan-set", "50"); pg.wait_for_timeout(500)
+    check("Aenderung der Spielzeit wird verarbeitet",
+          pg.locator("#plan-body").inner_text() != "", "")
+
+    # Route auf der Karte
+    pg.click("#plan-map"); pg.wait_for_timeout(1200)
+    check("Route liegt auf der Karte", pg.locator("#map").is_visible())
+    check("Numerierte Stationen gesetzt", pg.locator(".route-no").count() >= 1,
+          f"{pg.locator('.route-no').count()} Marker")
+    check("Verbindungslinie gezeichnet",
+          pg.locator("#map path.leaflet-interactive").count() >= 1
+          or pg.locator("#map svg path").count() >= 1)
+    pg.click("#btn-map"); pg.wait_for_timeout(500)
+    check("Karte wieder zu", pg.locator("#list").is_visible())
+
+    # --- Spotify: Player erst auf Tippen ---
+    pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    found = False
+    for i in range(14):
+        pg.locator(".row").nth(i).locator(".row-time").click()
+        pg.wait_for_selector("#detail .d-title")
+        if pg.locator("[data-play]").count():
+            found = True
+            break
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(120)
+    check("Anspiel-Knopf vorhanden", found)
+    if found:
+        check("Vorher KEIN iframe geladen", pg.locator("#detail iframe").count() == 0)
+        pg.locator("[data-play]").click(); pg.wait_for_timeout(600)
+        src = pg.locator("#detail iframe").first.get_attribute("src") or ""
+        check("Spotify-Embed wird geladen",
+              src.startswith("https://open.spotify.com/embed/"), src[:60])
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(250)
+
     # Ansicht hell/dunkel per Knopf.
     # WICHTIG: hier wird die GERENDERTE Farbe geprueft, nicht nur das
     # data-theme-Attribut. Genau diese Luecke hat einen Fehler durchgelassen:
