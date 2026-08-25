@@ -97,7 +97,7 @@ with sync_playwright() as p:
 
     pg.locator(".row").first.click()
     pg.wait_for_selector("#d-note")
-    name = pg.locator(".d-title").inner_text()
+    name = pg.locator("#detail .d-title").inner_text()
     pg.fill("#d-note", "Konflikt mit Lowertown pruefen")
     pg.wait_for_selector("#d-saved:has-text('Gespeichert')", timeout=4000)
     check("Notiz speichert", True, name)
@@ -168,6 +168,64 @@ with sync_playwright() as p:
     venues_in_list = set(pg.locator(".row-sub .venue").all_inner_texts())
     check("Liste zeigt nur diesen Spielort", len(venues_in_list) == 1, str(venues_in_list))
     pg.click("#f-reset"); pg.wait_for_timeout(300)
+
+    # Ansicht hell/dunkel per Knopf
+    def theme_attr():
+        return pg.locator("html").get_attribute("data-theme")
+    check("Start folgt der Systemvorgabe", theme_attr() is None, str(theme_attr()))
+    pg.click("#btn-theme"); pg.wait_for_timeout(200)
+    t1 = theme_attr()
+    pg.click("#btn-theme"); pg.wait_for_timeout(200)
+    t2 = theme_attr()
+    pg.click("#btn-theme"); pg.wait_for_timeout(200)
+    check("Schalter durchlaeuft hell, dunkel, System",
+          {t1, t2} == {"light", "dark"} and theme_attr() is None, f"{t1} -> {t2} -> System")
+    pg.click("#btn-theme"); pg.wait_for_timeout(200)   # auf 'light' stehen lassen
+    pg.reload(wait_until="load"); pg.wait_for_selector(".row", timeout=15000)
+    check("Ansicht ueberlebt Reload", theme_attr() == "light", str(theme_attr()))
+
+    # Menue oben rechts
+    pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
+    check("Menue enthaelt die Dateiaktionen",
+          pg.locator("#m-export").count() == 1 and pg.locator("#m-import").count() == 1
+          and pg.locator("#m-seen").count() == 1)
+    check("Menue zeigt die aktive Ansicht",
+          pg.locator('[data-theme-set="light"]').get_attribute("aria-pressed") == "true")
+    check("Menue zeigt Kennzahlen", "Favoriten" in pg.locator("#m-stats").inner_text(),
+          pg.locator("#m-stats").inner_text())
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(250)
+    check("Aktionen sind NICHT mehr im Fuss",
+          pg.locator(".foot .linkish").count() == 0)
+
+    # Gesehen markieren und als CSV ausgeben
+    pg.locator(".row").nth(1).locator(".row-time").click()
+    pg.wait_for_selector("[data-seen]")
+    act_name = pg.locator("#detail .d-title").inner_text()
+    pg.locator("[data-seen]").click(); pg.wait_for_timeout(250)
+    check("Gesehen setzt sich",
+          pg.locator("[data-seen]").get_attribute("aria-pressed") == "true")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Gesehen-Marke in der Liste", pg.locator("#list .seen-mark").count() >= 1)
+
+    pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
+    with pg.expect_download() as dl:
+        pg.click("#m-seen")
+    path = dl.value.path()
+    csv_text = open(path, encoding="utf-8-sig").read()
+    check("CSV wird heruntergeladen", dl.value.suggested_filename.endswith(".csv"),
+          dl.value.suggested_filename)
+    check("CSV hat Kopfzeile", csv_text.splitlines()[0].startswith('"Tag";"Zeit";"Act"'),
+          csv_text.splitlines()[0][:40])
+    check("CSV enthaelt den markierten Act", act_name.split()[0] in csv_text, act_name)
+    pg.wait_for_timeout(200)
+
+    # Clustering auf der Karte
+    pg.click("#btn-map"); pg.wait_for_timeout(1200)
+    clusters = pg.locator(".marker-cluster").count()
+    single = pg.locator(".leaflet-marker-icon:not(.marker-cluster)").count()
+    check("Marker sind geclustert", clusters > 0, f"{clusters} Cluster, {single} Einzelmarker")
+    check("Nicht mehr alle 34 Marker einzeln", single < 34, f"{single} einzeln")
+    pg.click("#btn-map"); pg.wait_for_timeout(400)
 
     # --- Vorschlaege importieren ---
     # Bewusst in einem FRISCHEN Kontext: im bisherigen sind schon Acts

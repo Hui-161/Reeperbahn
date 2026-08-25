@@ -29,6 +29,7 @@ const store = {
 };
 
 const fav = new Set(store.get('fav', []));
+const seen = new Set(store.get('seen', []));
 let note = store.get('note', {});
 let rate = store.get('rate', {});
 (() => {
@@ -44,6 +45,54 @@ const anchor = store.get('anchor', {});
 let hint = store.get('hint', {});
 
 const saveFav = () => store.set('fav', [...fav]);
+const saveSeen = () => store.set('seen', [...seen]);
+
+/* ---------- Ansicht hell/dunkel ----------
+   Drei Zustaende: Systemvorgabe, immer hell, immer dunkel. Die Wahl steht in
+   localStorage und wird als data-theme auf <html> gesetzt; das CSS entscheidet
+   den Rest. */
+
+const THEMES = ['system', 'light', 'dark'];
+// Gleiche Strichstaerke und Groesse wie die uebrigen Kopf-Icons, damit der
+// Schalter nicht wie ein Textzeichen zwischen SVGs sitzt.
+const THEME_ICON = {
+  system: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16" />'
+        + '<path d="M12 6a6 6 0 0 0 0 12z" fill="currentColor" stroke="none"/>',
+  light: '<circle cx="12" cy="12" r="4.2"/>'
+       + '<path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2'
+       + 'M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>',
+  dark: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7.5 7.5 0 1 0 10.5 10.5z"/>',
+};
+const THEME_LABEL = { system: 'Systemvorgabe', light: 'hell', dark: 'dunkel' };
+let theme = store.get('theme', 'system');
+
+function applyTheme() {
+  if (theme === 'system') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
+  const icon = document.getElementById('theme-icon');
+  if (icon) icon.innerHTML = THEME_ICON[theme];
+  const btn = document.getElementById('btn-theme');
+  if (btn) btn.title = `Ansicht: ${THEME_LABEL[theme]}`;
+  for (const b of document.querySelectorAll('[data-theme-set]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.themeSet === theme));
+  }
+  // Die Browserleiste soll mitziehen.
+  const dark = theme === 'dark' || (theme === 'system'
+    && matchMedia('(prefers-color-scheme: dark)').matches);
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.remove();
+  const meta = document.createElement('meta');
+  meta.name = 'theme-color';
+  meta.content = dark ? '#12111c' : '#faf8fd';
+  document.head.appendChild(meta);
+}
+
+function setTheme(next) {
+  theme = THEMES.includes(next) ? next : 'system';
+  store.set('theme', theme);
+  applyTheme();
+}
+
+applyTheme();
 
 /* ---------- Zustand ---------- */
 
@@ -58,13 +107,16 @@ const S = {
   mapOn: false,
 };
 
-let map = null, markers = [];
+const MAP_DETAIL_ZOOM = 17;
+let map = null, cluster = null;
+const markers = [];
+const popupHtml = [];
 
 const $ = (sel) => document.querySelector(sel);
 const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
   genrebox: $('#genrebox'), venuebox: $('#venuebox'),
-  detail: $('#detail'), meta: $('#meta'),
+  detail: $('#detail'), menu: $('#menu'), meta: $('#meta'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
 };
 
@@ -237,7 +289,8 @@ function row(sh, act) {
   return `<button class="row${r ? ' rated-' + r : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}</span>
     <span class="row-main">
-      <span class="row-name${note[act.id] ? ' has-note' : ''}">${esc(act.n)}${
+      <span class="row-name${note[act.id] ? ' has-note' : ''}${
+        seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${
         r ? `<span class="grade grade-${r}" title="Meine Note: ${r}">${r}</span>`
           : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
               title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : '')}</span>
@@ -353,10 +406,15 @@ function openDetail(ai) {
       <p class="bio">${esc(act.bio)}</p></div>` : ''}
 
     <div class="d-section">
-      <button class="chip" data-fav="${act.id}" aria-pressed="${fav.has(act.id)}">
-        <span class="heart">${fav.has(act.id) ? '♥' : '♡'}</span>
-        ${fav.has(act.id) ? 'Favorit' : 'Als Favorit merken'}
-      </button>
+      <div class="filters">
+        <button class="chip" data-fav="${act.id}" aria-pressed="${fav.has(act.id)}">
+          <span class="heart">${fav.has(act.id) ? '♥' : '♡'}</span>
+          ${fav.has(act.id) ? 'Favorit' : 'Als Favorit merken'}
+        </button>
+        <button class="chip" data-seen="${act.id}" aria-pressed="${seen.has(act.id)}">
+          ${seen.has(act.id) ? '✓ Gesehen' : 'Als gesehen markieren'}
+        </button>
+      </div>
     </div>
   </div>`;
 
@@ -405,6 +463,18 @@ function ensureMap() {
   const counts = new Map();
   for (const s of S.data.shows) if (s.v != null) counts.set(s.v, (counts.get(s.v) || 0) + 1);
 
+  // Clustering: 34 Haeuser auf engem Raum verdecken sich sonst gegenseitig.
+  cluster = L.markerClusterGroup({
+    maxClusterRadius: 38,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    // Ab dieser Zoomstufe keine Cluster mehr. Damit ist "Spielort anzeigen"
+    // deterministisch: hinzoomen, Marker ist einzeln, Popup auf. Ohne das
+    // muesste man sich auf zoomToShowLayer und dessen Animation verlassen -
+    // die laeuft nicht zuverlaessig, wenn die Karte gerade erst sichtbar
+    // wurde und ihre Groesse noch stale ist.
+    disableClusteringAtZoom: MAP_DETAIL_ZOOM,
+  });
   const pts = [];
   S.data.venues.forEach((v, i) => {
     if (v.lat == null) return;
@@ -414,15 +484,18 @@ function ensureMap() {
       v.acc && v.acc.length && esc(v.acc.join(', ')),
       v.inherited && v.parent && `Koordinaten von ${esc(v.parent)}`,
     ].filter(Boolean);
-    const m = L.marker([v.lat, v.lng]).addTo(map).bindPopup(
+    popupHtml[i] =
       `<div class="pop-title">${esc(v.n)}</div>
        <div class="pop-meta">${counts.get(i) || 0} Auftritte${bits.length ? '<br>' + bits.join('<br>') : ''}</div>
        <div class="pop-actions">
          <button data-onlyvenue="${i}">Nur dieses Haus zeigen</button>
-       </div>`);
+       </div>`;
+    const m = L.marker([v.lat, v.lng]).bindPopup(popupHtml[i]);
+    cluster.addLayer(m);
     markers[i] = m;
     pts.push([v.lat, v.lng]);
   });
+  map.addLayer(cluster);
   if (pts.length) map.fitBounds(pts, { padding: [30, 30] });
   return map;
 }
@@ -439,9 +512,13 @@ function showVenue(i) {
   const m = ensureMap();
   setTimeout(() => {
     m.invalidateSize();
-    m.setView([v.lat, v.lng], 17);
-    if (markers[i]) markers[i].openPopup();
-  }, 60);
+    m.setView([v.lat, v.lng], MAP_DETAIL_ZOOM, { animate: false });
+    // Popup direkt an der Koordinate statt am Marker: der Marker kann in
+    // diesem Moment noch im Cluster stecken (die Gruppe baut erst bei
+    // zoomend um), und dann haengt ein Marker-Popup an einem Element, das
+    // gar nicht auf der Karte liegt.
+    if (popupHtml[i]) m.openPopup(popupHtml[i], [v.lat, v.lng], { offset: [0, -12] });
+  }, 80);
 }
 
 /* ---------- Ereignisse ---------- */
@@ -485,6 +562,21 @@ document.addEventListener('click', (e) => {
       else n.textContent = on ? '♥' : '♡';
     }
     if (S.favOnly) render();
+    return;
+  }
+
+  const seenBtn = t.closest('[data-seen]');
+  if (seenBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const id = +seenBtn.dataset.seen;
+    seen.has(id) ? seen.delete(id) : seen.add(id);
+    saveSeen();
+    const on = seen.has(id);
+    for (const n of document.querySelectorAll(`[data-seen="${id}"]`)) {
+      n.setAttribute('aria-pressed', String(on));
+      n.textContent = on ? '✓ Gesehen' : 'Als gesehen markieren';
+    }
+    render();
     return;
   }
 
@@ -627,20 +719,50 @@ el.detail.addEventListener('close', () => {
    persoenlich, das Repository ist oeffentlich. So bleiben sie auf dem Geraet
    und lassen sich trotzdem zwischen Handy und Laptop bewegen. */
 
-$('#btn-export').addEventListener('click', () => {
-  const payload = {
-    kind: 'rbf26-auswahl', version: 1,
-    fav: [...fav], note, rate, hint,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+function download(name, text, type) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'reeperbahn-auswahl.json';
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-});
+}
 
-$('#btn-import').addEventListener('click', () => el.file.click());
+function exportChoice() {
+  download('reeperbahn-auswahl.json', JSON.stringify({
+    kind: 'rbf26-auswahl', version: 2,
+    fav: [...fav], seen: [...seen], note, rate, hint,
+  }, null, 2), 'application/json');
+}
+
+/* Gesehen-Liste als CSV: das ist die Mitschrift des Festivals, also mit Tag,
+   Zeit, Spielort, eigener Note und Notiz - nicht nur Namen. */
+function exportSeen() {
+  if (!seen.size) { alert('Noch nichts als gesehen markiert.'); return; }
+  const rows = [];
+  for (const sh of S.data.shows) {
+    const act = S.data.acts[sh.a];
+    if (!seen.has(act.id)) continue;
+    rows.push([
+      sh.d || '', sh.tbd ? '' : hhmm(sh.t), act.n,
+      sh.v != null ? S.data.venues[sh.v].n : '',
+      (act.g || []).map((i) => S.data.genres[i]).join('; '),
+      act.c || '', rate[act.id] || '', (note[act.id] || '').replace(/\s+/g, ' '),
+    ]);
+  }
+  // Acts ohne Auftritt in den Daten trotzdem auffuehren, damit nichts fehlt.
+  const listed = new Set(rows.map((r) => r[2]));
+  for (const act of S.data.acts) {
+    if (seen.has(act.id) && !listed.has(act.n)) {
+      rows.push(['', '', act.n, '', '', act.c || '', rate[act.id] || '',
+                 (note[act.id] || '').replace(/\s+/g, ' ')]);
+    }
+  }
+  rows.sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]) || a[2].localeCompare(b[2]));
+  const head = ['Tag', 'Zeit', 'Act', 'Spielort', 'Genres', 'Land', 'Note', 'Notiz'];
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = '\uFEFF' + [head, ...rows].map((r) => r.map(q).join(';')).join('\r\n');
+  download('reeperbahn-gesehen.csv', csv, 'text/csv;charset=utf-8');
+}
 
 el.file.addEventListener('change', async () => {
   const f = el.file.files && el.file.files[0];
@@ -652,10 +774,12 @@ el.file.addEventListener('change', async () => {
 
   if (data.kind === 'rbf26-auswahl') {
     (data.fav || []).forEach((id) => fav.add(+id));
+    (data.seen || []).forEach((id) => seen.add(+id));
     Object.assign(note, data.note || {});
     Object.assign(rate, data.rate || {});
     Object.assign(hint, data.hint || {});
-    saveFav(); store.set('note', note); store.set('rate', rate); store.set('hint', hint);
+    saveFav(); saveSeen();
+    store.set('note', note); store.set('rate', rate); store.set('hint', hint);
     alert('Auswahl übernommen.');
   } else if (data.suggested) {
     hint = buildHints(data);
@@ -690,6 +814,34 @@ function buildHints(data) {
   }
   return out;
 }
+
+$('#btn-theme').addEventListener('click', () => {
+  setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
+});
+
+document.addEventListener('click', (e) => {
+  const pick = e.target.closest('[data-theme-set]');
+  if (pick) setTheme(pick.dataset.themeSet);
+});
+
+/* ---------- Menue ---------- */
+
+$('#btn-menu').addEventListener('click', () => {
+  const rated = Object.keys(rate).length;
+  $('#m-stats').textContent =
+    `${fav.size} Favoriten · ${rated} bewertet · ${seen.size} gesehen · `
+    + `${Object.keys(note).length} Notizen`;
+  applyTheme();
+  el.menu.showModal();
+});
+
+el.menu.addEventListener('click', (e) => {
+  if (e.target === el.menu) el.menu.close();
+});
+
+$('#m-export').addEventListener('click', () => { el.menu.close(); exportChoice(); });
+$('#m-import').addEventListener('click', () => { el.menu.close(); el.file.click(); });
+$('#m-seen').addEventListener('click', () => { el.menu.close(); exportSeen(); });
 
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

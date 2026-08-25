@@ -180,19 +180,27 @@ im Repo, sonst gibt es keine Abhaengigkeiten.
 
 Enthalten: Timetable nach Festivaltag **oder ueber alle Tage**, Filter nach
 Genre (mit eigenem Eimer fuer Acts *ohne* Genre-Angabe) und nach Spielort,
-Favoriten, private Notizen, **Bewertung von 1 bis 5** (1 = sehr gut,
-5 = gar nicht), Volltextsuche ueber alle Tage, Karte mit allen Spielorten samt
-"Nur dieses Haus zeigen", Offline-Betrieb per Service Worker, installierbar
+Favoriten, **Gesehen-Markierung**, private Notizen, **Bewertung von 1 bis 5**
+(1 = sehr gut, 5 = gar nicht), Volltextsuche ueber alle Tage, Karte mit
+**geclusterten** Spielorten samt "Nur dieses Haus zeigen", Umschalter fuer
+hell/dunkel/Systemvorgabe, Offline-Betrieb per Service Worker, installierbar
 als PWA.
+
+Im Menue oben rechts: Auswahl sichern (JSON), Datei laden, und die
+**Gesehen-Liste als CSV** - mit Tag, Zeit, Spielort, eigener Note und Notiz,
+also als Mitschrift des Festivals und nicht als reine Namensliste.
 
 Die Note steht in der Liste als **Zahl** und nicht nur als Farbe - Farbe
 allein ist fuer Farbfehlsichtige keine Information. Bewertungen aus der
 frueheren dreistufigen Ampel werden beim Laden automatisch abgebildet
 (gruen->1, gelb->3, rot->5).
 
-Bekannte Einschraenkung: bei 34 Haeusern auf engem Raum verdecken sich die
-Kartenmarker beim Standard-Zoom teilweise. Der zuverlaessige Weg zu einem
-bestimmten Haus ist der Spielort-Link in der Trefferzeile.
+Zur Karte: die Marker sind geclustert (Leaflet.markercluster, eingecheckt),
+weil sich 34 Haeuser auf engem Raum sonst gegenseitig verdecken. Ab Zoomstufe
+17 loesen sich die Cluster auf - dadurch ist "Spielort anzeigen"
+deterministisch. Das Popup wird an der Koordinate geoeffnet, nicht am Marker:
+der kann in dem Moment noch im Cluster stecken, weil die Gruppe erst bei
+`zoomend` umbaut.
 
 Eigener Zustand (Favoriten, Notizen, Ampel) bleibt im Browser des Geraets —
 kein Server, kein Konto.

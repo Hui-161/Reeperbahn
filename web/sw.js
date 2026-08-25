@@ -1,9 +1,11 @@
 /* Offline-Betrieb: im Club ist der Empfang schlecht.
    Huelle aus dem Cache, Daten bevorzugt aus dem Netz mit Cache als Rueckfall. */
-const V = 'rbf26-v1';
+const V = 'rbf26-v2';
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'icon.svg', 'manifest.webmanifest',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
+  'vendor/leaflet/leaflet.markercluster.js',
+  'vendor/leaflet/MarkerCluster.css', 'vendor/leaflet/MarkerCluster.Default.css',
 ];
 
 self.addEventListener('install', (e) => {

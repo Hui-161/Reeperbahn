@@ -11,6 +11,8 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet/MarkerCluster.css">
+<link rel="stylesheet" href="vendor/leaflet/MarkerCluster.Default.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -24,6 +26,12 @@
       </button>
       <button id="btn-map" class="icon-btn" aria-label="Karte" title="Karte" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      </button>
+      <button id="btn-theme" class="icon-btn" aria-label="Ansicht wechseln">
+        <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+      </button>
+      <button id="btn-menu" class="icon-btn" aria-label="Menü" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
     </div>
   </div>
@@ -61,17 +69,42 @@
 
 <dialog id="detail" class="detail" aria-label="Details"></dialog>
 
+<dialog id="menu" class="detail" aria-label="Menü">
+  <div class="d-wrap">
+    <div class="d-head">
+      <h2 class="d-title">Menü</h2>
+      <button class="icon-btn d-close" data-close aria-label="Schließen">✕</button>
+    </div>
+
+    <div class="d-section">
+      <h3>Ansicht</h3>
+      <div class="menu-list">
+        <button type="button" data-theme-set="system">Systemvorgabe folgen</button>
+        <button type="button" data-theme-set="light">Immer hell</button>
+        <button type="button" data-theme-set="dark">Immer dunkel</button>
+      </div>
+    </div>
+
+    <div class="d-section">
+      <h3>Meine Auswahl</h3>
+      <div class="menu-list">
+        <button type="button" id="m-export">Auswahl sichern (JSON)</button>
+        <button type="button" id="m-import">Datei laden</button>
+        <button type="button" id="m-seen">Gesehen-Liste exportieren (CSV)</button>
+      </div>
+      <p class="menu-note" id="m-stats"></p>
+    </div>
+  </div>
+</dialog>
+
 <footer class="foot">
   <span id="meta"></span>
-  <span class="foot-actions">
-    <button id="btn-export" class="linkish" type="button">Auswahl sichern</button>
-    <button id="btn-import" class="linkish" type="button">Datei laden</button>
-    <input id="file" type="file" accept="application/json,.json" hidden>
-  </span>
+  <input id="file" type="file" accept="application/json,.json" hidden>
   <span class="foot-note">Private Auswahl, nur auf diesem Gerät gespeichert.</span>
 </footer>
 
 <script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/leaflet/leaflet.markercluster.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
