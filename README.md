@@ -159,6 +159,7 @@ aendern. Also: privat nutzen, nicht publizieren.
 | `web/` | die Web-App: statisch, kein Build-Schritt |
 | `web/serve_local.py` | lokaler Server, sendet die echten Cloudflare-Header |
 | `web/test_e2e.py` | Browser-Regressionstest (22 Pruefungen) |
+| `taste.py` | Abgleich eigener Bewertungen und Hoerprofil gegen das Line-up |
 | `BACKLOG.md` | Verbesserungswuensche, bewertet gegen die Datenlage |
 | `DEPLOY.md` | Cloudflare Pages + eigene Domain |
 | `data/snapshots/` | Historie — **gehoert ins Repository**, dagegen laeuft der Diff |

@@ -109,6 +109,53 @@ with sync_playwright() as p:
     csp = [e for e in errors if "content security policy" in e.lower()
            or "refused to" in e.lower()]
     check("Keine CSP-Verletzung", not csp, str(csp[:3]))
+    # --- Vorschlaege importieren ---
+    # Bewusst in einem FRISCHEN Kontext: im bisherigen sind schon Acts
+    # bewertet, und eine eigene Bewertung unterdrueckt den Vorschlagspunkt.
+    # Ohne Isolierung testet man sonst die Vorgeschichte statt den Import.
+    import json, tempfile
+    lineup = json.load(open("web/data/lineup.json", encoding="utf-8"))
+    ctx2 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg2 = ctx2.new_page()
+    pg2.goto(BASE + "/", wait_until="load")
+    pg2.wait_for_selector(".row", timeout=15000)
+    act_idx = pg2.locator(".row").evaluate_all(
+        "els => els.slice(0,2).map(e => e.dataset.act)")
+    picks = [lineup["acts"][int(i)]["id"] for i in act_idx]
+    fixture = {
+        "suggested": {str(picks[0]): 0.95, str(picks[1]): 0.2},
+        "evidence": {str(picks[0]): 10, str(picks[1]): 10},
+        "min_evidence": 3,
+        "profile_hits": [picks[1]],
+        "bio_refs": {}, "known": {},
+    }
+    fp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(fixture, fp); fp.close()
+    pg2.once("dialog", lambda d: d.accept())
+    pg2.set_input_files("#file", fp.name)
+    pg2.wait_for_timeout(800)
+    check("Vorschlag 'nein' bei Ausschluss-Genre", pg2.locator("#list .hint-nein").count() == 1,
+          f"{pg2.locator('.hint-nein').count()}")
+    check("Vorschlag 'ja' bei Profil-Treffer", pg2.locator("#list .hint-ja").count() == 1,
+          f"{pg2.locator('.hint-ja').count()}")
+
+    before = pg2.locator("#list .hint").count()
+    pg2.locator(".row").first.click()
+    pg2.wait_for_selector(".suggestion")
+    check("Vorschlag im Detail erklaert", pg2.locator(".suggestion").count() == 1)
+    pg2.locator(".rate button[data-r='rot']").click()
+    pg2.keyboard.press("Escape"); pg2.wait_for_timeout(500)
+    check("Eigene Bewertung verdraengt den Vorschlagspunkt",
+          pg2.locator("#list .hint").count() == before - 1,
+          f"{before} -> {pg2.locator('#list .hint').count()}")
+    check("Dialoginhalt beim Schliessen verworfen",
+          pg2.locator("#detail .suggestion").count() == 0)
+
+    pg2.reload(wait_until="load"); pg2.wait_for_selector(".row", timeout=15000)
+    check("Vorschlaege ueberleben Reload",
+          pg2.locator("#list .hint").count() == before - 1)
+    ctx2.close()
+
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e
             and e not in csp]

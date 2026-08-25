@@ -28,6 +28,9 @@ const fav = new Set(store.get('fav', []));
 let note = store.get('note', {});
 let rate = store.get('rate', {});
 const anchor = store.get('anchor', {});
+/* Vorschlaege aus taste.py. Getrennt von "rate": die eigene Bewertung
+   gewinnt immer, der Vorschlag ist nur eine Vorbelegung. */
+let hint = store.get('hint', {});
 
 const saveFav = () => store.set('fav', [...fav]);
 
@@ -49,7 +52,7 @@ const $ = (sel) => document.querySelector(sel);
 const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
   genrebox: $('#genrebox'), detail: $('#detail'), meta: $('#meta'),
-  q: $('#q'), searchbar: $('#searchbar'),
+  q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -194,7 +197,9 @@ function row(sh, act) {
   return `<button class="row${r ? ' rated-' + r : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}</span>
     <span class="row-main">
-      <span class="row-name${note[act.id] ? ' has-note' : ''}">${esc(act.n)}</span>
+      <span class="row-name${note[act.id] ? ' has-note' : ''}">${esc(act.n)}${
+        !r && hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
+          title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : ''}</span>
       <span class="row-sub">${venue
         ? `<span class="venue" data-venue="${sh.v}">${esc(venue.n)}</span>` : 'Spielort offen'}
         ${act.c ? ' · ' + esc(act.c) : ''}</span>
@@ -257,6 +262,14 @@ function openDetail(ai) {
       </div>
       <button class="icon-btn d-close" data-close aria-label="Schließen">✕</button>
     </div>
+
+    ${hint[act.id] ? `<div class="d-section">
+      <div class="suggestion">
+        <span class="hint hint-${hint[act.id].v}"></span>
+        <span><b>Vorschlag: ${hint[act.id].v === 'ja' ? 'eher ja' : 'eher nein'}</b> —
+        ${esc(hint[act.id].why)}. Deine Einschätzung unten überschreibt das.</span>
+      </div>
+    </div>` : ''}
 
     <div class="d-section">
       <h3>Meine Einschätzung</h3>
@@ -517,6 +530,83 @@ addEventListener('orientationchange', sizeMap);
 el.detail.addEventListener('click', (e) => {
   if (e.target === el.detail) el.detail.close();   // Klick auf den Hintergrund
 });
+
+/* Inhalt beim Schliessen verwerfen: ein geschlossenes <dialog> behaelt sonst
+   sein Markup, und veraltete Elemente zaehlen bei Selektoren mit. */
+el.detail.addEventListener('close', () => {
+  clearTimeout(noteTimer);
+  el.detail.innerHTML = '';
+  delete el.detail.dataset.act;
+});
+
+/* ---------- Sichern und Laden ----------
+   Bewusst als Datei und nicht ueber einen Server: Geschmacksdaten sind
+   persoenlich, das Repository ist oeffentlich. So bleiben sie auf dem Geraet
+   und lassen sich trotzdem zwischen Handy und Laptop bewegen. */
+
+$('#btn-export').addEventListener('click', () => {
+  const payload = {
+    kind: 'rbf26-auswahl', version: 1,
+    fav: [...fav], note, rate, hint,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'reeperbahn-auswahl.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+
+$('#btn-import').addEventListener('click', () => el.file.click());
+
+el.file.addEventListener('change', async () => {
+  const f = el.file.files && el.file.files[0];
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); }
+  catch (e) { alert('Die Datei ist kein gültiges JSON.'); return; }
+  el.file.value = '';
+
+  if (data.kind === 'rbf26-auswahl') {
+    (data.fav || []).forEach((id) => fav.add(+id));
+    Object.assign(note, data.note || {});
+    Object.assign(rate, data.rate || {});
+    Object.assign(hint, data.hint || {});
+    saveFav(); store.set('note', note); store.set('rate', rate); store.set('hint', hint);
+    alert('Auswahl übernommen.');
+  } else if (data.suggested) {
+    hint = buildHints(data);
+    store.set('hint', hint);
+    const n = Object.keys(hint).length;
+    alert(`${n} Vorschläge übernommen. Deine eigenen Bewertungen bleiben unberührt.`);
+  } else {
+    alert('Unbekanntes Format. Erwartet wird ein Export dieser App oder ' +
+          'taste/suggestions.json.');
+    return;
+  }
+  render();
+});
+
+/* Aus taste/suggestions.json ableiten, was in der App angezeigt wird. */
+function buildHints(data) {
+  const out = {};
+  const refs = data.bio_refs || {};
+  const hits = new Set((data.profile_hits || []).map(String));
+  const known = data.known || {};
+  const evidence = data.evidence || {};
+
+  for (const [id, score] of Object.entries(data.suggested || {})) {
+    if (known[id]) continue;                      // schon selbst entschieden
+    if (hits.has(id)) {
+      out[id] = { v: 'ja', why: 'steht in deiner eigenen Hörplaylist' };
+    } else if (refs[id] && refs[id].length) {
+      out[id] = { v: 'ja', why: 'Bio nennt ' + refs[id].join(', ') };
+    } else if (score >= 0.9 && (evidence[id] || 0) >= (data.min_evidence || 3)) {
+      out[id] = { v: 'nein', why: 'Genre, das du durchweg aussortiert hast' };
+    }
+  }
+  return out;
+}
 
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

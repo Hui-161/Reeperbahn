@@ -14,3 +14,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venues.json
+taste/labels.csv
+taste/*.local.*
+taste/profile.csv
+taste/suggestions.json

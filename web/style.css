@@ -406,7 +406,46 @@ main { min-height: 60vh; }
   flex-wrap: wrap;
   gap: .25rem 1rem;
 }
+.foot-actions { display: flex; gap: .75rem; }
 .foot-note { margin-left: auto; }
+
+.linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Vorschlag vs. eigene Entscheidung: bewusst UNTERSCHIEDLICH dargestellt.
+   Die eigene Ampel faerbt den Rand, ein Vorschlag nur diesen kleinen
+   Punkt - sonst verwischt, was Maschine und was Mensch entschieden hat. */
+.hint {
+  display: inline-block;
+  width: .45rem;
+  height: .45rem;
+  border-radius: 999px;
+  margin-left: .35rem;
+  vertical-align: .1em;
+}
+.hint-ja   { background: var(--gruen); }
+.hint-nein { background: var(--ink-faint); }
+
+.suggestion {
+  display: flex;
+  gap: .5rem;
+  align-items: baseline;
+  padding: .5rem .6rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  font-size: .85rem;
+  color: var(--ink-soft);
+}
+.suggestion b { color: var(--ink); font-weight: 650; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
