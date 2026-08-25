@@ -13,3 +13,4 @@ sync.log
 __pycache__/
 *.py[cod]
 .venv/
+venues.json

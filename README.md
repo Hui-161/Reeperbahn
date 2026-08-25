@@ -75,6 +75,14 @@ Der Weg zu einer View ist zweistufig:
 
 Nutzbare View-IDs: `overview_act`, `overview_festival_event`, `overview_event`.
 
+### Datenqualitaet: Spielorte erben Koordinaten
+
+Unter-Locations (Raeume und Nebenbuehnen, z. B. `"Molotow  / Top10"`) haben ein
+leeres `fieldGeolocation`; die Koordinaten haengen am Elterneintrag in
+`fieldParentLocation`. 20 der 189 Locations sind **nur** so verortbar. Ausserdem
+haben die Labels unsaubere Leerzeichen — Abgleich nur ueber einen normalisierten
+Schluessel. `fetch_venues.py` erledigt beides, `--check` prueft es.
+
 ### Datenqualitaet: Uhrzeiten sind teils Platzhalter
 
 **`06:00` ist keine Spielzeit, sondern der Platzhalter fuer "Tag steht,
@@ -145,7 +153,9 @@ aendern. Also: privat nutzen, nicht publizieren.
 | `fetch_lineup.py` | zweistufiger Abruf, Mapping auf das Show-Schema |
 | `rbf_core.py` | Datenmodell, Snapshots, Diff, ICS-Export, Selbsttest |
 | `sync.py` | ein Befehl: holen, Snapshot, Aenderungen melden |
+| `fetch_venues.py` | Spielorte mit Koordinaten, Adresse, Kapazitaet, Barrierefreiheit |
 | `discover.py` | Discovery-Probe — nur noetig, wenn die Seite umgebaut wird |
+| `BACKLOG.md` | Verbesserungswuensche, bewertet gegen die Datenlage |
 | `data/snapshots/` | Historie — **gehoert ins Repository**, dagegen laeuft der Diff |
 | `.github/workflows/lineup-check.yml` | taeglicher Check, Issue bei Aenderungen |
 
@@ -165,6 +175,7 @@ python3 sync.py                             # holen + Aenderungen melden
 python3 rbf_core.py diff                    # letzte zwei Snapshots
 python3 rbf_core.py csv shows.json          # flache Tabelle
 python3 rbf_core.py ics shows.json --artists "shame,Lowertown"
+python3 fetch_venues.py --check             # Spielorte + Verortbarkeit pruefen
 python3 rbf_core.py selftest                # Tests
 ```
 
