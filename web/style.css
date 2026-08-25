@@ -106,6 +106,14 @@
    Browser-Stylesheet - die Kaesten blieben dauerhaft offen. */
 [hidden] { display: none !important; }
 
+/* Kein Ziehen-zum-Neuladen. Am oberen Rand weiterzuwischen hat die Seite
+   sofort neu geladen und dabei die Scrollposition und den offenen Kasten
+   verloren. "contain" laesst das Scrollen innerhalb der Seite unberuehrt und
+   nimmt nur die Browser-Geste am Rand weg. */
+html {
+  overscroll-behavior-y: contain;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -113,6 +121,7 @@ body {
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
   padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior-y: contain;
 }
 
 /* ---------- Kopf ---------- */
@@ -327,7 +336,7 @@ main { min-height: 60vh; }
 
 .row {
   display: grid;
-  grid-template-columns: 3.4rem 1fr auto;
+  grid-template-columns: 3.4rem 1fr auto auto;
   gap: .6rem;
   align-items: start;
   width: 100%;
@@ -389,6 +398,17 @@ main { min-height: 60vh; }
 .grade-4 { background: var(--r4); }
 .grade-5 { background: var(--r5); }
 
+/* "1,5" braucht mehr Platz als "1" - das feste Quadrat wuerde abschneiden.
+   Die Farbe kommt weiter vom Eimer (grade-1 bzw. grade-2), der Strich am
+   Rand zeigt, dass es eine Zwischennote ist. */
+.grade-half {
+  width: auto;
+  min-width: 1.15rem;
+  padding: 0 .22rem;
+  font-size: .66rem;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .35);
+}
+
 .row-time {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -418,7 +438,7 @@ main { min-height: 60vh; }
   color: var(--ink-soft);
 }
 
-.row-fav {
+.row-fav, .row-play {
   min-width: var(--tap);
   min-height: var(--tap);
   display: grid;
@@ -432,6 +452,13 @@ main { min-height: 60vh; }
   cursor: pointer;
 }
 .row-fav[aria-pressed="true"] { color: var(--accent); }
+
+/* Anspielen direkt aus der Liste, links vom Herz. */
+.row-play { font-size: 1rem; }
+.row-play.is-playing { color: var(--accent); }
+/* Acts ohne Spotify-Link: der Platz bleibt, damit die Herzen in einer Spalte
+   stehen - aber der Knopf sieht nicht anfassbar aus. */
+.row-play[aria-disabled="true"] { opacity: .25; cursor: default; }
 .seen-mark::after {
   content: "✓";
   margin-left: .3rem;
@@ -530,23 +557,157 @@ main { min-height: 60vh; }
 .plan-drop ul { margin: 0; padding-left: 1.1rem; }
 .plan-drop li { font-size: .85rem; color: var(--ink-soft); }
 
-.route-no {
+/* Stationen der Route: Nadelform mit Spitze nach unten, damit sie nicht mit
+   den runden Ortsmarkern und den runden Cluster-Blasen verwechselbar sind.
+   Start und Ziel tragen zusaetzlich ein Wort - eine Zahl allein sagt nicht,
+   wo der Abend anfaengt. */
+.route-pin {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
   background: var(--accent);
-  color: var(--accent-ink);
-  font: 700 12px/1 system-ui, sans-serif;
-  box-shadow: 0 1px 4px rgb(0 0 0 / .4);
+  border: 2px solid var(--bg-raised);
+  box-shadow: 0 2px 6px rgb(0 0 0 / .45);
 }
+.route-pin-no {
+  transform: rotate(45deg);
+  color: var(--accent-ink);
+  font: 700 14px/1 system-ui, sans-serif;
+}
+.route-pin-tag {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: rotate(45deg) translate(-6px, 2px);
+  padding: .1rem .3rem;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--bg-raised);
+  font: 700 9px/1.3 system-ui, sans-serif;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+.route-pin.is-first {
+  background: var(--r1);
+  width: 38px; height: 38px;
+}
+.route-pin.is-first .route-pin-no { color: var(--on-scale); font-size: 15px; }
+.route-pin.is-last { background: var(--r4); }
+.route-pin.is-last .route-pin-no { color: var(--on-scale); }
+
+.route-arrow {
+  display: block;
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+  text-shadow: 0 0 3px var(--bg);
+}
+
+/* Ortskuerzel: zwei Buchstaben statt einer nackten Nadel. */
+.venue-code {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 2px solid var(--accent);
+  color: var(--ink);
+  font: 700 12px/1 system-ui, sans-serif;
+  letter-spacing: .02em;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .35);
+}
+/* Waehrend eine Route liegt, treten die Haeuser zurueck. */
+.map.route-on .venue-code,
+.map.route-on .marker-cluster { opacity: .38; }
+
+.pop-code, .vcode {
+  display: inline-block;
+  min-width: 1.9em;
+  margin-right: .35rem;
+  padding: 0 .25rem;
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  font: 700 .72rem/1.5 system-ui, sans-serif;
+  text-align: center;
+  letter-spacing: .03em;
+}
+.pop-code { background: var(--accent); color: var(--accent-ink); border: 0; }
 
 /* ---------- Spotify ---------- */
 
 .embed-wrap { margin-top: .4rem; }
 .embed-wrap iframe { width: 100%; height: 152px; border: 0; border-radius: 12px; }
 .embed-note { font-size: .75rem; color: var(--ink-faint); margin: .35rem 0 0; }
+
+/* Anspiel-Leiste am unteren Rand. Bleibt stehen, waehrend man weiterscrollt
+   und filtert - der Player laeuft dabei durch. */
+.player {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
+  z-index: 800;
+  padding: .4rem .6rem calc(.4rem + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 18px rgb(0 0 0 / .18);
+}
+.player-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .25rem;
+}
+.player-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .85rem;
+  font-weight: 700;
+}
+.player-slot iframe {
+  width: 100%;
+  height: 80px;
+  border: 0;
+  border-radius: 10px;
+  display: block;
+}
+/* Damit die letzte Zeile nicht unter der Leiste verschwindet. */
+body.has-player { padding-bottom: calc(env(safe-area-inset-bottom) + 8.5rem); }
+
+/* Kurzmeldung, etwa fuer die Warnung vor dem Verlassen. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.4rem + env(safe-area-inset-bottom));
+  z-index: 900;
+  transform: translate(-50%, .6rem);
+  max-width: min(90vw, 26rem);
+  padding: .55rem .9rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg-raised);
+  font-size: .85rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity .18s, transform .18s;
+  pointer-events: none;
+}
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+}
 
 /* ---------- Detail ---------- */
 
@@ -581,7 +742,19 @@ main { min-height: 60vh; }
   color: var(--ink-faint);
 }
 
-.rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
+/* Sieben Stufen: die beiden Zwischennoten stehen schmaler zwischen den
+   ganzen Noten, damit man auf einen Blick sieht, dass sie dazwischen liegen
+   und keine eigene Stufe im Filter sind. */
+.rate {
+  display: grid;
+  grid-template-columns: 1fr .68fr 1fr .68fr 1fr 1fr 1fr;
+  gap: .25rem;
+}
+.rate-note {
+  margin: .4rem 0 0;
+  font-size: .72rem;
+  color: var(--ink-faint);
+}
 .rate button {
   display: grid;
   gap: .1rem;
@@ -602,6 +775,26 @@ main { min-height: 60vh; }
 .rate button[data-r="3"][aria-pressed="true"] { background: var(--r3); border-color: var(--r3); }
 .rate button[data-r="4"][aria-pressed="true"] { background: var(--r4); border-color: var(--r4); }
 .rate button[data-r="5"][aria-pressed="true"] { background: var(--r5); border-color: var(--r5); }
+
+/* Zwischennoten: nur die Zahl, gestrichelter Rand. Der Text steht im
+   aria-label und im Titel - auf 68 % Spaltenbreite waere "sehr gut bis gut"
+   ohnehin nicht lesbar. */
+.rate button.is-half {
+  background: transparent;
+  border-style: dashed;
+}
+.rate button.is-half small { display: none; }
+.rate button.is-half b { font-size: .85rem; }
+.rate button[data-r="1.5"][aria-pressed="true"] {
+  background: color-mix(in srgb, var(--r1), var(--r2));
+  border-color: color-mix(in srgb, var(--r1), var(--r2));
+  border-style: solid;
+}
+.rate button[data-r="2.5"][aria-pressed="true"] {
+  background: color-mix(in srgb, var(--r2), var(--r3));
+  border-color: color-mix(in srgb, var(--r2), var(--r3));
+  border-style: solid;
+}
 
 .pop-actions { margin-top: .5rem; }
 .pop-actions button {

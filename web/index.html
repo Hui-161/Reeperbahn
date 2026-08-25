@@ -164,6 +164,19 @@
   </div>
 </dialog>
 
+<!-- Anspiel-Leiste: liegt ausserhalb von #list, damit sie ein render()
+     ueberlebt und beim Weiterscrollen weiterspielt. -->
+<div id="player" class="player" hidden>
+  <div class="player-head">
+    <span class="player-name" id="player-name"></span>
+    <button type="button" class="icon-btn" id="player-close"
+            aria-label="Player schließen">✕</button>
+  </div>
+  <div id="player-slot" class="player-slot"></div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
 <footer class="foot">
   <span id="meta"></span>
   <input id="file" type="file" accept="application/json,.json" hidden>

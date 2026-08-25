@@ -104,13 +104,119 @@ with sync_playwright() as p:
     pg.locator(".rate button[data-r='1']").click()
     check("Note 1 setzt sich",
           pg.locator(".rate button[data-r='1']").get_attribute("aria-pressed")=="true")
-    check("Skala hat fuenf Stufen", pg.locator(".rate button").count() == 5)
+    # Sieben Knoepfe: 1, 1,5, 2, 2,5, 3, 4, 5 - die Zwischennoten stehen
+    # dazwischen, zaehlen im Filter aber zur naechstbesseren ganzen Note.
+    steps = pg.locator(".rate button").evaluate_all("els => els.map(e => e.dataset.r)")
+    check("Skala hat sieben Stufen mit Zwischennoten",
+          steps == ["1", "1.5", "2", "2.5", "3", "4", "5"], steps)
+    check("Zwischennoten mit deutschem Komma",
+          pg.locator('.rate button[data-r="1.5"] b').inner_text() == "1,5",
+          pg.locator('.rate button[data-r="1.5"] b').inner_text())
     pg.screenshot(path="/tmp/shot-detail.png")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     check("Note faerbt Zeile", pg.locator(".row.rated-1").count() >= 1)
     check("Note steht als Zahl in der Liste",
           pg.locator("#list .grade-1").count() >= 1)
     check("Notiz-Marke in der Liste", pg.locator(".row-name.has-note").count() >= 1)
+
+    # --- Zwischennoten: 1,5 zaehlt im Filter zu 1, 2,5 zu 2 ---
+    pg.locator(".row").first.click(); pg.wait_for_selector(".rate")
+    pg.locator('.rate button[data-r="1.5"]').click()
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    badge = pg.locator("#list .grade").first
+    check("Zeile zeigt 1,5", badge.inner_text() == "1,5", badge.inner_text())
+    bcls = badge.get_attribute("class")
+    check("1,5 traegt die Farbe der 1",
+          "grade-1" in bcls and "grade-half" in bcls, bcls)
+    check("Zeilenrand folgt dem Eimer",
+          "rated-1" in pg.locator(".row").first.get_attribute("class"),
+          pg.locator(".row").first.get_attribute("class"))
+    pg.locator(".row").nth(1).click(); pg.wait_for_selector(".rate")
+    pg.locator('.rate button[data-r="2.5"]').click()
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Zweite Zeile zeigt 2,5",
+          pg.locator(".row").nth(1).locator(".grade").inner_text() == "2,5")
+
+    pg.click("#f-rate"); pg.wait_for_timeout(300)
+    chips = pg.locator("#ratebox .chip").evaluate_all(
+        "els => els.map(e => e.dataset.rate)")
+    check("Filter bleibt bei fuenf Stufen",
+          chips == ["1", "2", "3", "4", "5"], chips)
+    check("Chip nennt die Zwischennote",
+          "1,5" in pg.locator('#ratebox .chip[data-rate="1"]').inner_text(),
+          pg.locator('#ratebox .chip[data-rate="1"]').inner_text())
+    pg.locator('#ratebox .chip[data-rate="1"]').click(); pg.wait_for_timeout(400)
+    shown = pg.locator("#list .grade").evaluate_all(
+        "els => els.map(e => e.textContent)")
+    check("Filter 1 nimmt 1,5 mit", "1,5" in shown, shown)
+    check("Filter 1 laesst 2,5 draussen", "2,5" not in shown, shown)
+    pg.locator('#ratebox .chip[data-rate="1"]').click()
+    pg.locator('#ratebox .chip[data-rate="2"]').click(); pg.wait_for_timeout(400)
+    shown = pg.locator("#list .grade").evaluate_all(
+        "els => els.map(e => e.textContent)")
+    check("Filter 2 nimmt 2,5 mit", "2,5" in shown, shown)
+    check("Filter 2 laesst 1,5 draussen", "1,5" not in shown, shown)
+    pg.locator('#ratebox .chip[data-rate="2"]').click()
+    pg.click("#f-rate"); pg.wait_for_timeout(200)
+
+    # --- Anspielen direkt aus der Liste ---
+    order = pg.evaluate("""() => [...document.querySelector('.row').children]
+      .map(c => c.className.split(' ')[0]).join('|')""")
+    check("Play-Knopf steht links vom Herz",
+          order.index("row-play") < order.index("row-fav"), order)
+    pidx = pg.evaluate("""() => [...document.querySelectorAll('.row')]
+      .findIndex(r => r.querySelector('.row-play').dataset.quickplay)""")
+    check("Es gibt Acts mit Spotify-Link", pidx >= 0, pidx)
+    pg.locator(".row").nth(pidx).locator(".row-play").click()
+    pg.wait_for_timeout(500)
+    check("Player oeffnet, Detaildialog bleibt zu",
+          not pg.locator("#player").is_hidden()
+          and pg.evaluate("() => !document.querySelector('#detail').open"))
+    check("Spotify-Rahmen geladen", pg.locator("#player-slot iframe").count() == 1)
+    check("Liste macht Platz fuer die Leiste",
+          "has-player" in pg.evaluate("() => document.body.className"))
+    # Der Player liegt ausserhalb von #list, deshalb ueberlebt er ein render().
+    psrc = pg.locator("#player-slot iframe").get_attribute("src")
+    pg.click("#f-genre"); pg.wait_for_timeout(300)
+    check("Player laeuft beim Filtern weiter",
+          pg.locator("#player-slot iframe").get_attribute("src") == psrc)
+    pg.click("#f-genre"); pg.wait_for_timeout(200)
+    pg.locator(".row-play.is-playing").first.click(); pg.wait_for_timeout(300)
+    check("Nochmal tippen beendet",
+          pg.locator("#player").is_hidden()
+          and pg.locator("#player-slot iframe").count() == 0)
+
+    # --- Ortskuerzel ---
+    vcodes = pg.evaluate("""() => [...document.querySelectorAll('.row .vcode')]
+      .map(e => e.textContent.trim())""")
+    check("Kuerzel stehen in der Liste",
+          len(vcodes) > 0 and all(len(c) == 2 for c in vcodes),
+          sorted(set(vcodes))[:10])
+    uniq = pg.evaluate("""() => {
+      const m = new Map();
+      for (const v of document.querySelectorAll('.row .venue'))
+        m.set(v.textContent.trim().slice(2).trim(),
+              v.querySelector('.vcode').textContent.trim());
+      return [...m.values()];
+    }""")
+    check("Kuerzel sind eindeutig", len(uniq) == len(set(uniq)),
+          f"{len(uniq)} Orte, {len(set(uniq))} Kuerzel")
+
+    # --- Ziehen zum Neuladen abgeschaltet ---
+    ov = pg.evaluate(
+        "() => getComputedStyle(document.documentElement).overscrollBehaviorY")
+    check("Kein Neuladen durch Wischen", ov == "contain", ov)
+
+    # --- Zurueck schliesst Ebenen, verlaesst erst nach Warnung ---
+    pg.click("#btn-menu"); pg.wait_for_timeout(250)
+    pg.go_back(); pg.wait_for_timeout(400)
+    check("Zurueck schliesst erst das Menue",
+          pg.evaluate("() => !document.querySelector('#menu').open")
+          and pg.locator(".row").count() > 0)
+    pg.go_back(); pg.wait_for_timeout(400)
+    check("Zurueck warnt vor dem Verlassen",
+          "Nochmal zurück" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    check("App laeuft noch", pg.locator(".row").count() > 0)
 
     # Wunsch 4: Suche fokussiert
     pg.click("#btn-search"); pg.wait_for_timeout(150)
@@ -335,13 +441,37 @@ with sync_playwright() as p:
     # Route auf der Karte
     pg.click("#plan-map"); pg.wait_for_timeout(1200)
     check("Route liegt auf der Karte", pg.locator("#map").is_visible())
-    check("Numerierte Stationen gesetzt", pg.locator(".route-no").count() >= 1,
-          f"{pg.locator('.route-no').count()} Marker")
+    pins = pg.locator(".route-pin").count()
+    check("Numerierte Stationen gesetzt", pins >= 1, f"{pins} Marker")
     check("Verbindungslinie gezeichnet",
           pg.locator("#map path.leaflet-interactive").count() >= 1
           or pg.locator("#map svg path").count() >= 1)
+    # Der gemeldete Fehler: eine nackte Zahl war von der Zahl in einer
+    # Cluster-Blase nicht zu unterscheiden. Start und Ziel sind deshalb
+    # beschriftet, die Nadel hat eine andere Form, und die Haeuser treten
+    # zurueck, solange eine Route liegt.
+    check("Genau ein Start", pg.locator(".route-pin.is-first").count() == 1,
+          pg.locator(".route-pin.is-first").count())
+    tags = pg.locator(".route-pin-tag").evaluate_all(
+        "els => els.map(e => e.textContent.trim())")
+    check("Start ist beschriftet", "START" in tags, tags)
+    if pins > 1:
+        check("Ziel ist beschriftet", "ZIEL" in tags, tags)
+        check("Richtungspfeil je Teilstrecke",
+              pg.locator(".route-arrow").count() == pins - 1,
+              f"{pg.locator('.route-arrow').count()} Pfeile, {pins} Stationen")
+    check("Spielorte treten hinter die Route zurueck",
+          "route-on" in pg.locator("#map").get_attribute("class"))
+    faded = pg.evaluate("""() => {
+      const e = document.querySelector('.venue-code');
+      return e ? getComputedStyle(e).opacity : 'keiner sichtbar';
+    }""")
+    check("Ortsmarker sind abgeblendet",
+          faded in ("0.38", "keiner sichtbar"), faded)
     pg.click("#btn-map"); pg.wait_for_timeout(500)
     check("Karte wieder zu", pg.locator("#list").is_visible())
+    check("Route abgeraeumt", pg.locator(".route-pin").count() == 0
+          and "route-on" not in pg.locator("#map").get_attribute("class"))
 
     # --- Spotify: Player erst auf Tippen ---
     pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")

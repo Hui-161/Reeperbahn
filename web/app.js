@@ -5,11 +5,20 @@
 const DATA_URL = 'data/lineup.json';
 const KEY = 'rbf26.';
 const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-const RATES = [[1, 'sehr gut'], [2, 'gut'], [3, 'geht so'], [4, 'eher nicht'],
+const RATES = [[1, 'sehr gut'], [1.5, 'sehr gut bis gut'], [2, 'gut'],
+               [2.5, 'gut bis geht so'], [3, 'geht so'], [4, 'eher nicht'],
                [5, 'gar nicht']];
 // Bis Version 1 gab es drei Stufen. Alte Bewertungen werden auf die Skala
 // abgebildet, damit auf dem Handy nichts verloren geht.
 const RATE_MIGRATION = { gruen: 1, gelb: 3, rot: 5 };
+
+/* Die Zwischennoten 1,5 und 2,5 zaehlen im FILTER zur naechstbesseren ganzen
+   Note: wer "1" filtert, will 1,5 mitsehen. Deshalb gibt es zwei Ebenen -
+   die Note, die man vergibt, und der Eimer, in dem sie landet. Der Eimer
+   steuert Filter, Randfarbe und Abendplan; die Note steht als Zahl dran. */
+const rateBucket = (r) => Math.floor(+r) || 0;
+/* 1.5 als "1,5" - im Deutschen mit Komma. */
+const rateText = (r) => String(r).replace('.', ',');
 const NO_GENRE = -1;   // eigener Eimer: Acts ohne Genre-Angabe
 
 /* ---------- Speicher: faellt still auf Arbeitsspeicher zurueck ---------- */
@@ -121,6 +130,7 @@ const S = {
 
 const MAP_DETAIL_ZOOM = 17;
 let map = null, cluster = null;
+let venueCode = [];             // Index des Spielorts -> zwei Buchstaben
 const markers = [];
 const popupHtml = [];
 
@@ -133,7 +143,22 @@ const el = {
   detail: $('#detail'), menu: $('#menu'), meta: $('#meta'),
   filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
+  player: $('#player'), toast: $('#toast'),
 };
+
+/* Kurze Rueckmeldung ohne Dialog - fuer Dinge, die keine Bestaetigung
+   brauchen, aber sichtbar sein muessen. */
+let toastTimer = null;
+function toast(text, ms = 2400) {
+  el.toast.textContent = text;
+  el.toast.hidden = false;
+  el.toast.classList.add('is-on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.toast.classList.remove('is-on');
+    setTimeout(() => { el.toast.hidden = true; }, 200);
+  }, ms);
+}
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -143,10 +168,11 @@ const pRate = (id) => (partner && partner.rate ? +partner.rate[id] || 0 : 0);
 const pFav = (id) => !!(partner && partner.fav && partner.fav.includes(id));
 const pSeen = (id) => !!(partner && partner.seen && partner.seen.includes(id));
 /* "Beide": ein Act, den beide als Favorit haben oder beide mit 1-2 bewerten.
-   Das ist die Frage, die ein Team wirklich hat - wo wollen wir zusammen hin. */
+   Das ist die Frage, die ein Team wirklich hat - wo wollen wir zusammen hin.
+   Ueber den Eimer gerechnet, damit 1,5 und 2,5 mitzaehlen. */
 const bothWant = (id) => {
-  const mine = fav.has(id) || (+rate[id] > 0 && +rate[id] <= 2);
-  const theirs = pFav(id) || (pRate(id) > 0 && pRate(id) <= 2);
+  const mine = fav.has(id) || (rateBucket(rate[id]) > 0 && rateBucket(rate[id]) <= 2);
+  const theirs = pFav(id) || (rateBucket(pRate(id)) > 0 && rateBucket(pRate(id)) <= 2);
   return mine && theirs;
 };
 const fold = (s) => String(s ?? '').toLowerCase()
@@ -169,6 +195,9 @@ async function load() {
   // Waehrend des Festivals der heutige Tag, sonst alles - vorher will man
   // stoebern, waehrenddessen den Abend.
   S.day = S.data.days.includes(todayISO()) ? todayISO() : null;
+  // Vor dem ersten render(): die Kuerzel stehen auch in der Liste, nicht nur
+  // auf der Karte - sonst muesste man die Zuordnung jedes Mal neu suchen.
+  venueCode = venueCodes(S.data.venues);
   el.status.hidden = true;
   renderDays();
   renderGenres();
@@ -238,15 +267,24 @@ function openBox(which) {
   sizeMap();
 }
 
+/* Der Filter hat fuenf Stufen, nicht sieben: 1,5 wird unter 1 mitgezaehlt
+   und 2,5 unter 2. Die Zahl am Chip zaehlt beide Noten zusammen, sonst
+   passt sie nicht zu dem, was der Filter dann zeigt. */
 function renderRates() {
   const counts = new Map();
   for (const a of S.data.acts) {
-    const r = +rate[a.id];
-    if (r) counts.set(r, (counts.get(r) || 0) + 1);
+    const b = rateBucket(rate[a.id]);
+    if (b) counts.set(b, (counts.get(b) || 0) + 1);
   }
-  el.ratebox.innerHTML = RATES.map(([n, label]) =>
-    `<button class="chip" data-rate="${n}" aria-pressed="${S.rates.has(n)}"
-      >${n} ${esc(label)} <span class="tag">${counts.get(n) || 0}</span></button>`).join('');
+  const halves = new Map();
+  for (const [n] of RATES) if (!Number.isInteger(n)) halves.set(rateBucket(n), n);
+  el.ratebox.innerHTML = RATES.filter(([n]) => Number.isInteger(n))
+    .map(([n, label]) => {
+      const half = halves.get(n);
+      return `<button class="chip" data-rate="${n}" aria-pressed="${S.rates.has(n)}"
+        >${n}${half ? ` und ${rateText(half)}` : ''} ${esc(label)}
+        <span class="tag">${counts.get(n) || 0}</span></button>`;
+    }).join('');
 }
 
 /* ---------- Filterspeicher ---------- */
@@ -337,7 +375,7 @@ function visibleShows() {
     if (!spanAll && sh.d && sh.d !== S.day) continue;
 
     if (S.favOnly && !fav.has(act.id)) continue;
-    if (S.rates.size && !S.rates.has(+rate[act.id])) continue;
+    if (S.rates.size && !S.rates.has(rateBucket(rate[act.id]))) continue;
     if (S.seenOnly && !seen.has(act.id)) continue;
     if (S.teamOnly && !bothWant(act.id)) continue;
 
@@ -419,27 +457,76 @@ function dayLabel(sh) {
 function row(sh, act) {
   const venue = sh.v != null ? S.data.venues[sh.v] : null;
   const r = rate[act.id];
+  // Randfarbe und Notenfarbe folgen dem Eimer, weil es fuer 1,5 keine eigene
+  // Farbe gibt und braucht: die genaue Note steht als Zahl daneben.
+  const rb = rateBucket(r);
+  const pb = rateBucket(pRate(act.id));
   const tags = act.g.map((i) => `<span class="tag">${esc(S.data.genres[i])}</span>`).join('');
-  return `<button class="row${r ? ' rated-' + r : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
+  return `<button class="row${rb ? ' rated-' + rb : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
         seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${
-        r ? `<span class="grade grade-${r}" title="Meine Note: ${r}">${r}</span>`
+        rb ? `<span class="grade grade-${rb}${Number.isInteger(+r) ? '' : ' grade-half'}"
+              title="Meine Note: ${rateText(r)}">${rateText(r)}</span>`
           : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
               title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : '')}${
-        pRate(act.id) ? `<span class="grade grade-p grade-p-${pRate(act.id)}"
-          title="${esc(partnerName())}: Note ${pRate(act.id)}">${pRate(act.id)}</span>` : ''}${
+        pb ? `<span class="grade grade-p grade-p-${pb}"
+          title="${esc(partnerName())}: Note ${rateText(pRate(act.id))}">${
+          rateText(pRate(act.id))}</span>` : ''}${
         pFav(act.id) ? `<span class="heart-p"
           title="${esc(partnerName())}: Favorit">♥</span>` : ''}</span>
       <span class="row-sub">${venue
-        ? `<span class="venue" data-venue="${sh.v}">${esc(venue.n)}</span>` : 'Spielort offen'}
+        ? `<span class="venue" data-venue="${sh.v}"><span class="vcode"
+             >${esc(venueCode[sh.v] || '')}</span>${esc(venue.n)}</span>`
+        : 'Spielort offen'}
         ${act.c ? ' · ' + esc(act.c) : ''}</span>
       ${tags ? `<span class="row-tags">${tags}</span>` : ''}
     </span>
+    <span class="row-play${playingAct === act.id ? ' is-playing' : ''}"
+      role="button" data-quickplay="${esc(spotifyEmbed(act.sp) || '')}"
+      data-playname="${esc(act.n)}"
+      aria-disabled="${!act.sp}"
+      aria-label="${act.sp ? 'Anspielen' : 'Kein Spotify-Link'}"
+      title="${act.sp ? '30 Sekunden anspielen' : 'Für diesen Act gibt es keinen Spotify-Link'}"
+      >${playingAct === act.id ? '❙❙' : '▶'}</span>
     <span class="row-fav" role="button" aria-pressed="${fav.has(act.id)}"
       data-fav="${act.id}" aria-label="Favorit">${fav.has(act.id) ? '♥' : '♡'}</span>
   </button>`;
+}
+
+/* ---------- Anspielen direkt aus der Liste ----------
+   Der Player sitzt als Leiste UNTER der Liste, nicht in der Zeile: eine
+   Zeile aufzuklappen verschiebt alles darunter, und beim naechsten render()
+   waere der Player wieder weg. So laeuft er weiter, waehrend man scrollt,
+   filtert oder einen anderen Act oeffnet. */
+let playingAct = null;
+
+function openPlayer(src, name, actId) {
+  playingAct = actId;
+  $('#player-name').textContent = name;
+  // Nur neu setzen, wenn sich die Adresse aendert - sonst startet der
+  // Player bei jedem Tippen von vorn.
+  const slot = $('#player-slot');
+  if (slot.dataset.src !== src) {
+    slot.dataset.src = src;
+    slot.innerHTML = `<iframe src="${esc(src)}" title="Spotify-Player"
+      loading="lazy" allow="encrypted-media; clipboard-write"
+      referrerpolicy="no-referrer"></iframe>`;
+  }
+  el.player.hidden = false;
+  document.body.classList.add('has-player');
+  render();
+}
+
+function closePlayer() {
+  playingAct = null;
+  const slot = $('#player-slot');
+  slot.innerHTML = '';
+  delete slot.dataset.src;
+  el.player.hidden = true;
+  document.body.classList.remove('has-player');
+  render();
 }
 
 /* ---------- Scrollposition halten (Wunsch 2) ---------- */
@@ -508,14 +595,16 @@ function collectPlanItems(opts) {
       // Ohne Uhrzeit nicht planbar - aber zaehlen, sonst wundert man sich,
       // warum ein bewerteter Act fehlt.
       const a = S.data.acts[sh.a];
-      const r = +rate[a.id] || 0;
+      // Eimer, nicht Rohnote: "bis Note 1" soll 1,5 einschliessen, genau wie
+      // der Filter es tut.
+      const r = rateBucket(rate[a.id]);
       if ((!S.day || sh.d === S.day)
           && ((r && r <= opts.maxNote) || (opts.withFav && fav.has(a.id)))) undated++;
       continue;
     }
     if (S.day && sh.d !== S.day) continue;
     const act = S.data.acts[sh.a];
-    const r = +rate[act.id] || 0;
+    const r = rateBucket(rate[act.id]);
     const eligible = (r && r <= opts.maxNote)
       || (opts.withFav && fav.has(act.id));
     if (!eligible) continue;
@@ -527,7 +616,7 @@ function collectPlanItems(opts) {
       startIso: sh.t, value,
       venue: v ? { lat: v.lat, lng: v.lng, name: v.n } : null,
       venueIdx: sh.v,
-      note: r,
+      note: +rate[act.id] || 0,     // die echte Note, auch 1,5
     });
   }
   items.undatedCount = undated;
@@ -626,20 +715,66 @@ function showRoute() {
     m.invalidateSize();
     if (routeLayer) m.removeLayer(routeLayer);
     routeLayer = L.layerGroup().addTo(m);
+    // Die Spielort-Marker treten zurueck, solange eine Route liegt. Sonst
+    // stehen 34 Kuerzel gleich stark neben den Stationen der Route.
+    document.getElementById('map').classList.add('route-on');
     const latlngs = pts.map((s) => [s.venue.lat, s.venue.lng]);
     L.polyline(latlngs, { weight: 4, opacity: .85, dashArray: '1 8',
                           lineCap: 'round' }).addTo(routeLayer);
+
+    // Richtungspfeile in der Mitte jeder Teilstrecke: die Nummern allein
+    // sagen nicht, in welche Richtung es weitergeht.
+    for (let i = 0; i + 1 < latlngs.length; i++) {
+      const [a, b] = [latlngs[i], latlngs[i + 1]];
+      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      // Bildschirmwinkel: Laengengrade mit dem Kosinus der Breite stauchen,
+      // sonst zeigt der Pfeil auf dieser Breite gut 30 Grad daneben.
+      const k = Math.cos(a[0] * Math.PI / 180);
+      const deg = Math.atan2((b[1] - a[1]) * k, b[0] - a[0]) * 180 / Math.PI;
+      L.marker(mid, {
+        interactive: false,
+        icon: L.divIcon({
+          className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+          html: `<span class="route-arrow" style="transform:rotate(${
+            (90 - deg).toFixed(1)}deg)">➤</span>`,
+        }),
+      }).addTo(routeLayer);
+    }
+
     pts.forEach((s, i) => {
+      const first = i === 0;
+      const last = i === pts.length - 1;
+      // Start und Ziel sind beschriftet, nicht nur numeriert: die reine Zahl
+      // war von der Zahl in einer Cluster-Blase nicht zu unterscheiden.
+      const badge = first ? 'START' : last ? 'ZIEL' : '';
       L.marker([s.venue.lat, s.venue.lng], {
-        icon: L.divIcon({ className: '', iconSize: [22, 22],
-                          html: `<span class="route-no">${i + 1}</span>` }),
-        zIndexOffset: 1000,
+        icon: L.divIcon({
+          className: '', iconSize: [34, 44], iconAnchor: [17, 42],
+          popupAnchor: [0, -42],
+          html: `<span class="route-pin${first ? ' is-first' : ''}${
+            last && !first ? ' is-last' : ''}">
+                   <span class="route-pin-no">${i + 1}</span>
+                   ${badge ? `<span class="route-pin-tag">${badge}</span>` : ''}
+                 </span>`,
+        }),
+        zIndexOffset: 1000 + i,
       }).addTo(routeLayer).bindPopup(
-        `<div class="pop-title">${i + 1}. ${esc(s.name)}</div>
-         <div class="pop-meta">${hhmm(s.startIso)} · ${esc(s.venue.name)}</div>`);
+        `<div class="pop-title">${first ? 'Start: ' : last ? 'Zuletzt: ' : i + 1 + '. '}${
+          esc(s.name)}</div>
+         <div class="pop-meta">${hhmm(s.startIso)} · ${
+           esc(venueCode[s.venueIdx] || '')} ${esc(s.venue.name)}</div>`);
     });
-    m.fitBounds(latlngs, { padding: [40, 40] });
+    m.fitBounds(latlngs, { padding: [46, 46] });
   }, 80);
+}
+
+/* Die Route wieder abraeumen - sonst bleibt sie liegen, wenn man die Karte
+   fuer etwas anderes benutzt, und die Spielorte bleiben blass. */
+function clearRoute() {
+  if (routeLayer && map) map.removeLayer(routeLayer);
+  routeLayer = null;
+  const box = document.getElementById('map');
+  if (box) box.classList.remove('route-on');
 }
 
 /* ---------- Detailansicht ---------- */
@@ -668,7 +803,7 @@ function openDetail(ai) {
       <h3>Team</h3>
       <div class="suggestion">
         <span>${esc(partnerName())}:
-        ${pRate(act.id) ? `<b>Note ${pRate(act.id)}</b>` : 'keine Note'}${
+        ${pRate(act.id) ? `<b>Note ${rateText(pRate(act.id))}</b>` : 'keine Note'}${
           pFav(act.id) ? ' · <b>Favorit</b>' : ''}${
           pSeen(act.id) ? ' · gesehen' : ''}${
           bothWant(act.id) ? ' — <b>ihr wollt beide hin</b>' : ''}</span>
@@ -686,9 +821,14 @@ function openDetail(ai) {
     <div class="d-section">
       <h3>Meine Einschätzung</h3>
       <div class="rate">${RATES.map(([k, label]) =>
-        `<button data-r="${k}" aria-pressed="${+rate[act.id] === k}"
-          aria-label="${k} - ${label}"><b>${k}</b><small>${label}</small></button>`).join('')}
+        `<button data-r="${k}"
+          class="${Number.isInteger(k) ? '' : 'is-half'}"
+          aria-pressed="${+rate[act.id] === k}"
+          aria-label="${rateText(k)} - ${label}"><b>${rateText(k)}</b><small
+          >${label}</small></button>`).join('')}
       </div>
+      <p class="rate-note">1,5 und 2,5 liegen dazwischen. Im Filter zählen sie
+      zu 1 beziehungsweise 2.</p>
     </div>
 
     <div class="d-section">
@@ -784,6 +924,75 @@ function spotifyEmbed(url) {
   return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : null;
 }
 
+/* ---------- Ortskuerzel ----------
+   Zwei Buchstaben pro Spielort, aus dem Namen abgeleitet. Auf der Karte
+   liegen 34 Haeuser dicht beieinander; nackte Nadeln sind nicht
+   unterscheidbar, und eine Nummer waere mit den Zahlen der Cluster und der
+   Route verwechselbar. Buchstaben sind es nicht.
+
+   Woerter wie "Club" oder "Theater" fliegen raus, weil sie in mehreren Namen
+   stehen und deshalb nicht unterscheiden. */
+const CODE_SKIP = new Set([
+  'club', 'bar', 'hall', 'halle', 'theater', 'kirche', 'saal', 'haus',
+  'restaurant', 'cafe', 'café', 'kiez', 'hamburg', 'st', 'der', 'die', 'das',
+  'den', 'dem', 'und', 'im', 'am', 'an', 'in', 'zur', 'zum', 'auf', 'the',
+  'of', 'bei', 'beim', 'von', 'vor', 'kleine', 'grosse', 'große', 'neue',
+]);
+
+function venueCodes(venues) {
+  const words = (n) => String(n || '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/).filter(Boolean);
+
+  /* Kandidaten in der Reihenfolge, in der sie versucht werden. */
+  function candidates(name) {
+    const all = words(name);
+    const sig = all.filter((w) => !CODE_SKIP.has(w.toLowerCase()));
+    const use = sig.length ? sig : all;
+    const out = [];
+
+    /* Nebenraeume heissen "Haus / Raum" ("Mojo Club / Mojo Jazz Café").
+       Dann ist der Anfangsbuchstabe des Hauses plus der des ERSTEN eigenen
+       Wortes des Raumes das sprechendste Kuerzel: MJ, nicht MM. */
+    const parts = String(name || '').split('/');
+    if (parts.length >= 2) {
+      const head = words(parts[0]).filter((w) => !CODE_SKIP.has(w.toLowerCase()));
+      const seen = new Set(words(parts[0]).map((w) => w.toLowerCase()));
+      const tail = words(parts.slice(1).join(' '))
+        .filter((w) => !seen.has(w.toLowerCase())
+                       && !CODE_SKIP.has(w.toLowerCase()));
+      if (head[0] && tail[0]) out.push(head[0][0] + tail[0][0]);
+    }
+
+    if (use.length >= 2) out.push(use[0][0] + use[1][0]);
+    if (use[0] && use[0].length >= 2) out.push(use[0].slice(0, 2));
+    if (use[0]) {
+      // Erster Buchstabe plus jeder weitere Buchstabe desselben Wortes -
+      // "Molotow" ergibt so MO, ML, MT, MW ...
+      for (const c of use[0].slice(1)) out.push(use[0][0] + c);
+    }
+    if (all.length >= 2) out.push(all[0][0] + all[1][0]);
+    if (use[0]) for (let d = 2; d <= 9; d++) out.push(use[0][0] + d);
+    return out.map((c) => c.toUpperCase());
+  }
+
+  // Nach Namen sortiert vergeben, nicht nach Array-Position: dann bleibt ein
+  // Kuerzel gleich, auch wenn das Line-up neue Haeuser dazwischenschiebt.
+  const order = venues.map((v, i) => [i, v])
+    .filter(([, v]) => v)
+    .sort((a, b) => String(a[1].n).localeCompare(String(b[1].n), 'de'));
+
+  const codes = [];
+  const taken = new Set();
+  for (const [i, v] of order) {
+    let code = candidates(v.n).find((c) => !taken.has(c));
+    if (!code) code = 'X' + (taken.size % 10);      // sollte nie eintreten
+    taken.add(code);
+    codes[i] = code;
+  }
+  return codes;
+}
+
 /* ---------- Karte (Wunsch 3 und 7) ---------- */
 
 function ensureMap() {
@@ -811,6 +1020,7 @@ function ensureMap() {
     disableClusteringAtZoom: MAP_DETAIL_ZOOM,
   });
   const pts = [];
+  const codes = venueCode.length ? venueCode : venueCodes(S.data.venues);
   S.data.venues.forEach((v, i) => {
     if (v.lat == null) return;
     const bits = [
@@ -820,12 +1030,19 @@ function ensureMap() {
       v.inherited && v.parent && `Koordinaten von ${esc(v.parent)}`,
     ].filter(Boolean);
     popupHtml[i] =
-      `<div class="pop-title">${esc(v.n)}</div>
+      `<div class="pop-title"><span class="pop-code">${esc(codes[i])}</span>
+         ${esc(v.n)}</div>
        <div class="pop-meta">${counts.get(i) || 0} Auftritte${bits.length ? '<br>' + bits.join('<br>') : ''}</div>
        <div class="pop-actions">
          <button data-onlyvenue="${i}">Nur dieses Haus zeigen</button>
        </div>`;
-    const m = L.marker([v.lat, v.lng]).bindPopup(popupHtml[i]);
+    const m = L.marker([v.lat, v.lng], {
+      icon: L.divIcon({
+        className: '', iconSize: [30, 30], iconAnchor: [15, 15],
+        popupAnchor: [0, -14],
+        html: `<span class="venue-code" title="${esc(v.n)}">${esc(codes[i])}</span>`,
+      }),
+    }).bindPopup(popupHtml[i]);
     cluster.addLayer(m);
     markers[i] = m;
     pts.push([v.lat, v.lng]);
@@ -839,6 +1056,7 @@ function showVenue(i) {
   const v = S.data.venues[i];
   if (!v || v.lat == null) return;
   if (el.detail.open) el.detail.close();
+  clearRoute();               // sonst bleiben die Spielorte blass
   openBox(null);
   S.mapOn = true;
   $('#btn-map').setAttribute('aria-pressed', 'true');
@@ -879,6 +1097,18 @@ document.addEventListener('click', (e) => {
 
   const venue = t.closest('[data-venue]');
   if (venue) { e.preventDefault(); e.stopPropagation(); showVenue(+venue.dataset.venue); return; }
+
+  // Muss VOR der Zeile stehen, sonst oeffnet der Klick den Detaildialog.
+  const qp = t.closest('[data-quickplay]');
+  if (qp) {
+    e.preventDefault(); e.stopPropagation();
+    if (!qp.dataset.quickplay) return;            // kein Spotify-Link
+    const id = +qp.closest('.row').dataset.act;
+    const actId = S.data.acts[id].id;
+    if (playingAct === actId) closePlayer();
+    else openPlayer(qp.dataset.quickplay, qp.dataset.playname, actId);
+    return;
+  }
 
   const favBtn = t.closest('[data-fav]');
   if (favBtn) {
@@ -943,7 +1173,15 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-  if (t.closest('[data-close]')) { el.detail.close(); return; }
+  // Den Dialog schliessen, IN DEM der Knopf steckt. Vorher stand hier
+  // el.detail.close(), deshalb war das ✕ im Menue wirkungslos: es hat den
+  // Detaildialog geschlossen, der ohnehin schon zu war.
+  const closer = t.closest('[data-close]');
+  if (closer) {
+    const dlg = closer.closest('dialog');
+    (dlg || el.detail).close();
+    return;
+  }
 
   const day = t.closest('.day');
   if (day) {
@@ -1084,7 +1322,7 @@ $('#f-reset').addEventListener('click', () => {
 $('#btn-map').addEventListener('click', (e) => {
   if (S.planOn) S.planOn = false;
   S.mapOn = !S.mapOn;
-  if (!S.mapOn && routeLayer && map) { map.removeLayer(routeLayer); routeLayer = null; }
+  if (!S.mapOn) clearRoute();
   e.currentTarget.setAttribute('aria-pressed', String(S.mapOn));
   if (S.mapOn) openBox(null);
   render();
@@ -1540,6 +1778,48 @@ addEventListener('visibilitychange', () => {
   } else {
     runSync(true, true);   // zurueck im Bild: nur lesen
   }
+});
+
+$('#player-close').addEventListener('click', closePlayer);
+
+/* ---------- Zurueck-Taste und Zurueck-Geste ----------
+   Ohne das verlaesst ein Wisch von der Kante die App, obwohl gerade nur ein
+   Dialog offen ist. Der Trick: beim Start einen Eintrag in die Historie
+   legen. Jedes Zurueck poppt ihn, wir raeumen eine Ebene auf und legen ihn
+   neu - erst wenn nichts mehr offen ist UND wir vorgewarnt haben, legen wir
+   ihn nicht neu, und das naechste Zurueck verlaesst die App wirklich. */
+let leaveArmed = false;
+let leaveTimer = null;
+
+/* Was das Zurueck der Reihe nach schliesst. Erste zutreffende Ebene gewinnt. */
+function closeOneLayer() {
+  if (el.detail.open) { el.detail.close(); return true; }
+  if (el.menu.open) { el.menu.close(); return true; }
+  if (!el.player.hidden) { closePlayer(); return true; }
+  if (BOXES.some((n) => !el[n].hidden)) { openBox(null); return true; }
+  if (S.planOn) { showPlan(false); return true; }
+  if (S.mapOn) { $('#btn-map').click(); return true; }
+  if (!el.searchbar.hidden) { $('#q-clear').click(); return true; }
+  return false;
+}
+
+history.replaceState({ rbf: 'base' }, '');
+history.pushState({ rbf: 'guard' }, '');
+
+addEventListener('popstate', () => {
+  if (closeOneLayer()) {
+    history.pushState({ rbf: 'guard' }, '');
+    return;
+  }
+  if (!leaveArmed) {
+    leaveArmed = true;
+    toast('Nochmal zurück zum Verlassen der App', 2600);
+    clearTimeout(leaveTimer);
+    leaveTimer = setTimeout(() => { leaveArmed = false; }, 2600);
+    history.pushState({ rbf: 'guard' }, '');
+    return;
+  }
+  // Vorgewarnt und nichts mehr offen: nichts neu auflegen, der Browser geht.
 });
 
 load().then(() => {
