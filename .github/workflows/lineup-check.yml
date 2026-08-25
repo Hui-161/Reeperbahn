@@ -1,0 +1,73 @@
+name: lineup-check
+
+# Taeglicher Abruf des Line-ups. Bei Aenderungen wird ein Issue angelegt und
+# der neue Snapshot committet. Ohne Aenderungen passiert nichts.
+on:
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: lineup-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Line-up abrufen und vergleichen
+        id: sync
+        run: |
+          set +e
+          python3 sync.py --quiet > diff.txt 2> sync.err
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          cat sync.err >&2
+          # 0 = keine Aenderung, 10 = Aenderungen, 1 = Abruf-Fehler
+          if [ "$code" = "1" ]; then
+            echo "::error::Abruf fehlgeschlagen - Details im Log oben"
+            exit 1
+          fi
+          exit 0
+
+      - name: Aenderungen in die Job-Zusammenfassung
+        if: steps.sync.outputs.code == '10'
+        run: |
+          {
+            echo "## Line-up-Aenderungen"
+            echo
+            echo '```'
+            cat diff.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Issue anlegen
+        if: steps.sync.outputs.code == '10'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Line-up-Aenderungen $(date -u +%F)" \
+            --body-file diff.txt
+
+      - name: Neuen Snapshot committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/snapshots
+          if git diff --staged --quiet; then
+            echo "Kein neuer Snapshot."
+          else
+            git commit -m "Line-up-Snapshot $(date -u +%F)"
+            git push
+          fi

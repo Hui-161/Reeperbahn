@@ -1,0 +1,15 @@
+# Abrufergebnisse - jederzeit reproduzierbar via fetch_lineup.py
+shows.json
+shows.csv
+acts-raw.json
+acts-ohne-termin.json
+discovery-report.json
+*.ics
+
+# Die Snapshots unter data/snapshots/ gehoeren bewusst INS Repository:
+# sie sind die Historie, gegen die der Diff laeuft.
+
+sync.log
+__pycache__/
+*.py[cod]
+.venv/
