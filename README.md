@@ -186,8 +186,15 @@ Favoriten, **Gesehen-Markierung**, private Notizen, **Bewertung von 1 bis 5**
 hell/dunkel/Systemvorgabe, Offline-Betrieb per Service Worker, installierbar
 als PWA.
 
-Filter: Favoriten, Bewertet, **Gesehen**, **Beide** (nur mit Partner-Datei),
-Genre, Spielort - alle kombinierbar.
+Filter: Favoriten, **Note 1-5** (aufklappbar, mehrfach waehlbar), Gesehen,
+Beide (nur mit Team oder Partner-Datei), Genre, Spielort - alle kombinierbar.
+Immer nur ein Klappkasten offen.
+
+**Filterspeicher** (Lesezeichen-Symbol oben rechts): eine eingestellte
+Filterkombination unter einem Namen ablegen, per Klick wieder anwenden, per
+✕ loeschen. Gespeichert werden Tag, Genres, Spielorte, Noten und die Schalter -
+der Suchbegriff bewusst nicht: ein gespeicherter Filter soll eine Sicht sein,
+kein eingefrorener Suchbegriff.
 
 ## Team online (verschluesselt)
 

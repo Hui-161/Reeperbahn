@@ -30,6 +30,11 @@
       <button id="btn-theme" class="icon-btn" aria-label="Ansicht wechseln">
         <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
       </button>
+      <button id="btn-filters" class="icon-btn" aria-label="Gespeicherte Filter"
+              aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path
+          d="M6 3.5h12v17l-6-4-6 4z"/></svg>
+      </button>
       <button id="btn-menu" class="icon-btn" aria-label="Menü" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
@@ -49,9 +54,7 @@
     <button id="f-fav" class="chip chip-fav" aria-pressed="false">
       <span class="heart" aria-hidden="true">♥</span> Favoriten
     </button>
-    <button id="f-rate" class="chip" aria-pressed="false">
-      <span class="grade grade-1" aria-hidden="true">1</span> Bewertet
-    </button>
+    <button id="f-rate" class="chip">Bewertet</button>
     <button id="f-seen" class="chip" aria-pressed="false">✓ Gesehen</button>
     <button id="f-team" class="chip" aria-pressed="false" hidden>Beide</button>
     <button id="f-genre" class="chip">Genres</button>
@@ -60,7 +63,18 @@
   </div>
 
   <div id="genrebox" class="genrebox" hidden></div>
+  <div id="ratebox" class="genrebox" hidden></div>
   <div id="venuebox" class="genrebox" hidden></div>
+
+  <div id="filterbox" class="genrebox filterbox" hidden>
+    <div id="filterlist" class="filterlist"></div>
+    <form id="filtersave" class="filtersave" onsubmit="return false">
+      <input id="filtername" type="text" maxlength="32" placeholder="Diesen Filter speichern als …"
+             autocomplete="off" aria-label="Name für den Filter">
+      <button type="button" id="filtersave-go" class="chip">Speichern</button>
+    </form>
+    <p class="menu-note" id="filterhint"></p>
+  </div>
 </header>
 
 <main>

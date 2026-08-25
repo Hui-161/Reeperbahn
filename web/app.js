@@ -47,6 +47,9 @@ let hint = store.get('hint', {});
    halten ist der ganze Trick: jede Seite schreibt ausschliesslich ihre eigene
    Datei, damit kann beim Zusammenfuehren nichts kollidieren. */
 let partner = store.get('partner', null);
+/* Gespeicherte Filtersaetze. Die Suche gehoert absichtlich NICHT dazu: ein
+   gespeicherter Filter soll eine Sicht sein, kein eingefrorener Suchbegriff. */
+let savedFilters = store.get('filters', []);
 const team = window.RBFTeam ? window.RBFTeam.createTeamClient(store) : null;
 let syncing = false;
 
@@ -107,7 +110,7 @@ const S = {
   day: null,
   q: '',
   favOnly: false,
-  rateOnly: false,
+  rates: new Set(),
   genres: new Set(),
   venues: new Set(),
   seenOnly: false,
@@ -124,6 +127,7 @@ const $ = (sel) => document.querySelector(sel);
 const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
   genrebox: $('#genrebox'), venuebox: $('#venuebox'),
+  ratebox: $('#ratebox'), filterbox: $('#filterbox'),
   detail: $('#detail'), menu: $('#menu'), meta: $('#meta'),
   filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
@@ -167,6 +171,8 @@ async function load() {
   renderDays();
   renderGenres();
   renderVenues();
+  renderRates();
+  renderSavedFilters();
   render();
   const d = new Date(S.data.generated_at);
   el.meta.textContent = `${S.data.acts.length} Acts · ${S.data.shows.length} Auftritte · ` +
@@ -218,6 +224,102 @@ function renderVenues() {
       >${esc(S.data.venues[i].n)} <span class="tag">${n}</span></button>`).join('');
 }
 
+/* Genau ein Kasten offen. Paarweise Verdrahtung war bei zwei Kaesten noch
+   uebersichtlich, bei vier ist sie eine Fehlerquelle. */
+const BOXES = ['genrebox', 'ratebox', 'venuebox', 'filterbox'];
+
+function openBox(which) {
+  const wasOpen = which && !el[which].hidden;
+  for (const name of BOXES) el[name].hidden = true;
+  if (which && !wasOpen) el[which].hidden = false;
+  $('#btn-filters').setAttribute('aria-pressed', String(!el.filterbox.hidden));
+  sizeMap();
+}
+
+function renderRates() {
+  const counts = new Map();
+  for (const a of S.data.acts) {
+    const r = +rate[a.id];
+    if (r) counts.set(r, (counts.get(r) || 0) + 1);
+  }
+  el.ratebox.innerHTML = RATES.map(([n, label]) =>
+    `<button class="chip" data-rate="${n}" aria-pressed="${S.rates.has(n)}"
+      >${n} ${esc(label)} <span class="tag">${counts.get(n) || 0}</span></button>`).join('');
+}
+
+/* ---------- Filterspeicher ---------- */
+
+function currentFilter() {
+  return {
+    day: S.day,
+    fav: S.favOnly,
+    seen: S.seenOnly,
+    team: S.teamOnly,
+    rates: [...S.rates],
+    genres: [...S.genres],
+    venues: [...S.venues],
+  };
+}
+
+function describeFilter(f) {
+  const bits = [];
+  if (f.day) bits.push(dayLabel(f.day));
+  else bits.push('alle Tage');
+  if (f.fav) bits.push('Favoriten');
+  if (f.seen) bits.push('gesehen');
+  if (f.team) bits.push('beide');
+  if (f.rates && f.rates.length) bits.push('Note ' + f.rates.join('/'));
+  if (f.genres && f.genres.length) {
+    bits.push(f.genres.map((i) => i === NO_GENRE ? 'ohne Angabe' : S.data.genres[i]).join(', '));
+  }
+  if (f.venues && f.venues.length) {
+    bits.push(f.venues.map((i) => (S.data.venues[i] || {}).n || '?').join(', '));
+  }
+  return bits.join(' · ');
+}
+
+function applyFilter(f) {
+  S.day = f.day ?? null;
+  S.favOnly = !!f.fav;
+  S.seenOnly = !!f.seen;
+  S.teamOnly = !!f.team;
+  S.rates = new Set((f.rates || []).map(Number));
+  S.genres = new Set((f.genres || []).map(Number));
+  S.venues = new Set((f.venues || []).map(Number));
+  S.q = '';
+  el.q.value = '';
+  el.searchbar.hidden = true;
+  for (const [id, on] of [['f-fav', S.favOnly], ['f-seen', S.seenOnly],
+                          ['f-team', S.teamOnly]]) {
+    $('#' + id).setAttribute('aria-pressed', String(on));
+  }
+  renderDays();
+  renderGenres();
+  renderVenues();
+  renderRates();
+  render();
+}
+
+function renderSavedFilters() {
+  const list = $('#filterlist');
+  const hint = $('#filterhint');
+  if (!list) return;
+  if (!savedFilters.length) {
+    list.innerHTML = '<span class="menu-note">Noch nichts gespeichert. '
+      + 'Filter einstellen, unten benennen, speichern.</span>';
+  } else {
+    list.innerHTML = savedFilters.map((f, i) =>
+      `<span class="saved">
+         <button class="saved-use" data-usefilter="${i}"
+           title="${esc(describeFilter(f.f))}">${esc(f.name)}</button>
+         <button class="saved-del" data-delfilter="${i}"
+           aria-label="${esc(f.name)} löschen">✕</button>
+       </span>`).join('');
+  }
+  if (hint) hint.textContent = 'Gespeichert werden Tag, Genres, Spielorte, Noten '
+    + 'und die Schalter — der Suchbegriff nicht.';
+}
+
 /* ---------- Auswahl ---------- */
 
 function visibleShows() {
@@ -233,7 +335,7 @@ function visibleShows() {
     if (!spanAll && sh.d && sh.d !== S.day) continue;
 
     if (S.favOnly && !fav.has(act.id)) continue;
-    if (S.rateOnly && !rate[act.id]) continue;
+    if (S.rates.size && !S.rates.has(+rate[act.id])) continue;
     if (S.seenOnly && !seen.has(act.id)) continue;
     if (S.teamOnly && !bothWant(act.id)) continue;
 
@@ -261,11 +363,13 @@ function visibleShows() {
 /* ---------- Liste ---------- */
 
 function render() {
-  const anyFilter = S.favOnly || S.rateOnly || S.seenOnly || S.teamOnly
+  const anyFilter = S.favOnly || S.rates.size > 0 || S.seenOnly || S.teamOnly
     || S.genres.size > 0 || S.venues.size > 0 || S.q.trim() !== '';
   $('#f-reset').hidden = !anyFilter;
   $('#f-genre').classList.toggle('on', S.genres.size > 0);
   $('#f-genre').textContent = S.genres.size ? `Genres (${S.genres.size})` : 'Genres';
+  $('#f-rate').classList.toggle('on', S.rates.size > 0);
+  $('#f-rate').textContent = S.rates.size ? `Bewertet (${S.rates.size})` : 'Bewertet';
   $('#f-team').hidden = !partner;
   $('#f-venue').classList.toggle('on', S.venues.size > 0);
   $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
@@ -541,8 +645,7 @@ function showVenue(i) {
   const v = S.data.venues[i];
   if (!v || v.lat == null) return;
   if (el.detail.open) el.detail.close();
-  el.genrebox.hidden = true;
-  el.venuebox.hidden = true;
+  openBox(null);
   S.mapOn = true;
   $('#btn-map').setAttribute('aria-pressed', 'true');
   render();
@@ -644,6 +747,31 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  const rateChip = t.closest('[data-rate]');
+  if (rateChip) {
+    const n = +rateChip.dataset.rate;
+    S.rates.has(n) ? S.rates.delete(n) : S.rates.add(n);
+    rateChip.setAttribute('aria-pressed', String(S.rates.has(n)));
+    render();
+    return;
+  }
+
+  const useFilter = t.closest('[data-usefilter]');
+  if (useFilter) {
+    const f = savedFilters[+useFilter.dataset.usefilter];
+    if (f) { applyFilter(f.f); openBox(null); }
+    return;
+  }
+
+  const delFilter = t.closest('[data-delfilter]');
+  if (delFilter) {
+    const i = +delFilter.dataset.delfilter;
+    savedFilters.splice(i, 1);
+    store.set('filters', savedFilters);
+    renderSavedFilters();
+    return;
+  }
+
   const venueFilter = t.closest('[data-venuefilter]');
   if (venueFilter) {
     const i = +venueFilter.dataset.venuefilter;
@@ -692,11 +820,7 @@ $('#f-fav').addEventListener('click', (e) => {
   render();
 });
 
-$('#f-rate').addEventListener('click', (e) => {
-  S.rateOnly = !S.rateOnly;
-  e.currentTarget.setAttribute('aria-pressed', String(S.rateOnly));
-  render();
-});
+$('#f-rate').addEventListener('click', () => { renderRates(); openBox('ratebox'); });
 
 $('#f-seen').addEventListener('click', (e) => {
   S.seenOnly = !S.seenOnly;
@@ -710,37 +834,50 @@ $('#f-team').addEventListener('click', (e) => {
   render();
 });
 
-$('#f-genre').addEventListener('click', () => {
-  const open = el.genrebox.hidden;
-  el.genrebox.hidden = !open;
-  if (open) el.venuebox.hidden = true;   // nur ein Kasten offen
-  sizeMap();
+$('#f-genre').addEventListener('click', () => openBox('genrebox'));
+$('#f-venue').addEventListener('click', () => openBox('venuebox'));
+
+$('#btn-filters').addEventListener('click', () => {
+  renderSavedFilters();
+  openBox('filterbox');
 });
 
-$('#f-venue').addEventListener('click', () => {
-  const open = el.venuebox.hidden;
-  el.venuebox.hidden = !open;
-  if (open) el.genrebox.hidden = true;
-  sizeMap();
+$('#filtersave-go').addEventListener('click', () => {
+  const input = $('#filtername');
+  const name = input.value.trim().slice(0, 32);
+  if (!name) { input.focus(); return; }
+  const f = currentFilter();
+  const empty = !f.fav && !f.seen && !f.team && !f.rates.length
+    && !f.genres.length && !f.venues.length && f.day === null;
+  if (empty && !confirm('Es ist gerade kein Filter gesetzt. Trotzdem speichern?')) return;
+  const at = savedFilters.findIndex((x) => x.name === name);
+  if (at >= 0) savedFilters[at] = { name, f }; else savedFilters.push({ name, f });
+  store.set('filters', savedFilters);
+  input.value = '';
+  renderSavedFilters();
+});
+
+$('#filtername').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('#filtersave-go').click(); }
 });
 
 $('#f-reset').addEventListener('click', () => {
-  S.favOnly = S.rateOnly = S.seenOnly = S.teamOnly = false;
-  S.genres.clear(); S.venues.clear(); S.q = '';
+  S.favOnly = S.seenOnly = S.teamOnly = false;
+  S.rates.clear(); S.genres.clear(); S.venues.clear(); S.q = '';
   el.q.value = ''; el.searchbar.hidden = true;
   $('#f-fav').setAttribute('aria-pressed', 'false');
-  $('#f-rate').setAttribute('aria-pressed', 'false');
   $('#f-seen').setAttribute('aria-pressed', 'false');
   $('#f-team').setAttribute('aria-pressed', 'false');
   renderGenres();
   renderVenues();
+  renderRates();
   render();
 });
 
 $('#btn-map').addEventListener('click', (e) => {
   S.mapOn = !S.mapOn;
   e.currentTarget.setAttribute('aria-pressed', String(S.mapOn));
-  if (S.mapOn) { el.genrebox.hidden = true; el.venuebox.hidden = true; }
+  if (S.mapOn) openBox(null);
   render();
   if (S.mapOn) { const m = ensureMap(); setTimeout(() => m.invalidateSize(), 60); }
 });

@@ -214,6 +214,67 @@ with sync_playwright() as p:
           and pg.locator("#f-team").get_attribute("aria-pressed") == "false"
           and pg.locator("#f-reset").is_hidden())
 
+    # --- Bewertungsfilter als Kasten mit 1 bis 5 ---
+    pg.click("#f-rate"); pg.wait_for_selector("#ratebox .chip")
+    check("Notenkasten hat fuenf Stufen", pg.locator("#ratebox .chip").count() == 5,
+          f"{pg.locator('#ratebox .chip').count()}")
+    check("Andere Kaesten sind zu",
+          pg.locator("#genrebox").is_hidden() and pg.locator("#venuebox").is_hidden())
+    pg.locator('#ratebox .chip[data-rate="1"]').click(); pg.wait_for_timeout(350)
+    only1 = pg.locator(".row").count()
+    check("Note 1 filtert", only1 >= 1, f"{only1} Zeile(n)")
+    check("Chip zeigt die Anzahl", "(1)" in pg.locator("#f-rate").inner_text(),
+          pg.locator("#f-rate").inner_text())
+    pg.locator('#ratebox .chip[data-rate="5"]').click(); pg.wait_for_timeout(350)
+    check("Note 5 dazu erweitert die Auswahl",
+          pg.locator(".row").count() >= only1
+          and "(2)" in pg.locator("#f-rate").inner_text(),
+          f"{pg.locator('.row').count()} | {pg.locator('#f-rate').inner_text()}")
+    pg.locator('#ratebox .chip[data-rate="5"]').click(); pg.wait_for_timeout(250)
+
+    # --- Filterspeicher ---
+    pg.click("#btn-filters"); pg.wait_for_selector("#filterbox:not([hidden])")
+    check("Notenkasten schliesst beim Oeffnen des Speichers",
+          pg.locator("#ratebox").is_hidden())
+    check("Speicher startet leer",
+          pg.locator("#filterlist .saved").count() == 0)
+    pg.fill("#filtername", "Nur Bestnoten")
+    pg.click("#filtersave-go"); pg.wait_for_timeout(350)
+    check("Filter gespeichert", pg.locator("#filterlist .saved").count() == 1)
+    check("Name steht dran",
+          "Nur Bestnoten" in pg.locator(".saved-use").first.inner_text())
+
+    # Filter zuruecksetzen, dann den gespeicherten anwenden
+    pg.click("#btn-filters"); pg.wait_for_timeout(200)
+    pg.click("#f-reset"); pg.wait_for_timeout(350)
+    check("Nach Reset kein Notenfilter",
+          "(" not in pg.locator("#f-rate").inner_text(),
+          pg.locator("#f-rate").inner_text())
+    pg.click("#btn-filters"); pg.wait_for_selector("#filterbox:not([hidden])")
+    pg.locator(".saved-use").first.click(); pg.wait_for_timeout(500)
+    check("Gespeicherter Filter wird angewendet",
+          "(1)" in pg.locator("#f-rate").inner_text(),
+          pg.locator("#f-rate").inner_text())
+    check("Und der Kasten schliesst sich", pg.locator("#filterbox").is_hidden())
+
+    # Loeschen
+    pg.click("#btn-filters"); pg.wait_for_selector("#filterbox:not([hidden])")
+    pg.locator(".saved-del").first.click(); pg.wait_for_timeout(350)
+    check("Filter geloescht", pg.locator("#filterlist .saved").count() == 0)
+
+    # Ueberlebt der Speicher einen Reload?
+    pg.fill("#filtername", "Merkposten")
+    pg.click("#filtersave-go"); pg.wait_for_timeout(300)
+    pg.reload(wait_until="load"); pg.wait_for_selector(".row", timeout=15000)
+    pg.click("#btn-filters"); pg.wait_for_selector("#filterbox:not([hidden])")
+    check("Gespeicherte Filter ueberleben Reload",
+          pg.locator("#filterlist .saved").count() == 1,
+          f"{pg.locator('#filterlist .saved').count()}")
+    pg.locator(".saved-del").first.click(); pg.wait_for_timeout(250)
+    pg.click("#btn-filters"); pg.wait_for_timeout(200)
+    pg.click("#f-reset") if pg.locator("#f-reset").is_visible() else None
+    pg.wait_for_timeout(300)
+
     # Ansicht hell/dunkel per Knopf.
     # WICHTIG: hier wird die GERENDERTE Farbe geprueft, nicht nur das
     # data-theme-Attribut. Genau diese Luecke hat einen Fehler durchgelassen:

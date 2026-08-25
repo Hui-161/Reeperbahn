@@ -131,16 +131,21 @@ body {
 
 h1 {
   margin: 0;
-  font-size: 1.05rem;
+  /* Muss mit der Breite mitgehen: mit fuenf Symbolen daneben bricht ein
+     starrer Titel auf schmalen Geraeten in zwei Zeilen um. */
+  font-size: clamp(.82rem, 3.6vw, 1.05rem);
+  white-space: nowrap;
   letter-spacing: -.01em;
   font-weight: 700;
 }
 h1 span { color: var(--accent); }
 
-.top-actions { margin-left: auto; display: flex; gap: .25rem; }
+.top-actions { margin-left: auto; display: flex; gap: .1rem; }
 
 .icon-btn {
-  min-width: var(--tap);
+  /* Schmaler als hoch: die Beruehrungsflaeche bleibt 44 px hoch, in der
+     Breite ist bei fuenf Symbolen sonst kein Platz. */
+  min-width: 40px;
   min-height: var(--tap);
   display: grid;
   place-items: center;
@@ -239,6 +244,53 @@ h1 span { color: var(--accent); }
 .chip-ghost { background: none; color: var(--ink-faint); font-weight: 400; }
 .chip .heart { font-size: 1rem; line-height: 1; }
 
+.filterbox { flex-direction: column; align-items: stretch; }
+
+.filterlist { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+/* Gespeicherter Filter: anwenden und loeschen sind zwei getrennte Flaechen,
+   damit man beim Antippen nicht versehentlich loescht. */
+.saved {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+.saved > button {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.saved-use { min-height: 36px; padding: 0 .3rem 0 .7rem; }
+.saved-use:hover { color: var(--accent); }
+.saved-del {
+  min-width: 34px;
+  min-height: 36px;
+  color: var(--ink-faint);
+  border-left: 1px solid var(--line) !important;
+}
+.saved-del:hover { color: var(--r5); background: var(--bg-sunken); }
+
+.filtersave { display: flex; gap: .35rem; margin-top: .1rem; }
+.filtersave input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 .6rem;
+  font: inherit;
+  font-size: .85rem;
+  color: var(--ink);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
 .genrebox {
   display: flex;
   flex-wrap: wrap;
@@ -324,6 +376,12 @@ main { min-height: 60vh; }
 .grade-p-4 { color: var(--r4); }
 .grade-p-5 { color: var(--r5); }
 .heart-p { margin-left: .3rem; font-size: .8rem; color: var(--accent); opacity: .75; }
+
+#ratebox .chip[aria-pressed="true"][data-rate="1"] { background: var(--r1); border-color: var(--r1); color: var(--on-scale); }
+#ratebox .chip[aria-pressed="true"][data-rate="2"] { background: var(--r2); border-color: var(--r2); color: var(--on-scale); }
+#ratebox .chip[aria-pressed="true"][data-rate="3"] { background: var(--r3); border-color: var(--r3); color: var(--on-scale); }
+#ratebox .chip[aria-pressed="true"][data-rate="4"] { background: var(--r4); border-color: var(--r4); color: var(--on-scale); }
+#ratebox .chip[aria-pressed="true"][data-rate="5"] { background: var(--r5); border-color: var(--r5); color: var(--on-scale); }
 
 .grade-1 { background: var(--r1); }
 .grade-2 { background: var(--r2); }
