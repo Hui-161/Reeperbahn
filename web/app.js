@@ -56,6 +56,9 @@ let hint = store.get('hint', {});
    halten ist der ganze Trick: jede Seite schreibt ausschliesslich ihre eigene
    Datei, damit kann beim Zusammenfuehren nichts kollidieren. */
 let partner = store.get('partner', null);
+// Wann der letzte Abgleich durchlief - steht in der Fusszeile und im
+// Menue. Weit oben deklariert, weil metaLine() und teamInfo() es lesen.
+let lastSyncAt = store.get('lastsync', null);
 /* Gespeicherte Filtersaetze. Die Suche gehoert absichtlich NICHT dazu: ein
    gespeicherter Filter soll eine Sicht sein, kein eingefrorener Suchbegriff. */
 let savedFilters = store.get('filters', []);
@@ -205,9 +208,21 @@ async function load() {
   renderRates();
   renderSavedFilters();
   render();
+  metaLine();
+}
+
+/* Die Fusszeile sagt jetzt auch, ob der Team-Abgleich laeuft. Vorher stand das
+   nur im Menue - man musste es aufklappen, um zu sehen, dass gar kein Team
+   eingerichtet war. */
+function metaLine() {
+  if (!S.data) return;
   const d = new Date(S.data.generated_at);
-  el.meta.textContent = `${S.data.acts.length} Acts · ${S.data.shows.length} Auftritte · ` +
-    `Stand ${isNaN(d) ? S.data.generated_at : d.toLocaleDateString('de-DE')}`;
+  let t = `${S.data.acts.length} Acts · ${S.data.shows.length} Auftritte · `
+    + `Stand ${isNaN(d) ? S.data.generated_at : d.toLocaleDateString('de-DE')}`;
+  if (team && team.config) {
+    t += ` · Team-Abgleich an${lastSyncAt ? ', ' + relTime(lastSyncAt) : ''}`;
+  }
+  el.meta.textContent = t;
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -1548,12 +1563,33 @@ function teamInfo() {
   }
   if (!note) return;
   if (!on) {
-    note.textContent = 'Kein Online-Team. Ohne Team funktioniert der Austausch '
-      + 'auch über Dateien.';
+    // Deutlich als AUS markieren. Vorher stand hier nur Prosa, und man konnte
+    // nicht erkennen, dass gar nichts laeuft - der Austausch ueber Dateien
+    // sah aus wie das Ganze.
+    note.innerHTML = '<b class="sync-off">Kein Online-Team — es wird nichts '
+      + 'abgeglichen.</b><br>„Team einrichten“ drücken und der zweiten Person '
+      + 'Beitrittslink und Passphrase geben. Danach läuft der Abgleich von '
+      + 'selbst, ohne Dateien.';
     return;
   }
-  note.textContent = `Team aktiv als „${c.name}“. Ende-zu-Ende verschlüsselt — `
-    + 'der Server sieht nur Chiffrat. Wer Link und Passphrase hat, ist im Team.';
+  const ago = lastSyncAt ? relTime(lastSyncAt) : 'noch nicht';
+  note.innerHTML = `<b class="sync-on">Abgleich läuft automatisch</b> — `
+    + `alle ${PULL_FAST_MS / 1000} Sekunden, solange die App offen ist. `
+    + `Letzter Abgleich: ${esc(ago)}.<br>`
+    + `Du erscheinst als „${esc(c.name)}“. Ende-zu-Ende verschlüsselt — der `
+    + 'Server sieht nur Chiffrat. Wer Link und Passphrase hat, ist im Team.';
+}
+
+/* "vor 12 Sekunden" ist beim Hinsehen brauchbarer als eine Uhrzeit. */
+function relTime(iso) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 10) return 'gerade eben';
+  if (s < 90) return `vor ${s} Sekunden`;
+  const m = Math.round(s / 60);
+  if (m < 90) return `vor ${m} Minuten`;
+  const h = Math.round(m / 60);
+  if (h < 36) return `vor ${h} Stunden`;
+  return new Date(iso).toLocaleString('de-DE');
 }
 
 function myTeamDoc() {
@@ -1580,6 +1616,15 @@ function adoptOthers(others) {
   return usable.length;
 }
 
+/* Woran man erkennt, ob sich auf der Gegenseite etwas getan hat - ohne den
+   Zeitstempel, der sich bei jedem Abgleich aendert. */
+function partnerSignature() {
+  if (!partner) return '';
+  return JSON.stringify([partner.name, (partner.fav || []).length,
+                         Object.keys(partner.rate || {}).length,
+                         (partner.seen || []).length]);
+}
+
 /* Automatischer Abgleich nach eigenen Aenderungen. Ohne das muesste man
    mitten im Konzert daran denken, "Jetzt abgleichen" zu druecken - und genau
    das passiert nicht. Verzoegert, damit schnelles Durchtippen nicht jedes Mal
@@ -1594,19 +1639,56 @@ function scheduleSync() {
   syncTimer = setTimeout(() => runSync(true), SYNC_DEBOUNCE_MS);
 }
 
-/* Regelmaessig NUR lesen. Wegen der KV-Verzoegerung erscheint ein frisch
-   beigetretenes Mitglied sonst bis zu einer Minute lang nicht - was wie ein
-   Defekt aussieht. Lesen ist billig (100.000/Tag), Schreiben nicht. */
-const PULL_INTERVAL_MS = 90000;
+/* Regelmaessig NUR lesen. Lesen ist billig (100.000/Tag), Schreiben nicht
+   (1.000/Tag).
+
+   Das Intervall war 90 Sekunden - und war damit der eigentliche Engpass. Gegen
+   die echte API gemessen: eine AENDERUNG an einem bestehenden Eintrag ist nach
+   1 Sekunde abrufbar, nur ein NEUER Eintrag braucht rund 30 Sekunden, bis er
+   im Verzeichnis auftaucht. Der Speicher war also schnell, das Nachfragen war
+   langsam.
+
+   15 Sekunden im Vordergrund, nach 10 Minuten ohne Neuigkeiten auf 60
+   Sekunden gedrosselt. Zwei Geraete, die den ganzen Tag offen sind, kommen
+   damit auf gut 10.000 Leseanfragen - ein Zehntel des Freibetrags. */
+const PULL_FAST_MS = 15000;
+const PULL_SLOW_MS = 60000;
+const IDLE_BEFORE_SLOW_MS = 10 * 60 * 1000;
 let pullTimer = null;
+let lastRemoteChange = 0;
 
 function startPulling() {
   clearInterval(pullTimer);
   if (!team || !team.config) return;
-  pullTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') runSync(true, true);
-  }, PULL_INTERVAL_MS);
+  lastRemoteChange = Date.now();
+  let current = PULL_FAST_MS;
+  const arm = (ms) => {
+    current = ms;
+    clearInterval(pullTimer);
+    pullTimer = setInterval(tick, ms);
+  };
+  const tick = () => {
+    if (document.visibilityState !== 'visible') return;
+    runSync(true, true);
+    const idle = Date.now() - lastRemoteChange;
+    const want = idle > IDLE_BEFORE_SLOW_MS ? PULL_SLOW_MS : PULL_FAST_MS;
+    if (want !== current) arm(want);
+  };
+  arm(PULL_FAST_MS);
 }
+
+/* Ein neuer Beitritt taucht im Verzeichnis erst nach etwa 30 Sekunden auf.
+   Nach dem eigenen Hochladen wird deshalb einmal verzoegert nachgefragt -
+   sonst sieht man die neue Person erst beim naechsten Takt. */
+let catchUpTimer = null;
+function scheduleCatchUp() {
+  clearTimeout(catchUpTimer);
+  catchUpTimer = setTimeout(() => runSync(true, true), 35000);
+}
+
+/* Nur hochladen, wenn sich wirklich etwas geaendert hat. Sonst verbraucht
+   jeder App-Start einen Schreibzugriff, und die sind knapp. */
+let pushedSignature = null;
 
 async function runSync(quiet, pullOnly) {
   if (!team || !team.config || syncing) return;
@@ -1614,21 +1696,49 @@ async function runSync(quiet, pullOnly) {
   const note = $('#m-team-note');
   if (note && !quiet) note.textContent = 'Abgleich läuft …';
   try {
-    const others = pullOnly ? await team.pull() : await team.sync(myTeamDoc());
+    const doc = myTeamDoc();
+    // at ist ein Zeitstempel und aendert sich immer - fuer den Vergleich raus.
+    const sig = JSON.stringify([doc.fav, doc.seen, doc.rate]);
+    const needPush = !pullOnly && sig !== pushedSignature;
+    let others;
+    if (needPush) {
+      others = await team.sync(doc);
+      pushedSignature = sig;
+      scheduleCatchUp();
+    } else {
+      others = await team.pull();
+    }
+    const before = partnerSignature();
     const n = adoptOthers(others);
+    if (partnerSignature() !== before) lastRemoteChange = Date.now();
     const undec = others.filter((o) => o.undecryptable).length;
+    lastSyncAt = new Date().toISOString();
+    store.set('lastsync', lastSyncAt);
     teamInfo();
     partnerInfo();
+    metaLine();
     render();
     if (!quiet) {
-      alert(n
-        ? `Abgeglichen. ${n} weitere Person(en) im Team.`
-        + (undec ? ` ${undec} Eintrag/Einträge nicht lesbar — dort weicht die `
-                 + 'Passphrase ab.' : '')
-        // Nicht "niemand da" behaupten: der Speicher braucht bis zu einer
-        // Minute, bis ein neuer Eintrag im Verzeichnis auftaucht.
-        : 'Abgeglichen. Noch niemand sonst sichtbar — ein neuer Beitritt '
-          + 'braucht bis zu einer Minute. Die App lädt von selbst nach.');
+      // Genau sagen, was passiert ist. "Abgeglichen" allein liess offen, ob
+      // etwas hochgeladen wurde und ob die Gegenseite ueberhaupt existiert.
+      const sent = needPush ? 'Deine Auswahl ist hochgeladen. '
+                            : 'Nichts Neues zum Hochladen. ';
+      alert(sent + (n
+        ? `${n} weitere Person(en) im Team gelesen.`
+        + (undec ? ` ${undec} Eintrag/Einträge sind nicht lesbar — dort weicht `
+                 + 'die Passphrase ab.' : '')
+        : undec
+          ? `${undec} Eintrag/Einträge sind nicht lesbar — dort weicht die `
+            + 'Passphrase ab. Beide brauchen genau dieselbe.'
+          // Nicht "niemand da" behaupten: ein neuer Eintrag taucht im
+          // Verzeichnis erst nach etwa 30 Sekunden auf.
+          : 'Noch niemand sonst sichtbar. Ein frischer Beitritt braucht rund '
+            + 'eine halbe Minute, bis er auf der anderen Seite ankommt — die '
+            + 'App fragt von selbst nach.'));
+    }
+    if (quiet && undec && !n && note) {
+      note.textContent = 'Die Gegenseite ist nicht lesbar — dort weicht die '
+        + 'Passphrase ab. Beide brauchen genau dieselbe.';
     }
   } catch (err) {
     const msg = err.code === 'token_invalid'
@@ -1752,11 +1862,15 @@ function partnerInfo() {
   const note = $('#m-partner-note');
   const clear = $('#m-partner-clear');
   if (!note) return;
+  const online = !!(team && team.config);
   if (!partner) {
     clear.hidden = true;
-    note.textContent = 'Noch keine Partner-Datei geladen. Beide exportieren ihre '
-      + 'Auswahl über „Auswahl sichern“ und schicken sie sich zu — danach stehen '
-      + 'die Markierungen beider Seiten nebeneinander.';
+    note.textContent = online
+      ? 'Von der anderen Seite ist noch nichts angekommen. Sobald sie dem Team '
+        + 'beigetreten ist und etwas bewertet, erscheint es hier von selbst — '
+        + 'ohne Datei.'
+      : 'Noch nichts von der anderen Seite. Mit einem Online-Team geht das von '
+        + 'selbst; ohne Team über „Auswahl sichern“ und die Datei austauschen.';
     return;
   }
   clear.hidden = false;
@@ -1764,7 +1878,8 @@ function partnerInfo() {
     ? S.data.acts.filter((a) => bothWant(a.id)).length : 0;
   note.textContent = `${partnerName()}: ${(partner.fav || []).length} Favoriten, `
     + `${Object.keys(partner.rate || {}).length} bewertet, `
-    + `${(partner.seen || []).length} gesehen · ${both} Acts wollt ihr beide sehen.`;
+    + `${(partner.seen || []).length} gesehen · ${both} Acts wollt ihr beide sehen.`
+    + (online && lastSyncAt ? ` · Stand ${relTime(lastSyncAt)}` : '');
 }
 
 el.filePartner.addEventListener('change', async () => {

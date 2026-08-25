@@ -141,6 +141,54 @@ with sync_playwright() as p:
           C.locator("#list .grade-p").count() == 0,
           f"{C.locator('#list .grade-p').count()}")
 
+    # ---------- Der Kern: kommt es OHNE Knopfdruck an? ----------
+    # Das war der gemeldete Fehler. Er lag nicht am Speicher, sondern am
+    # Abfragetakt: 90 Sekunden. Gemessen gegen die echte API ist eine
+    # Aenderung an einem bestehenden Eintrag nach 1 Sekunde abrufbar - die
+    # App hat nur zu selten nachgefragt. Diese Pruefung faellt durch, wenn
+    # der Takt wieder hochgesetzt wird.
+    import time as _t
+    A.keyboard.press("Escape"); A.wait_for_timeout(200)
+    before = B.evaluate("""() => {
+      const p = JSON.parse(localStorage.getItem('rbf26.partner') || 'null');
+      return p ? Object.keys(p.rate || {}).length : 0;
+    }""")
+    fresh = [i for i in
+             A.locator(".row").evaluate_all("els => els.map(e => e.dataset.act)")
+             if i not in idxA][:1]
+    A.locator(f'.row[data-act="{fresh[0]}"] .row-time').first.click()
+    A.wait_for_selector("#detail .rate")
+    A.locator(".rate button[data-r='4']").click()
+    A.keyboard.press("Escape")
+    t0 = _t.time(); arrived = None
+    # Grosszuegig bemessen, damit ein langsamer Rechner den Test nicht
+    # rot macht - aber weit unter den 90 Sekunden von vorher.
+    while _t.time() - t0 < 45:
+        now = B.evaluate("""() => {
+          const p = JSON.parse(localStorage.getItem('rbf26.partner') || 'null');
+          return p ? Object.keys(p.rate || {}).length : 0;
+        }""")
+        if now > before: arrived = int(_t.time() - t0); break
+        _t.sleep(2)
+    check("Aenderung kommt ohne Knopfdruck an", arrived is not None,
+          f"nach {arrived} s" if arrived is not None else "nie (Grenze 45 s)")
+    check("Und zwar deutlich schneller als die alten 90 s",
+          arrived is not None and arrived < 40, f"{arrived} s")
+
+    # Sichtbarer Zustand: laeuft der Abgleich, muss man das sehen koennen -
+    # vorher stand nur Prosa im Menue und man konnte nicht erkennen, dass
+    # ueberhaupt nichts eingerichtet war.
+    B.click("#btn-menu"); B.wait_for_selector("#menu[open]")
+    note = B.locator("#m-team-note").inner_text()
+    check("Menue zeigt den Abgleich als aktiv",
+          B.locator("#m-team-note .sync-on").count() == 1, note[:70])
+    check("Menue nennt den letzten Abgleich", "Letzter Abgleich" in note,
+          note[:70])
+    B.keyboard.press("Escape"); B.wait_for_timeout(200)
+    check("Fusszeile nennt den Team-Abgleich",
+          "Team-Abgleich an" in B.locator("#meta").inner_text(),
+          B.locator("#meta").inner_text()[-60:])
+
     real = [e for e in errsA + errsB
             if "openstreetmap" not in e.lower() and "ERR_" not in e]
     check("Keine JS-Fehler", not real, str(real[:2]))

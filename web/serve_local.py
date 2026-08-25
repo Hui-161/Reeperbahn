@@ -17,9 +17,11 @@ import functools
 import hashlib
 import http.server
 import json
+import os
 import pathlib
 import re
 import sys
+import time
 from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -53,6 +55,31 @@ MAX_BODY = 128 * 1024
 MAX_MEMBERS = 8
 AUTH: dict[str, str] = {}
 DOCS: dict[str, dict] = {}
+
+# Cloudflare KV ist eventual consistent, und zwar UNGLEICHMAESSIG. Gegen die
+# echte API gemessen:
+#   ein NEUER Schluessel taucht im Verzeichnis-Listing erst nach ~30 s auf
+#   eine AENDERUNG an einem bestehenden Schluessel ist nach ~1 s da
+# Ohne diese Nachbildung war der Team-Test gruen, waehrend es in Wirklichkeit
+# aussah, als komme nichts an - der Mock lieferte alles sofort.
+# Mit RBF_KV_LAG=0 laesst sich die Verzoegerung fuer schnelle Testlaeufe
+# abschalten.
+KV_FIRST_SEEN_LAG = float(os.environ.get("RBF_KV_LAG", "30"))
+FIRST_WRITE: dict[tuple, float] = {}
+
+
+def visible_members(team: str) -> list[dict]:
+    """Was ein Listing JETZT zeigen wuerde."""
+    now = time.monotonic()
+    out = []
+    for (t, mid), doc in DOCS.items():
+        if t != team:
+            continue
+        born = FIRST_WRITE.get((t, mid), 0.0)
+        if now - born < KV_FIRST_SEEN_LAG:
+            continue                      # Schluessel noch nicht im Verzeichnis
+        out.append({"id": mid, **doc})
+    return out
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -103,9 +130,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._reply({"error": "token_invalid"}, 403); return True
 
         if self.command == "GET" and member is None:
-            members = [{"id": mid, **doc}
-                       for (t, mid), doc in DOCS.items() if t == team]
-            self._reply({"team": team, "members": members}); return True
+            self._reply({"team": team, "members": visible_members(team)})
+            return True
 
         if self.command == "PUT" and member:
             length = int(self.headers.get("Content-Length") or 0)
@@ -121,12 +147,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if (team, member) not in DOCS and len(current) >= MAX_MEMBERS:
                 self._reply({"error": "team_full", "max": MAX_MEMBERS}, 409); return True
             stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            FIRST_WRITE.setdefault((team, member), time.monotonic())
             DOCS[(team, member)] = {"iv": payload["iv"], "ct": payload["ct"],
                                     "updated": stamp}
             self._reply({"ok": True, "updated": stamp}); return True
 
         if self.command == "DELETE" and member:
             DOCS.pop((team, member), None)
+            FIRST_WRITE.pop((team, member), None)
             self._reply({"ok": True}); return True
 
         self._reply({"error": "method_not_allowed"}, 405); return True

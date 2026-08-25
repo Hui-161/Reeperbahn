@@ -821,6 +821,15 @@ body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
   border-color: color-mix(in srgb, var(--r2), var(--r3));
 }
 
+/* Laeuft der Abgleich oder nicht - das muss man sehen, ohne den Text zu
+   lesen. */
+.sync-on { color: var(--r1); }
+.sync-off { color: var(--r4); }
+.sync-on::before, .sync-off::before {
+  content: "●";
+  margin-right: .35rem;
+}
+
 .pop-actions { margin-top: .5rem; }
 .pop-actions button {
   min-height: 36px;
