@@ -38,9 +38,17 @@ with sync_playwright() as p:
     pg.goto(BASE + "/", wait_until="load")
     pg.wait_for_selector(".row", timeout=15000)
 
-    rows0 = pg.locator(".row").count()
     days = pg.locator(".day").count()
-    check("Liste rendert", rows0 > 20 and days == 4, f"{rows0} Zeilen, {days} Tage")
+    rows_all_default = pg.locator(".row").count()
+    check("Standard ist 'Alle Tage' (heute liegt vor dem Festival)",
+          pg.locator('.day[data-day=""]').get_attribute("aria-selected") == "true")
+    check("Reiter: Alle + vier Tage", days == 5, f"{days} Reiter")
+    # Ab hier auf einen einzelnen Tag stellen, damit die Zaehlungen eindeutig sind.
+    pg.locator('.day[data-day="2026-09-17"]').click()
+    pg.wait_for_timeout(400)
+    rows0 = pg.locator(".row").count()
+    check("Liste rendert", 20 < rows0 < rows_all_default,
+          f"{rows0} an einem Tag, {rows_all_default} an allen")
     check("Kopfzeile Uhrzeit-Gruppen", pg.locator(".slot-head").count() > 3)
 
     # Wunsch 6: Genre-Filter inkl. "ohne Angabe"
@@ -93,12 +101,15 @@ with sync_playwright() as p:
     pg.fill("#d-note", "Konflikt mit Lowertown pruefen")
     pg.wait_for_selector("#d-saved:has-text('Gespeichert')", timeout=4000)
     check("Notiz speichert", True, name)
-    pg.locator(".rate button[data-r='gruen']").click()
-    check("Ampel setzt sich",
-          pg.locator(".rate button[data-r='gruen']").get_attribute("aria-pressed")=="true")
+    pg.locator(".rate button[data-r='1']").click()
+    check("Note 1 setzt sich",
+          pg.locator(".rate button[data-r='1']").get_attribute("aria-pressed")=="true")
+    check("Skala hat fuenf Stufen", pg.locator(".rate button").count() == 5)
     pg.screenshot(path="/tmp/shot-detail.png")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
-    check("Ampel faerbt Zeile", pg.locator(".row.rated-gruen").count() >= 1)
+    check("Note faerbt Zeile", pg.locator(".row.rated-1").count() >= 1)
+    check("Note steht als Zahl in der Liste",
+          pg.locator("#list .grade-1").count() >= 1)
     check("Notiz-Marke in der Liste", pg.locator(".row-name.has-note").count() >= 1)
 
     # Wunsch 4: Suche fokussiert
@@ -125,11 +136,39 @@ with sync_playwright() as p:
     pg.goto(BASE + "/", wait_until="load")
     pg.wait_for_selector(".row", timeout=15000)
     check("Favorit ueberlebt Reload", pg.locator('.row-fav[aria-pressed="true"]').count() >= 1)
-    check("Ampel ueberlebt Reload", pg.locator(".row.rated-gruen").count() >= 1)
+    check("Note ueberlebt Reload", pg.locator(".row.rated-1").count() >= 1)
 
     csp = [e for e in errors if "content security policy" in e.lower()
            or "refused to" in e.lower()]
     check("Keine CSP-Verletzung", not csp, str(csp[:3]))
+    # "Alle Tage": Suche und Stoebern ueber Tagesgrenzen
+    pg.locator('.day[data-day=""]').click()
+    pg.wait_for_timeout(400)
+    rows_all = pg.locator(".row").count()
+    check("Alle-Tage-Reiter zeigt mehr als ein Tag",
+          rows_all > rows0 and rows_all == rows_all_default,
+          f"{rows0} (ein Tag) -> {rows_all} (alle)")
+    heads = pg.locator(".slot-head").all_inner_texts()
+    check("Gruppen nennen den Tag",
+          any(h.startswith(("Mi", "Do", "Fr", "Sa")) for h in heads), heads[:2])
+    pg.locator('.day[data-day="2026-09-18"]').click(); pg.wait_for_timeout(300)
+    check("Zurueck auf einen Tag", pg.locator(".row").count() < rows_all)
+
+    # Karte: der echte Weg - Spielort in der Liste antippen, dann im Popup
+    # filtern. (Direkt auf einen Marker zu klicken ist unzuverlaessig: bei 34
+    # Haeusern auf engem Raum verdecken sich die Marker gegenseitig.)
+    pg.locator(".row-sub .venue").first.click(); pg.wait_for_timeout(1000)
+    pg.locator("[data-onlyvenue]").click(); pg.wait_for_timeout(600)
+    check("Karte schliesst nach 'Nur dieses Haus'", pg.locator("#list").is_visible())
+    check("Genau ein Spielort gefiltert",
+          "(1)" in pg.locator("#f-venue").inner_text(),
+          pg.locator("#f-venue").inner_text())
+    check("Und ueber alle Tage",
+          pg.locator('.day[data-day=""]').get_attribute("aria-selected") == "true")
+    venues_in_list = set(pg.locator(".row-sub .venue").all_inner_texts())
+    check("Liste zeigt nur diesen Spielort", len(venues_in_list) == 1, str(venues_in_list))
+    pg.click("#f-reset"); pg.wait_for_timeout(300)
+
     # --- Vorschlaege importieren ---
     # Bewusst in einem FRISCHEN Kontext: im bisherigen sind schon Acts
     # bewertet, und eine eigene Bewertung unterdrueckt den Vorschlagspunkt.
@@ -164,7 +203,7 @@ with sync_playwright() as p:
     pg2.locator(".row").first.click()
     pg2.wait_for_selector(".suggestion")
     check("Vorschlag im Detail erklaert", pg2.locator(".suggestion").count() == 1)
-    pg2.locator(".rate button[data-r='rot']").click()
+    pg2.locator(".rate button[data-r='5']").click()
     pg2.keyboard.press("Escape"); pg2.wait_for_timeout(500)
     check("Eigene Bewertung verdraengt den Vorschlagspunkt",
           pg2.locator("#list .hint").count() == before - 1,
@@ -176,6 +215,22 @@ with sync_playwright() as p:
     check("Vorschlaege ueberleben Reload",
           pg2.locator("#list .hint").count() == before - 1)
     ctx2.close()
+
+    # Migration: alte Dreistufen-Werte muessen auf die Skala abgebildet werden
+    ctx3 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    ctx3.add_init_script(
+        "try { localStorage.setItem('rbf26.rate',"
+        " JSON.stringify({'11515':'gruen','10864':'gelb','10874':'rot'})); } catch (e) {}")
+    pg3 = ctx3.new_page()
+    pg3.goto(BASE + "/", wait_until="load")
+    pg3.wait_for_selector(".row", timeout=15000)
+    pg3.locator('.day[data-day=""]').click(); pg3.wait_for_timeout(400)
+    check("Alte 'gruen' wird Note 1", pg3.locator("#list .grade-1").count() >= 1)
+    check("Alte 'gelb' wird Note 3", pg3.locator("#list .grade-3").count() >= 1)
+    check("Alte 'rot' wird Note 5", pg3.locator("#list .grade-5").count() >= 1)
+    check("Keine alten Klassen mehr",
+          pg3.locator(".row.rated-gruen").count() == 0)
+    ctx3.close()
 
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e

@@ -5,7 +5,11 @@
 const DATA_URL = 'data/lineup.json';
 const KEY = 'rbf26.';
 const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-const RATES = [['gruen', 'Hin'], ['gelb', 'Vielleicht'], ['rot', 'Nein']];
+const RATES = [[1, 'sehr gut'], [2, 'gut'], [3, 'geht so'], [4, 'eher nicht'],
+               [5, 'gar nicht']];
+// Bis Version 1 gab es drei Stufen. Alte Bewertungen werden auf die Skala
+// abgebildet, damit auf dem Handy nichts verloren geht.
+const RATE_MIGRATION = { gruen: 1, gelb: 3, rot: 5 };
 const NO_GENRE = -1;   // eigener Eimer: Acts ohne Genre-Angabe
 
 /* ---------- Speicher: faellt still auf Arbeitsspeicher zurueck ---------- */
@@ -27,6 +31,13 @@ const store = {
 const fav = new Set(store.get('fav', []));
 let note = store.get('note', {});
 let rate = store.get('rate', {});
+(() => {
+  let touched = false;
+  for (const [id, v] of Object.entries(rate)) {
+    if (typeof v === 'string' && v in RATE_MIGRATION) { rate[id] = RATE_MIGRATION[v]; touched = true; }
+  }
+  if (touched) store.set('rate', rate);
+})();
 const anchor = store.get('anchor', {});
 /* Vorschlaege aus taste.py. Getrennt von "rate": die eigene Bewertung
    gewinnt immer, der Vorschlag ist nur eine Vorbelegung. */
@@ -78,7 +89,9 @@ async function load() {
       'gespeicherten Stand — beim ersten Aufruf gibt es den noch nicht.</small>';
     return;
   }
-  S.day = S.data.days.includes(todayISO()) ? todayISO() : S.data.days[0];
+  // Waehrend des Festivals der heutige Tag, sonst alles - vorher will man
+  // stoebern, waehrenddessen den Abend.
+  S.day = S.data.days.includes(todayISO()) ? todayISO() : null;
   el.status.hidden = true;
   renderDays();
   renderGenres();
@@ -94,7 +107,10 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 /* ---------- Kopfbereich ---------- */
 
 function renderDays() {
-  el.days.innerHTML = S.data.days.map((d) => {
+  const all = `<button class="day" role="tab" data-day=""
+    aria-selected="${S.day === null}">Alle
+    <small>${S.data.days.length} Tage</small></button>`;
+  el.days.innerHTML = all + S.data.days.map((d) => {
     const dt = new Date(d + 'T12:00:00');
     return `<button class="day" role="tab" data-day="${d}"
       aria-selected="${d === S.day}">${WD[dt.getDay()]}
@@ -136,13 +152,14 @@ function renderVenues() {
 function visibleShows() {
   const q = fold(S.q.trim());
   const searching = q.length > 0;
+  const spanAll = searching || S.day === null;
   const out = [];
 
   for (const sh of S.data.shows) {
     const act = S.data.acts[sh.a];
 
-    // Bei aktiver Suche ueber alle Tage suchen, sonst nur der gewaehlte Tag.
-    if (!searching && sh.d && sh.d !== S.day) continue;
+    // Ueber alle Tage: bei aktiver Suche und wenn "Alle" gewaehlt ist.
+    if (!spanAll && sh.d && sh.d !== S.day) continue;
 
     if (S.favOnly && !fav.has(act.id)) continue;
     if (S.rateOnly && !rate[act.id]) continue;
@@ -190,12 +207,14 @@ function render() {
     return;
   }
 
-  const searching = S.q.trim() !== '';
+  const spanAll = S.q.trim() !== '' || S.day === null;
   let html = '', head = '';
   for (const sh of shows) {
     const act = S.data.acts[sh.a];
-    const group = sh.tbd ? 'Uhrzeit noch offen'
-      : (searching ? dayLabel(sh) + ', ' + hhmm(sh.t) : hhmm(sh.t).slice(0, 2) + ' Uhr');
+    const group = sh.tbd
+      ? (spanAll ? dayLabel(sh) + ' - Uhrzeit noch offen' : 'Uhrzeit noch offen')
+      : (spanAll ? dayLabel(sh) + ' ' + hhmm(sh.t).slice(0, 2) + ' Uhr'
+                 : hhmm(sh.t).slice(0, 2) + ' Uhr');
     if (group !== head) { head = group; html += `<div class="slot-head">${esc(head)}</div>`; }
     html += row(sh, act);
   }
@@ -219,8 +238,9 @@ function row(sh, act) {
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}">${esc(act.n)}${
-        !r && hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
-          title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : ''}</span>
+        r ? `<span class="grade grade-${r}" title="Meine Note: ${r}">${r}</span>`
+          : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
+              title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : '')}</span>
       <span class="row-sub">${venue
         ? `<span class="venue" data-venue="${sh.v}">${esc(venue.n)}</span>` : 'Spielort offen'}
         ${act.c ? ' · ' + esc(act.c) : ''}</span>
@@ -242,7 +262,7 @@ addEventListener('scroll', () => {
     const top = document.querySelector('.top').offsetHeight;
     for (const r of rows) {
       if (r.getBoundingClientRect().bottom > top) {
-        anchor[S.day] = r.dataset.show;
+        anchor[S.day || 'alle'] = r.dataset.show;
         store.set('anchor', anchor);
         break;
       }
@@ -251,7 +271,7 @@ addEventListener('scroll', () => {
 }, { passive: true });
 
 function restoreAnchor() {
-  const id = anchor[S.day];
+  const id = anchor[S.day || 'alle'];
   if (!id || S.q.trim()) return;
   const target = el.list.querySelector(`.row[data-show="${CSS.escape(id)}"]`);
   if (!target) return;
@@ -295,7 +315,8 @@ function openDetail(ai) {
     <div class="d-section">
       <h3>Meine Einschätzung</h3>
       <div class="rate">${RATES.map(([k, label]) =>
-        `<button data-r="${k}" aria-pressed="${rate[act.id] === k}">${label}</button>`).join('')}
+        `<button data-r="${k}" aria-pressed="${+rate[act.id] === k}"
+          aria-label="${k} - ${label}"><b>${k}</b><small>${label}</small></button>`).join('')}
       </div>
     </div>
 
@@ -395,7 +416,10 @@ function ensureMap() {
     ].filter(Boolean);
     const m = L.marker([v.lat, v.lng]).addTo(map).bindPopup(
       `<div class="pop-title">${esc(v.n)}</div>
-       <div class="pop-meta">${counts.get(i) || 0} Auftritte${bits.length ? '<br>' + bits.join('<br>') : ''}</div>`);
+       <div class="pop-meta">${counts.get(i) || 0} Auftritte${bits.length ? '<br>' + bits.join('<br>') : ''}</div>
+       <div class="pop-actions">
+         <button data-onlyvenue="${i}">Nur dieses Haus zeigen</button>
+       </div>`);
     markers[i] = m;
     pts.push([v.lat, v.lng]);
   });
@@ -425,6 +449,23 @@ function showVenue(i) {
 document.addEventListener('click', (e) => {
   const t = e.target;
 
+  // Aus der Karte heraus auf genau dieses Haus filtern - und ueber alle Tage,
+  // sonst sieht man nur den Bruchteil des gewaehlten Tages.
+  const only = t.closest('[data-onlyvenue]');
+  if (only) {
+    e.preventDefault(); e.stopPropagation();
+    const i = +only.dataset.onlyvenue;
+    S.venues.clear(); S.venues.add(i);
+    S.day = null;
+    S.mapOn = false;
+    $('#btn-map').setAttribute('aria-pressed', 'false');
+    renderDays();
+    renderVenues();
+    render();
+    scrollTo({ top: 0, behavior: 'instant' });
+    return;
+  }
+
   const venue = t.closest('[data-venue]');
   if (venue) { e.preventDefault(); e.stopPropagation(); showVenue(+venue.dataset.venue); return; }
 
@@ -450,11 +491,11 @@ document.addEventListener('click', (e) => {
   const rateBtn = t.closest('[data-r]');
   if (rateBtn) {
     const id = el.detail.dataset.act;
-    const val = rateBtn.dataset.r;
-    if (rate[id] === val) delete rate[id]; else rate[id] = val;
+    const val = +rateBtn.dataset.r;
+    if (+rate[id] === val) delete rate[id]; else rate[id] = val;
     store.set('rate', rate);
     for (const b of el.detail.querySelectorAll('[data-r]')) {
-      b.setAttribute('aria-pressed', String(rate[id] === b.dataset.r));
+      b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
     }
     render();
     return;
@@ -464,7 +505,7 @@ document.addEventListener('click', (e) => {
 
   const day = t.closest('.day');
   if (day) {
-    S.day = day.dataset.day;
+    S.day = day.dataset.day || null;
     for (const b of el.days.children) b.setAttribute('aria-selected', String(b === day));
     if (S.mapOn) { S.mapOn = false; $('#btn-map').setAttribute('aria-pressed', 'false'); }
     render();

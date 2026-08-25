@@ -178,10 +178,21 @@ Statische Seite, **kein Build-Schritt**: kein npm, kein Bundler, keine
 Node-Version, die in zwei Jahren nicht mehr baut. Leaflet liegt versioniert
 im Repo, sonst gibt es keine Abhaengigkeiten.
 
-Enthalten: Timetable nach Festivaltag, Genre-Filter (mit eigenem Eimer fuer
-Acts *ohne* Genre-Angabe), Favoriten, private Notizen und Ampelbewertung pro
-Act, Volltextsuche ueber alle Tage, Karte mit allen Spielorten, Offline-Betrieb
-per Service Worker, installierbar als PWA.
+Enthalten: Timetable nach Festivaltag **oder ueber alle Tage**, Filter nach
+Genre (mit eigenem Eimer fuer Acts *ohne* Genre-Angabe) und nach Spielort,
+Favoriten, private Notizen, **Bewertung von 1 bis 5** (1 = sehr gut,
+5 = gar nicht), Volltextsuche ueber alle Tage, Karte mit allen Spielorten samt
+"Nur dieses Haus zeigen", Offline-Betrieb per Service Worker, installierbar
+als PWA.
+
+Die Note steht in der Liste als **Zahl** und nicht nur als Farbe - Farbe
+allein ist fuer Farbfehlsichtige keine Information. Bewertungen aus der
+frueheren dreistufigen Ampel werden beim Laden automatisch abgebildet
+(gruen->1, gelb->3, rot->5).
+
+Bekannte Einschraenkung: bei 34 Haeusern auf engem Raum verdecken sich die
+Kartenmarker beim Standard-Zoom teilweise. Der zuverlaessige Weg zu einem
+bestimmten Haus ist der Spielort-Link in der Trefferzeile.
 
 Eigener Zustand (Favoriten, Notizen, Ampel) bleibt im Browser des Geraets —
 kein Server, kein Konto.

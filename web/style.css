@@ -14,9 +14,15 @@
   --line: #e4dff1;
   --accent: #6741d9;
   --accent-ink: #ffffff;
-  --gruen: #2f9e44;
-  --gelb: #e8a300;
-  --rot: #d64545;
+  /* Fuenfstufige Skala. Die kraeftigen Mitteltoene (Gruen 3.69, Gelb 4.24 auf
+     Weiss) fallen durch die Kontraktpruefung - daher abgedunkelt. So tragen
+     alle fuenf Stufen sowohl als Text als auch als Badge-Flaeche. */
+  --r1: #237032;
+  --r2: #4b7a0a;
+  --r3: #94560a;
+  --r4: #b53d0c;
+  --r5: #b02525;
+  --gruen: #237032;
   --shadow: 0 1px 2px rgb(27 26 32 / .06), 0 6px 20px rgb(27 26 32 / .06);
   --r: 12px;
   --tap: 44px;
@@ -33,9 +39,12 @@
     --line: #2d2a3e;
     --accent: #b197fc;
     --accent-ink: #17131f;
+    --r1: #51cf66;
+    --r2: #a9e34b;
+    --r3: #ffd43b;
+    --r4: #ff922b;
+    --r5: #ff8787;
     --gruen: #51cf66;
-    --gelb: #ffd43b;
-    --rot: #ff6b6b;
     --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px rgb(0 0 0 / .3);
   }
 }
@@ -231,9 +240,32 @@ main { min-height: 60vh; }
   cursor: pointer;
 }
 .row:hover { border-color: var(--ink-faint); }
-.row.rated-gruen { border-left: 4px solid var(--gruen); }
-.row.rated-gelb  { border-left: 4px solid var(--gelb); }
-.row.rated-rot   { border-left: 4px solid var(--rot); opacity: .62; }
+.row.rated-1 { border-left: 4px solid var(--r1); }
+.row.rated-2 { border-left: 4px solid var(--r2); }
+.row.rated-3 { border-left: 4px solid var(--r3); }
+.row.rated-4 { border-left: 4px solid var(--r4); opacity: .78; }
+.row.rated-5 { border-left: 4px solid var(--r5); opacity: .58; }
+
+/* Die Note als Zahl, nicht nur als Farbe - Farbe allein ist fuer
+   Farbfehlsichtige keine Information. */
+.grade {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-left: .35rem;
+  border-radius: .3rem;
+  font-size: .72rem;
+  font-weight: 700;
+  vertical-align: .05em;
+  color: #fff;
+}
+@media (prefers-color-scheme: dark) { .grade { color: #17131f; } }
+.grade-1 { background: var(--r1); }
+.grade-2 { background: var(--r2); }
+.grade-3 { background: var(--r3); }
+.grade-4 { background: var(--r4); }
+.grade-5 { background: var(--r5); }
 
 .row-time {
   font-variant-numeric: tabular-nums;
@@ -329,23 +361,44 @@ main { min-height: 60vh; }
   color: var(--ink-faint);
 }
 
-.rate { display: flex; gap: .4rem; }
+.rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: .3rem; }
 .rate button {
-  flex: 1;
-  min-height: var(--tap);
+  display: grid;
+  gap: .1rem;
+  min-height: calc(var(--tap) + 6px);
+  padding: .3rem .1rem;
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--bg-sunken);
   color: var(--ink-soft);
   font: inherit;
-  font-weight: 600;
-  font-size: .85rem;
   cursor: pointer;
 }
-.rate button[aria-pressed="true"] { color: var(--accent-ink); }
-.rate button[data-r="gruen"][aria-pressed="true"] { background: var(--gruen); border-color: var(--gruen); }
-.rate button[data-r="gelb"][aria-pressed="true"]  { background: var(--gelb);  border-color: var(--gelb); color: #1b1a20; }
-.rate button[data-r="rot"][aria-pressed="true"]   { background: var(--rot);   border-color: var(--rot); }
+.rate b { font-size: 1.05rem; font-weight: 700; line-height: 1; }
+.rate small { font-size: .6rem; line-height: 1.1; hyphens: auto; }
+.rate button[aria-pressed="true"] { color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .rate button[aria-pressed="true"] { color: #17131f; }
+}
+.rate button[data-r="1"][aria-pressed="true"] { background: var(--r1); border-color: var(--r1); }
+.rate button[data-r="2"][aria-pressed="true"] { background: var(--r2); border-color: var(--r2); }
+.rate button[data-r="3"][aria-pressed="true"] { background: var(--r3); border-color: var(--r3); }
+.rate button[data-r="4"][aria-pressed="true"] { background: var(--r4); border-color: var(--r4); }
+.rate button[data-r="5"][aria-pressed="true"] { background: var(--r5); border-color: var(--r5); }
+
+.pop-actions { margin-top: .5rem; }
+.pop-actions button {
+  min-height: 36px;
+  padding: 0 .6rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  color: #1b1a20;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
 
 .dot { width: .6rem; height: .6rem; border-radius: 999px; display: inline-block; }
 .dot-gruen { background: var(--gruen); }
