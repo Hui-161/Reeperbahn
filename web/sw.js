@@ -1,6 +1,21 @@
 /* Offline-Betrieb: im Club ist der Empfang schlecht.
-   Huelle aus dem Cache, Daten bevorzugt aus dem Netz mit Cache als Rueckfall. */
-const V = 'rbf26-v2';
+ *
+ * Strategie: NETZ ZUERST fuer alles Eigene, Cache als Rueckfall.
+ *
+ * Vorher war es umgekehrt (Cache zuerst). Das hat einen echten Fehler
+ * verursacht: die Dateinamen tragen keine Version, also lieferte der Cache
+ * nach einem Deploy weiter die alte style.css aus, waehrend index.html und
+ * app.js schon neu waren. Ergebnis war eine Mischung aus alt und neu - beim
+ * Umschalten auf "immer hell" blieb die Ansicht dunkel, weil das alte CSS
+ * data-theme gar nicht kannte.
+ *
+ * Netz zuerst kostet bei knapp 60 KB eigener Dateien wenig und schliesst
+ * gemischte Staende aus. Offline bleibt es nutzbar: ist kein Netz da, schlaegt
+ * fetch sofort fehl und der Cache greift; bei schlechtem Empfang bricht der
+ * Timeout nach 2,5 s ab.
+ */
+const V = 'rbf26-v3';
+const TIMEOUT_MS = 2500;
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'icon.svg', 'manifest.webmanifest',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
@@ -20,6 +35,27 @@ self.addEventListener('activate', (e) => {
     .then(() => self.clients.claim()));
 });
 
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then((v) => { clearTimeout(t); resolve(v); },
+                 (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
+async function networkFirst(req) {
+  const cache = await caches.open(V);
+  try {
+    const res = await withTimeout(fetch(req), TIMEOUT_MS);
+    if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+    return res;
+  } catch (err) {
+    const hit = await cache.match(req, { ignoreSearch: false });
+    if (hit) return hit;
+    throw err;
+  }
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
@@ -28,20 +64,8 @@ self.addEventListener('fetch', (e) => {
   // Kartenkacheln nie cachen - das laeuft sonst voll.
   if (url.hostname.endsWith('openstreetmap.org')) return;
 
-  // Programmdaten: frisch bevorzugt, offline der letzte Stand.
-  if (url.pathname.endsWith('lineup.json')) {
-    e.respondWith(
-      fetch(req).then((res) => {
-        caches.open(V).then((c) => c.put(req, res.clone()));
-        return res;
-      }).catch(() => caches.match(req))
-    );
-    return;
-  }
-
+  // Fremde Hosts (Kuenstlerbilder) gehen direkt ans Netz.
   if (url.origin !== location.origin) return;
-  e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-    if (res.ok) caches.open(V).then((c) => c.put(req, res.clone()));
-    return res;
-  })));
+
+  e.respondWith(networkFirst(req));
 });

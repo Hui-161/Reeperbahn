@@ -169,20 +169,40 @@ with sync_playwright() as p:
     check("Liste zeigt nur diesen Spielort", len(venues_in_list) == 1, str(venues_in_list))
     pg.click("#f-reset"); pg.wait_for_timeout(300)
 
-    # Ansicht hell/dunkel per Knopf
+    # Ansicht hell/dunkel per Knopf.
+    # WICHTIG: hier wird die GERENDERTE Farbe geprueft, nicht nur das
+    # data-theme-Attribut. Genau diese Luecke hat einen Fehler durchgelassen:
+    # das Attribut stand richtig, ausgeliefert wurde aber altes CSS aus dem
+    # Service-Worker-Cache, und die Ansicht blieb dunkel.
     def theme_attr():
         return pg.locator("html").get_attribute("data-theme")
+
+    def lum():
+        """Helligkeit der Kartenflaeche, 0 (schwarz) bis 1 (weiss)."""
+        rgb = pg.evaluate(
+            "getComputedStyle(document.querySelector('.row')).backgroundColor")
+        n = [int(x) / 255 for x in rgb[rgb.index('(') + 1:rgb.index(')')].split(',')[:3]]
+        f = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in n]
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
     check("Start folgt der Systemvorgabe", theme_attr() is None, str(theme_attr()))
+
     pg.click("#btn-theme"); pg.wait_for_timeout(200)
     t1 = theme_attr()
+    light_lum = lum()
+    check("'Immer hell' rendert wirklich hell", light_lum > 0.85,
+          f"Helligkeit {light_lum:.3f} (Karte)")
     pg.click("#btn-theme"); pg.wait_for_timeout(200)
     t2 = theme_attr()
+    dark_lum = lum()
+    check("'Immer dunkel' rendert wirklich dunkel", dark_lum < 0.1,
+          f"Helligkeit {dark_lum:.3f} (Karte)")
     pg.click("#btn-theme"); pg.wait_for_timeout(200)
     check("Schalter durchlaeuft hell, dunkel, System",
           {t1, t2} == {"light", "dark"} and theme_attr() is None, f"{t1} -> {t2} -> System")
     pg.click("#btn-theme"); pg.wait_for_timeout(200)   # auf 'light' stehen lassen
     pg.reload(wait_until="load"); pg.wait_for_selector(".row", timeout=15000)
     check("Ansicht ueberlebt Reload", theme_attr() == "light", str(theme_attr()))
+    check("Und ist nach dem Reload noch hell", lum() > 0.85, f"Helligkeit {lum():.3f}")
 
     # Menue oben rechts
     pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
@@ -273,6 +293,33 @@ with sync_playwright() as p:
     check("Vorschlaege ueberleben Reload",
           pg2.locator("#list .hint").count() == before - 1)
     ctx2.close()
+
+    # Der Fall, der auf dem Handy schiefging: Systemvorgabe DUNKEL, Nutzer
+    # waehlt ausdruecklich hell. Vorher blieb es dunkel (altes CSS aus dem
+    # Cache), das Attribut allein sah aber richtig aus.
+    ctx4 = b.new_context(viewport={"width": 420, "height": 700},
+                         color_scheme="dark", locale="de-DE")
+    pg4 = ctx4.new_page()
+    pg4.goto(BASE + "/", wait_until="load")
+    pg4.wait_for_selector(".row", timeout=15000)
+
+    def lum4():
+        rgb = pg4.evaluate(
+            "getComputedStyle(document.querySelector('.row')).backgroundColor")
+        n = [int(x) / 255 for x in rgb[rgb.index('(') + 1:rgb.index(')')].split(',')[:3]]
+        f = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in n]
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+    check("Systemvorgabe dunkel wird dunkel gerendert", lum4() < 0.1,
+          f"Helligkeit {lum4():.3f}")
+    pg4.click('[data-theme-set="light"]') if pg4.locator('#menu[open]').count() \
+        else pg4.click("#btn-theme")
+    pg4.wait_for_timeout(300)
+    check("Ausdrueckliches Hell gewinnt gegen dunkle Systemvorgabe",
+          pg4.locator("html").get_attribute("data-theme") == "light" and lum4() > 0.85,
+          f"data-theme={pg4.locator('html').get_attribute('data-theme')}, "
+          f"Helligkeit {lum4():.3f}")
+    ctx4.close()
 
     # Migration: alte Dreistufen-Werte muessen auf die Skala abgebildet werden
     ctx3 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")

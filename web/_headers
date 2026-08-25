@@ -5,9 +5,20 @@
   Permissions-Policy: geolocation=(self), camera=(), microphone=()
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://www.reeperbahnfestival.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
 
-# Leaflet ist versioniert eingecheckt und aendert sich nur bei Aktualisierung.
+# Vendor-Dateien tragen KEINE Version im Namen. "immutable" waere hier eine
+# Falle: nach einer Aktualisierung haengen Besucher ein Jahr auf der alten
+# Fassung. Ein Tag mit Revalidierung ist billig (ETag) und sicher.
 /vendor/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400, must-revalidate
+
+# Die App-Huelle traegt ebenfalls keine Version im Namen - also immer
+# revalidieren, sonst entstehen gemischte Staende aus alten und neuen Dateien.
+/index.html
+  Cache-Control: no-cache
+/app.js
+  Cache-Control: no-cache
+/style.css
+  Cache-Control: no-cache
 
 # Programmdaten aendern sich taeglich.
 /data/*

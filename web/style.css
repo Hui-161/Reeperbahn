@@ -26,15 +26,21 @@
   --d-on-scale: #17131f;
   --d-shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px rgb(0 0 0 / .3);
 
-  /* --- Hell, aktiv --- */
-  --bg: #faf8fd;
+  /* --- Hell, aktiv ---
+     Auf Tageslicht ausgelegt: die LESEFLAECHE (Karten) ist reinweiss, also
+     maximal hell; der Rahmen ist lila getoent, damit die Karten sich schon
+     ueber die Helligkeit abheben und Lila praesent bleibt. Textkontraste
+     gegen die Karte: ink 18.7, soft 10.6, faint 6.9, Akzent 7.7 - der
+     vorherige Satz lag bei 17.3 / 7.4 / 4.6 / 6.3, der schwaechste Ton also
+     knapp ueber der Grenze. Draussen reicht das nicht. */
+  --bg: #f3f0fb;
   --bg-raised: #ffffff;
-  --bg-sunken: #f1ecfa;
-  --ink: #1b1a20;
-  --ink-soft: #57545f;
-  --ink-faint: #76737f;
-  --line: #e4dff1;
-  --accent: #6741d9;
+  --bg-sunken: #e9e3f8;
+  --ink: #12111a;
+  --ink-soft: #403d4b;
+  --ink-faint: #5b586a;
+  --line: #cec4e6;
+  --accent: #5730ce;
   --accent-ink: #ffffff;
   /* Fuenfstufige Skala. Die kraeftigen Mitteltoene (Gruen 3.69, Gelb 4.24 auf
      Weiss) fallen durch die Kontrastpruefung - daher abgedunkelt. */

@@ -210,6 +210,18 @@ Vortags (Grenze 05:00). Ohne das entsteht ein Tages-Tab mit zwei Auftritten,
 und wer Samstagnacht sucht, findet sie unter Sonntag. Betrifft aktuell 12
 Auftritte.
 
+**Caching:** Der Service Worker geht **Netz zuerst, Cache als Rueckfall**.
+Umgekehrt (Cache zuerst) hat einen echten Fehler verursacht: die Dateinamen
+tragen keine Version, also lieferte der Cache nach einem Deploy weiter die
+alte `style.css` aus, waehrend `index.html` und `app.js` schon neu waren -
+ein gemischter Stand. Deshalb steht in `_headers` auch `no-cache` fuer die
+App-Huelle, und `/vendor/*` ist **nicht** `immutable` (ohne Version im Namen
+waere das eine Falle fuer ein Jahr).
+
+Der helle Modus ist auf **Tageslicht** ausgelegt: die Lesflaeche (Karten) ist
+reinweiss, der Rahmen lila getoent. Textkontraste gegen die Karte: 18.7 / 10.6
+/ 6.9 / 7.7 (Text, Sekundaertext, Metatext, Akzent).
+
 Aufsetzen und Deployment: [`DEPLOY.md`](DEPLOY.md).
 
 ```bash
