@@ -561,12 +561,19 @@ main { min-height: 60vh; }
    den runden Ortsmarkern und den runden Cluster-Blasen verwechselbar sind.
    Start und Ziel tragen zusaetzlich ein Wort - eine Zahl allein sagt nicht,
    wo der Abend anfaengt. */
-.route-pin {
+.route-stop {
   position: relative;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 52px;
+}
+.route-pin {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 2px;
   border-radius: 50% 50% 50% 4px;
   transform: rotate(-45deg);
   background: var(--accent);
@@ -578,22 +585,23 @@ main { min-height: 60vh; }
   color: var(--accent-ink);
   font: 700 14px/1 system-ui, sans-serif;
 }
+/* Die Beschriftung sitzt unter der Nadelspitze - im ungedrehten Wrapper,
+   damit sie nicht mitkippt. */
 .route-pin-tag {
   position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: rotate(45deg) translate(-6px, 2px);
-  padding: .1rem .3rem;
+  top: 36px;
+  padding: .08rem .28rem;
   border-radius: 4px;
   background: var(--ink);
   color: var(--bg-raised);
-  font: 700 9px/1.3 system-ui, sans-serif;
+  font: 700 9px/1.35 system-ui, sans-serif;
   letter-spacing: .06em;
   white-space: nowrap;
 }
 .route-pin.is-first {
   background: var(--r1);
-  width: 38px; height: 38px;
+  width: 36px; height: 36px;
+  margin-top: 0;
 }
 .route-pin.is-first .route-pin-no { color: var(--on-scale); font-size: 15px; }
 .route-pin.is-last { background: var(--r4); }
@@ -622,8 +630,8 @@ main { min-height: 60vh; }
   box-shadow: 0 1px 4px rgb(0 0 0 / .35);
 }
 /* Waehrend eine Route liegt, treten die Haeuser zurueck. */
-.map.route-on .venue-code,
-.map.route-on .marker-cluster { opacity: .38; }
+.map.route-on .venue-code { opacity: .38; }
+.map.route-on .marker-cluster div { opacity: .38; }
 
 .pop-code, .vcode {
   display: inline-block;
@@ -917,16 +925,30 @@ body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
 /* ---------- Cluster ---------- */
 
 /* Die mitgelieferten Clusterfarben sind Gruen/Gelb/Orange - genau die Toene
-   der Notenskala. Das waere verwechselbar, also Lila. */
+   der Notenskala, also verwechselbar.
+
+   Lila gefuellt waren sie aber auch falsch: dann sahen sie genauso aus wie
+   die numerierten Stationen der Route, und man konnte nicht erkennen, welche
+   Zahl "so viele Haeuser" und welche "hierhin als Erstes" heisst. Die Karte
+   benutzt deshalb zwei klar getrennte Formen:
+
+     rund und hell mit Ring  = ein Ort oder mehrere Orte
+     Nadel, gefuellt         = eine Station DEINER Route
+
+   Die Cluster gehoeren also zur Ortsfamilie: gleiche Form wie ein
+   Ortskuerzel, nur mit Doppelring als Zeichen fuer "mehrere". */
 .marker-cluster-small,
 .marker-cluster-medium,
-.marker-cluster-large { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.marker-cluster-large { background: transparent; }
 .marker-cluster-small div,
 .marker-cluster-medium div,
 .marker-cluster-large div {
-  background: var(--accent);
-  color: var(--accent-ink);
-  font: 700 12px/30px system-ui, sans-serif;
+  background: var(--bg-raised);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-raised), 0 0 0 4px color-mix(
+    in srgb, var(--accent) 45%, transparent), 0 1px 4px rgb(0 0 0 / .3);
+  color: var(--accent);
+  font: 700 12px/26px system-ui, sans-serif;
 }
 
 .linkish {

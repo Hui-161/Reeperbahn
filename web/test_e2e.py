@@ -187,20 +187,21 @@ with sync_playwright() as p:
           and pg.locator("#player-slot iframe").count() == 0)
 
     # --- Ortskuerzel ---
-    vcodes = pg.evaluate("""() => [...document.querySelectorAll('.row .vcode')]
+    # Sie stehen im Spielort-Kasten, nicht in jeder Programmzeile: dort stand
+    # das Kuerzel direkt neben dem vollen Namen und las sich doppelt
+    # ("25  25 Club").
+    pg.click("#f-venue"); pg.wait_for_timeout(400)
+    vcodes = pg.evaluate("""() => [...document.querySelectorAll('#venuebox .vcode')]
       .map(e => e.textContent.trim())""")
-    check("Kuerzel stehen in der Liste",
-          len(vcodes) > 0 and all(len(c) == 2 for c in vcodes),
-          sorted(set(vcodes))[:10])
-    uniq = pg.evaluate("""() => {
-      const m = new Map();
-      for (const v of document.querySelectorAll('.row .venue'))
-        m.set(v.textContent.trim().slice(2).trim(),
-              v.querySelector('.vcode').textContent.trim());
-      return [...m.values()];
-    }""")
-    check("Kuerzel sind eindeutig", len(uniq) == len(set(uniq)),
-          f"{len(uniq)} Orte, {len(set(uniq))} Kuerzel")
+    check("Kuerzel stehen im Spielort-Kasten",
+          len(vcodes) > 10 and all(len(c) == 2 for c in vcodes),
+          f"{len(vcodes)} Orte, z. B. {sorted(set(vcodes))[:8]}")
+    check("Kuerzel sind eindeutig", len(vcodes) == len(set(vcodes)),
+          f"{len(vcodes)} Orte, {len(set(vcodes))} Kuerzel")
+    check("Kein Kuerzel mehr in der Programmzeile",
+          pg.locator(".row .vcode").count() == 0,
+          pg.locator(".row .vcode").count())
+    pg.click("#f-venue"); pg.wait_for_timeout(200)
 
     # --- Ziehen zum Neuladen abgeschaltet ---
     ov = pg.evaluate(
@@ -236,6 +237,42 @@ with sync_playwright() as p:
     check("Marker gesetzt", pg.locator(".leaflet-marker-icon").count() > 5,
           f"{pg.locator('.leaflet-marker-icon').count()} Marker")
     check("Popup offen", pg.locator(".leaflet-popup").count() == 1)
+    # Ortsmarker tragen ihr Kuerzel, damit 34 Haeuser auf engem Raum
+    # unterscheidbar sind - und damit sie nicht wie eine numerierte
+    # Route-Station aussehen.
+    mcodes = pg.evaluate("""() => [...document.querySelectorAll('.venue-code')]
+      .map(e => e.textContent.trim())""")
+    check("Marker tragen ihr Kuerzel",
+          len(mcodes) > 0 and all(len(c) == 2 for c in mcodes), mcodes)
+    check("Kuerzel steht im Popup",
+          pg.locator(".leaflet-popup .pop-code").count() == 1,
+          pg.locator(".leaflet-popup .pop-title").inner_text())
+    # Cluster-Blasen duerfen NICHT gefuellt sein wie die Route-Nadeln - das
+    # war der gemeldete Fehler ("kolidiert mit der nummer der locations").
+    # Geprueft wird die Eigenschaft, auf die es ankommt: die Fuellung einer
+    # Blase darf nicht die Akzentfarbe sein, denn die tragen die Nadeln der
+    # Route. Sonst heisst eine Zahl mal "so viele Haeuser" und mal
+    # "hierhin als Erstes" - bei gleichem Aussehen.
+    cl = pg.evaluate("""() => {
+      const e = document.querySelector('.marker-cluster div');
+      if (!e) return null;
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--accent)';
+      document.body.appendChild(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      const s = getComputedStyle(e);
+      return { bg: s.backgroundColor, border: s.borderStyle,
+               width: s.borderTopWidth, accent };
+    }""")
+    if cl is None:
+        check("Cluster-Stil geprueft", True, "keine Blase auf dieser Zoomstufe")
+    else:
+        check("Cluster tragen NICHT die Farbe der Route-Nadeln",
+              cl["bg"] != cl["accent"], f"{cl['bg']} vs Akzent {cl['accent']}")
+        check("Cluster sind geringt",
+              cl["border"] == "solid" and cl["width"] != "0px",
+              f"{cl['border']} {cl['width']}")
     pg.screenshot(path="/tmp/shot-map.png")
 
     # Persistenz nach Reload

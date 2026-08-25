@@ -250,9 +250,13 @@ function renderVenues() {
   // Nach Anzahl sortiert: die grossen Haeuser zuerst, danach alphabetisch.
   const entries = [...counts.entries()].sort((a, b) =>
     b[1] - a[1] || S.data.venues[a[0]].n.localeCompare(S.data.venues[b[0]].n, 'de'));
+  // Das Kuerzel steht HIER, nicht in jeder Programmzeile: in der Zeile stand
+  // es direkt neben dem vollen Namen und las sich doppelt ("25  25 Club").
+  // Dieser Kasten ist die Stelle, an der man die Zuordnung nachschaut.
   el.venuebox.innerHTML = entries.map(([i, n]) =>
     `<button class="chip" data-venuefilter="${i}" aria-pressed="${S.venues.has(i)}"
-      >${esc(S.data.venues[i].n)} <span class="tag">${n}</span></button>`).join('');
+      ><span class="vcode">${esc(venueCode[i] || '')}</span>${
+      esc(S.data.venues[i].n)} <span class="tag">${n}</span></button>`).join('');
 }
 
 /* Genau ein Kasten offen. Paarweise Verdrahtung war bei zwei Kaesten noch
@@ -477,8 +481,7 @@ function row(sh, act) {
         pFav(act.id) ? `<span class="heart-p"
           title="${esc(partnerName())}: Favorit">♥</span>` : ''}</span>
       <span class="row-sub">${venue
-        ? `<span class="venue" data-venue="${sh.v}"><span class="vcode"
-             >${esc(venueCode[sh.v] || '')}</span>${esc(venue.n)}</span>`
+        ? `<span class="venue" data-venue="${sh.v}">${esc(venue.n)}</span>`
         : 'Spielort offen'}
         ${act.c ? ' · ' + esc(act.c) : ''}</span>
       ${tags ? `<span class="row-tags">${tags}</span>` : ''}
@@ -719,13 +722,43 @@ function showRoute() {
     // stehen 34 Kuerzel gleich stark neben den Stationen der Route.
     document.getElementById('map').classList.add('route-on');
     const latlngs = pts.map((s) => [s.venue.lat, s.venue.lng]);
-    L.polyline(latlngs, { weight: 4, opacity: .85, dashArray: '1 8',
-                          lineCap: 'round' }).addTo(routeLayer);
+
+    /* Mehrere Konzerte im selben Haus liegen auf derselben Koordinate - dann
+       verdeckt eine Nadel die andere vollstaendig, und verdeckt war
+       ausgerechnet der Start. Die Nadeln werden deshalb aufgefaechert, aber
+       in BILDSCHIRM-Pixeln: ein Versatz in Koordinaten waere beim
+       Hineinzoomen riesig und beim Herauszoomen unsichtbar. Der erste Versuch
+       mit 12 m Abstand ergab bei diesem Zoom 6 Pixel - zu wenig.
+       Die Linie behaelt die echten Koordinaten, es wird nichts verschoben,
+       was auf der Karte etwas bedeutet. */
+    const fanIndex = [];
+    const seenAt = new Map();
+    latlngs.forEach(([lat, lng], i) => {
+      const key = lat.toFixed(5) + ',' + lng.toFixed(5);
+      const n = seenAt.get(key) || 0;
+      seenAt.set(key, n + 1);
+      fanIndex[i] = n;
+    });
+    const fanShift = (n) => {
+      if (!n) return [0, 0];
+      const a = -Math.PI / 2 + n * (Math.PI / 3);      // 60 Grad je Schritt
+      const r = 30;                                     // Pixel
+      return [Math.round(r * Math.cos(a)), Math.round(r * Math.sin(a))];
+    };
+
+    // Leaflet will einen Farbwert, keine CSS-Variable - also den aktuellen
+    // Akzent auslesen, damit die Linie in beiden Ansichten passt.
+    const accent = getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent').trim() || '#b197fc';
+    L.polyline(latlngs, { color: accent, weight: 4, opacity: .9,
+                          dashArray: '1 8', lineCap: 'round' }).addTo(routeLayer);
 
     // Richtungspfeile in der Mitte jeder Teilstrecke: die Nummern allein
     // sagen nicht, in welche Richtung es weitergeht.
     for (let i = 0; i + 1 < latlngs.length; i++) {
       const [a, b] = [latlngs[i], latlngs[i + 1]];
+      // Gleiches Haus: es gibt keine Strecke und damit keine Richtung.
+      if (a[0] === b[0] && a[1] === b[1]) continue;
       const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
       // Bildschirmwinkel: Laengengrade mit dem Kosinus der Breite stauchen,
       // sonst zeigt der Pfeil auf dieser Breite gut 30 Grad daneben.
@@ -747,17 +780,26 @@ function showRoute() {
       // Start und Ziel sind beschriftet, nicht nur numeriert: die reine Zahl
       // war von der Zahl in einer Cluster-Blase nicht zu unterscheiden.
       const badge = first ? 'START' : last ? 'ZIEL' : '';
-      L.marker([s.venue.lat, s.venue.lng], {
+      const [fx, fy] = fanShift(fanIndex[i]);
+      L.marker(latlngs[i], {
         icon: L.divIcon({
-          className: '', iconSize: [34, 44], iconAnchor: [17, 42],
-          popupAnchor: [0, -42],
-          html: `<span class="route-pin${first ? ' is-first' : ''}${
-            last && !first ? ' is-last' : ''}">
-                   <span class="route-pin-no">${i + 1}</span>
+          // Der Faecher steckt im iconAnchor, nicht in der Koordinate: so
+          // bleibt der Marker geografisch dort, wo das Haus steht.
+          className: '', iconSize: [44, 52],
+          iconAnchor: [22 - fx, 40 - fy],
+          popupAnchor: [fx, fy - 40],
+          // Die Beschriftung liegt AUSSERHALB der gedrehten Nadel, sonst
+          // dreht sie mit und schiebt sich ueber die Zahl.
+          html: `<span class="route-stop">
+                   <span class="route-pin${first ? ' is-first' : ''}${
+                     last && !first ? ' is-last' : ''}"
+                     ><span class="route-pin-no">${i + 1}</span></span>
                    ${badge ? `<span class="route-pin-tag">${badge}</span>` : ''}
                  </span>`,
         }),
-        zIndexOffset: 1000 + i,
+        // Rueckwaerts: die fruehere Station liegt oben, der Start ganz oben.
+        // Vorher lag die spaetere obendrauf und hat den Start verdeckt.
+        zIndexOffset: 1000 + (pts.length - i) + (first ? 100 : 0),
       }).addTo(routeLayer).bindPopup(
         `<div class="pop-title">${first ? 'Start: ' : last ? 'Zuletzt: ' : i + 1 + '. '}${
           esc(s.name)}</div>
