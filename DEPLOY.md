@@ -101,26 +101,58 @@ dazukommt.
 
 ## Team-Abgleich einrichten (KV-Namespace)
 
-Der Team-Abgleich braucht einen KV-Namespace. Einmalig:
+Der Team-Abgleich braucht einen KV-Namespace. Im Repo ist das Binding
+**auskommentiert** - eine erfundene id laesst `wrangler deploy` fehlschlagen,
+und dann waere die ganze Seite unten und nicht nur der Abgleich. Ohne Binding
+antwortet die API mit `{"error":"kv_missing"}`, die App bleibt ueber die
+Datei-Variante vollstaendig nutzbar.
+
+### Weg 1: Terminal (empfohlen, ein Befehl)
+
+Auf einem Rechner mit dem geklonten Repo:
 
 ```bash
-npx wrangler kv namespace create TEAM
+npx wrangler login                                    # einmalig, oeffnet den Browser
+npx wrangler kv namespace create TEAM --update-config
 ```
 
-Der Befehl gibt eine `id` aus. Die in `wrangler.jsonc` bei
-`kv_namespaces` anstelle von `PLATZHALTER_KV_ID` eintragen und committen:
+`--update-config` traegt die id direkt in `wrangler.jsonc` ein. Danach die
+Kommentarzeichen vor `kv_namespaces` entfernen, falls noch vorhanden, dann:
+
+```bash
+git add wrangler.jsonc && git commit -m "KV-Namespace fuer den Team-Abgleich"
+git push
+```
+
+Der Push loest den Deploy aus.
+
+### Weg 2: Dashboard
+
+**Storage & Databases → KV → Create instance**, Name z. B. `reeperbahn-team`.
+Die angezeigte **Namespace ID** kopieren und in `wrangler.jsonc` eintragen:
 
 ```jsonc
 "kv_namespaces": [
-  { "binding": "TEAM", "id": "hier_die_ausgegebene_id" }
+  { "binding": "TEAM", "id": "hier_die_kopierte_id" }
 ]
 ```
 
-Alternativ im Dashboard: **Storage & Databases → KV → Create**, dann im
-Worker unter **Settings → Bindings** als `TEAM` verknuepfen.
+**Wichtig:** Die Verknuepfung muss in `wrangler.jsonc` stehen, nicht nur im
+Dashboard. `wrangler deploy` setzt die Bindings des Workers auf genau das, was
+in der Konfiguration steht - ein nur im Dashboard angelegtes Binding wird beim
+naechsten Deploy entfernt.
 
-Solange kein Namespace verknuepft ist, antwortet die API mit
-`{"error":"kv_missing"}` und die App bleibt bei der Datei-Variante nutzbar.
+### Pruefen, ob es wirkt
+
+```bash
+curl -s -H 'X-Team-Token: 0123456789012345678901234567890123456789' \
+  https://reeperbahn.hui161.de/api/team/AAAAAAAAAAAAAAAA
+```
+
+* `{"error":"kv_missing"}` - Binding fehlt noch
+* `{"team":"AAAAAAAAAAAAAAAA","members":[]}` - es laeuft
+
+(Der Aufruf legt ein leeres Wegwerf-Team an, das nach 180 Tagen verfaellt.)
 
 **Was gespeichert wird:** ausschliesslich Chiffrat, Nonce und Zeitstempel. Die
 App verschluesselt im Browser (AES-GCM, Schluessel per PBKDF2 aus einer

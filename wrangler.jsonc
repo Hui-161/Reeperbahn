@@ -13,10 +13,19 @@
   // vorbei, und die Regeln aus web/_headers gelten weiter fuer sie.
   "main": "worker/index.js",
 
-  "kv_namespaces": [
-    // id wird beim Anlegen des Namespace eingesetzt, siehe DEPLOY.md
-    { "binding": "TEAM", "id": "PLATZHALTER_KV_ID" }
-  ],
+  // Team-Abgleich: erst nach dem Anlegen des KV-Namespace einkommentieren.
+  // Eine erfundene id laesst "wrangler deploy" fehlschlagen - dann waere die
+  // ganze Seite unten, nicht nur der Abgleich. Ohne Binding antwortet die API
+  // mit {"error":"kv_missing"} und die App bleibt ueber die Datei-Variante
+  // vollstaendig nutzbar.
+  //
+  //   npx wrangler kv namespace create TEAM --update-config
+  //
+  // Der Befehl traegt die id hier selbst ein. Siehe DEPLOY.md.
+  //
+  // "kv_namespaces": [
+  //   { "binding": "TEAM", "id": "HIER_DIE_ECHTE_ID" }
+  // ],
 
   "assets": {
     // <- Hier steht "web". Pfad relativ zu dieser Datei.
