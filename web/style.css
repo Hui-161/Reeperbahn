@@ -348,6 +348,23 @@ main { min-height: 60vh; }
    Das gemeinsame Wischfeld liegt fixed und wird davon nicht beschnitten. */
 .list { padding: .5rem .75rem 3rem; overflow-x: clip; }
 
+/* Der groesste Einzelgewinn an Geschwindigkeit. Die Liste hat 406 Zeilen;
+   der Browser hat sie alle vermessen und gemalt, auch die 400 ausserhalb des
+   Bildschirms. Ein voller Neuaufbau kostete auf einer vierfach gebremsten
+   CPU 1139 ms - fast eine Sekunde Stillstand bei jedem Filter- oder
+   Tagwechsel. Mit content-visibility ueberspringt der Browser Layout und
+   Malen fuer alles, was nicht zu sehen ist: gemessen 62 ms, also ein
+   Achtzehntel.
+
+   Die Zahl in contain-intrinsic-size ist die gemessene mittlere Zeilenhoehe
+   (Median 69, Mittel 80 px). "auto" davor heisst: sobald eine Zeile einmal
+   sichtbar war, benutzt der Browser ihre echte Hoehe - die Schaetzung wirkt
+   also nur beim ersten Mal und die Scrollhoehe wandert nicht dauerhaft. */
+.row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}
+
 .slot-head {
   position: sticky;
   top: 0;

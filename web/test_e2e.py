@@ -857,10 +857,10 @@ with sync_playwright() as p:
     check("Der Detaildialog bleibt dabei zu",
           pg5.evaluate("() => !document.querySelector('#detail').open"))
     qsteps = pg5.locator("#quick-rate button").evaluate_all(
-        "e => e.map(x => x.dataset.qr)")
+        "e => e.map(x => x.dataset.r)")
     check("Schnellbewertung hat alle sieben Stufen",
           qsteps == ["1", "1.5", "2", "2.5", "3", "4", "5"], qsteps)
-    pg5.locator('#quick-rate button[data-qr="1.5"]').click()
+    pg5.locator('#quick-rate button[data-r="1.5"]').click()
     pg5.wait_for_timeout(400)
     check("Note aus der Schnellbewertung landet in der Liste",
           pg5.locator("#list .grade").first.inner_text() == "1,5",
@@ -961,6 +961,110 @@ with sync_playwright() as p:
           pg5.evaluate("() => !document.querySelector('#quick').open")
           and pg5.locator(".row").count() > 0)
     check("Keine JS-Fehler beim Wischen", not err5, str(err5[:2]))
+
+    # --- Die beiden Fehler aus den Handy-Screenshots ---
+
+    # 1. Eine gesetzte Note war in der Schnellbewertung UNSICHTBAR: der Knopf
+    #    hatte data-qr, das CSS zielt auf data-r. Damit griff nur die
+    #    Textfarbe fuer "gewaehlt" (dunkel) und nicht der farbige Grund -
+    #    dunkel auf dunkel.
+    pg5.evaluate(SWIPE, [8, 120, 8]); pg5.wait_for_timeout(500)
+    pg5.locator('#quick-rate button[data-r="2"]').click(); pg5.wait_for_timeout(400)
+    pg5.evaluate(SWIPE, [8, 120, 8]); pg5.wait_for_timeout(500)
+    look = pg5.evaluate("""() => {
+      const b = document.querySelector('#quick-rate button[data-r="2"]');
+      const plain = document.querySelector('#quick-rate button[data-r="4"]');
+      const s = getComputedStyle(b);
+      return { pressed: b.getAttribute('aria-pressed'), bg: s.backgroundColor,
+               farbe: s.color, andere: getComputedStyle(plain).backgroundColor };
+    }""")
+    check("Gesetzte Note ist in der Schnellbewertung gesetzt",
+          look["pressed"] == "true", look)
+    check("Und hat einen eigenen farbigen Grund",
+          look["bg"] != look["andere"], f"{look['bg']} gegen {look['andere']}")
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+
+    # 2. Die Wischanzeige klebte an einer alten Bildschirmposition, weil sie
+    #    nur beim Beruehren vermessen wurde. Eine Geste beginnt aber oft
+    #    senkrecht - der Browser scrollt noch, und danach lag das Feld ueber
+    #    einer voelligt anderen Zeile.
+    aligned = pg5.evaluate("""() => {
+      const row = document.querySelectorAll('.row')[10];
+      const fire = (type, x, y) => {
+        const t = new Touch({ identifier: 1, target: row, clientX: x,
+                              clientY: y, pageX: x, pageY: y });
+        const empty = type === 'touchend';
+        row.dispatchEvent(new TouchEvent(type, { bubbles: true,
+          cancelable: true, touches: empty ? [] : [t],
+          targetTouches: empty ? [] : [t], changedTouches: [t] }));
+      };
+      const r0 = row.getBoundingClientRect();
+      const y = r0.top + r0.height / 2;
+      fire('touchstart', r0.left + 40, y);
+      // Die Seite rutscht unter dem Finger weg. Der Finger selbst bleibt, wo
+      // er ist - clientY zaehlt vom Fensterrand, nicht vom Dokument. Genau
+      // deshalb bemerkt die Richtungserkennung hier KEINE senkrechte
+      // Bewegung, und die Zeile ist trotzdem verschoben.
+      window.scrollBy(0, 140);
+      for (let i = 1; i <= 8; i++) fire('touchmove', r0.left + 40 + i * 15, y);
+      const box = document.querySelector('#swipe').getBoundingClientRect();
+      const rowNow = row.getBoundingClientRect();
+      fire('touchend', r0.left + 160, y);
+      return Math.abs(box.top - rowNow.top);
+    }""")
+    check("Wischanzeige liegt auch nach Scrollen auf der Zeile",
+          aligned < 2, f"{aligned:.1f} px daneben")
+    check("Nach der Geste bleibt keine Zeile verschoben",
+          pg5.evaluate("() => document.querySelectorAll('.row.swiping').length") == 0
+          and pg5.evaluate("() => document.querySelector('#swipe').hidden"))
+    # Die Geste war weit genug und hat die Schnellbewertung geoeffnet - die
+    # muss weg, sonst faengt sie die naechsten Klicks ab.
+    if pg5.evaluate("() => document.querySelector('#quick').open"):
+        pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+
+    # --- Geschwindigkeit: eine Note darf nicht die ganze Liste neu bauen ---
+    # Geprueft wird die Eigenschaft, nicht die Millisekunden: bleibt eine
+    # FREMDE Zeile dasselbe DOM-Element, wurde nicht alles neu gebaut. Ein
+    # voller Neuaufbau kostete gemessen 1139 ms auf gebremster CPU.
+    # Nach einem Wisch sperrt die App den Klick kurz - abwarten, sonst
+    # verschluckt sie den Tipper des Tests.
+    pg5.evaluate("() => scrollTo({ top: 0, behavior: 'instant' })")
+    pg5.wait_for_timeout(600)
+    pg5.evaluate("() => { document.querySelectorAll('.row')[20].dataset.probe = 'x'; }")
+    pg5.locator(".row").nth(12).locator(".row-time").click()
+    pg5.wait_for_selector("#detail .rate")
+    pg5.locator("#detail .rate button[data-r='3']").click()
+    pg5.wait_for_timeout(300)
+    check("Note aendern baut die Liste NICHT neu",
+          pg5.evaluate("() => document.querySelectorAll('.row')[20]"
+                       ".dataset.probe === 'x'"))
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+
+    # Mit aktivem Notenfilter MUSS neu gebaut werden - die Zeile kann ja
+    # herausfallen. Sonst bliebe eine Zeile stehen, die nicht mehr passt.
+    pg5.click("#f-rate"); pg5.wait_for_timeout(300)
+    pg5.locator('#ratebox .chip[data-rate="3"]').click(); pg5.wait_for_timeout(400)
+    pg5.evaluate("() => { const r = document.querySelectorAll('.row')[0];"
+                 " if (r) r.dataset.probe2 = 'y'; }")
+    pg5.locator(".row").first.locator(".row-time").click()
+    pg5.wait_for_selector("#detail .rate")
+    pg5.locator("#detail .rate button[data-r='5']").click()
+    pg5.wait_for_timeout(400)
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+    check("Mit Notenfilter wird die Liste neu gebaut",
+          pg5.evaluate("() => { const r = document.querySelectorAll('.row')[0];"
+                       " return !r || r.dataset.probe2 !== 'y'; }"))
+    pg5.locator('#ratebox .chip[data-rate="3"]').click()
+    pg5.click("#f-rate"); pg5.wait_for_timeout(300)
+
+    # Offscreen-Zeilen werden vom Browser uebersprungen - ohne das dauert ein
+    # Neuaufbau fast eine Sekunde.
+    cv = pg5.evaluate("""() => {
+      const s = getComputedStyle(document.querySelector('.row'));
+      return { cv: s.contentVisibility, size: s.containIntrinsicSize };
+    }""")
+    check("Zeilen ausserhalb des Bildschirms werden uebersprungen",
+          cv["cv"] == "auto" and "80px" in cv["size"], cv)
     ctx5.close()
 
     real = [e for e in errors if "openstreetmap" not in e.lower()

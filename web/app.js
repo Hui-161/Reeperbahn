@@ -437,7 +437,45 @@ function visibleShows() {
 
 /* ---------- Liste ---------- */
 
+/* ---------- Nur das Noetige neu zeichnen ----------
+   render() baut die ganze Liste neu: 406 Zeilen, 285 KB HTML, auf einem
+   gebremsten Handy 111 ms gemessen. Nach jedem Tippen auf eine Note fuehlt
+   sich das an wie Haengen.
+
+   Aendert sich nur der Zustand EINES Acts, werden deshalb nur dessen Zeilen
+   ersetzt. Voll neu gebaut wird nur, wenn die Aenderung entscheidet, WELCHE
+   Zeilen sichtbar sind - dann muss die Zeile ja verschwinden oder
+   auftauchen. */
+let showById = null;
+function showMap() {
+  if (!showById) showById = new Map(S.data.shows.map((s) => [String(s.id), s]));
+  return showById;
+}
+
+function refreshAct(ai) {
+  if (!Number.isFinite(ai) || !S.data) { render(); return; }
+  // Ein aktiver Filter auf Note, Favorit, Gesehen oder Team entscheidet ueber
+  // die Sichtbarkeit - dann hilft Flicken nicht.
+  if (S.rates.size || S.favOnly || S.seenOnly || S.teamOnly) { render(); return; }
+  const rows = el.list.querySelectorAll(`.row[data-act="${ai}"]`);
+  if (!rows.length) return;
+  const act = S.data.acts[ai];
+  const map = showMap();
+  for (const node of rows) {
+    const sh = map.get(node.dataset.show);
+    if (sh) node.outerHTML = row(sh, act);
+  }
+}
+
+let renderPending = false;
+
 function render() {
+  /* Nicht mitten in einer Wischgeste neu bauen: der Neuaufbau ersetzt genau
+     die Zeile, an der der Finger haengt. Danach zeigte die Anzeige auf eine
+     Zeile, die es nicht mehr gab - so entstand das Bild mit dem Feld an der
+     falschen Stelle. Nachgeholt wird es beim Loslassen. */
+  if (sw && sw.active) { renderPending = true; return; }
+  renderPending = false;
   const anyFilter = S.favOnly || S.rates.size > 0 || S.seenOnly || S.teamOnly
     || S.genres.size > 0 || S.venues.size > 0 || S.q.trim() !== '';
   $('#f-reset').hidden = !anyFilter;
@@ -956,6 +994,7 @@ function openDetail(ai) {
   </div>`;
 
   el.detail.dataset.act = act.id;
+  el.detail.dataset.ai = ai;
   if (!el.detail.open) el.detail.showModal();
   syncDialogCount();
 }
@@ -1228,21 +1267,28 @@ document.addEventListener('click', (e) => {
       n.setAttribute('aria-pressed', String(on));
       n.textContent = on ? '✓ Gesehen' : 'Als gesehen markieren';
     }
-    render();
+    refreshAct(+el.detail.dataset.ai);
     return;
   }
 
   const rateBtn = t.closest('[data-r]');
   if (rateBtn) {
-    const id = el.detail.dataset.act;
+    // Der Act haengt am DIALOG, nicht fest am Detaildialog: die
+    // Schnellbewertung benutzt dieselben Knoepfe. Vorher hatte sie eigene
+    // data-qr-Knoepfe, und weil das CSS auf data-r zielt, war eine gesetzte
+    // Note dort unsichtbar - dunkle Schrift auf dunklem Grund.
+    const dlg = rateBtn.closest('dialog') || el.detail;
+    const id = dlg.dataset.act;
     const val = +rateBtn.dataset.r;
     if (+rate[id] === val) delete rate[id]; else rate[id] = val;
     store.set('rate', rate);
     scheduleSync();
-    for (const b of el.detail.querySelectorAll('[data-r]')) {
+    for (const b of dlg.querySelectorAll('[data-r]')) {
       b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
     }
-    render();
+    // Die Schnellbewertung ist genau fuer diesen einen Griff da.
+    if (dlg === el.quick) dlg.close();
+    refreshAct(+dlg.dataset.ai);
     return;
   }
 
@@ -1746,14 +1792,19 @@ async function runSync(quiet, pullOnly) {
     }
     const before = partnerSignature();
     const n = adoptOthers(others);
-    if (partnerSignature() !== before) lastRemoteChange = Date.now();
+    const changed = partnerSignature() !== before;
+    if (changed) lastRemoteChange = Date.now();
     const undec = others.filter((o) => o.undecryptable).length;
     lastSyncAt = new Date().toISOString();
     store.set('lastsync', lastSyncAt);
     teamInfo();
     partnerInfo();
     metaLine();
-    render();
+    // NUR neu zeichnen, wenn von der Gegenseite wirklich etwas Neues kam.
+    // Vorher lief hier alle 15 Sekunden ein voller Neuaufbau der Liste - 111 ms
+    // auf einem gebremsten Handy, fuer nichts. Genau das war die spuerbare
+    // Traegheit.
+    if (changed) render();
     if (!quiet) {
       // Genau sagen, was passiert ist. "Abgeglichen" allein liess offen, ob
       // etwas hochgeladen wurde und ob die Gegenseite ueberhaupt existiert.
@@ -2015,6 +2066,17 @@ function swipePaint(dx) {
   const box = el.swipe;
   const act = swipeActionFor(dx);
   const armed = Math.abs(dx) >= swipeCfg.dist;
+  /* Die Position JEDES Mal neu bestimmen. Vorher wurde sie einmal beim
+     Beruehren gemerkt - aber eine Geste beginnt oft senkrecht, der Browser
+     scrollt noch ein Stueck, und danach klebte das Feld an einer alten
+     Bildschirmposition: es lag ueber einer voelligt anderen Zeile.
+     Ein getBoundingClientRect pro Bewegung ist billig, die Zeile ist ja
+     schon vermessen. */
+  const r = sw.row.getBoundingClientRect();
+  box.style.top = `${r.top}px`;
+  box.style.left = `${r.left - dx}px`;
+  box.style.width = `${r.width}px`;
+  box.style.height = `${r.height}px`;
   box.className = 'swipe'
     + (act ? ' ' + act.cls : ' act-none')
     + (dx > 0 ? ' from-left' : ' from-right')
@@ -2025,22 +2087,25 @@ function swipePaint(dx) {
 }
 
 function swipeStart(row, touch) {
-  const r = row.getBoundingClientRect();
   sw = { row, ai: +row.dataset.act, x0: touch.clientX, y0: touch.clientY,
          dx: 0, active: false };
-  const box = el.swipe;
-  box.style.top = `${r.top}px`;
-  box.style.left = `${r.left}px`;
-  box.style.width = `${r.width}px`;
-  box.style.height = `${r.height}px`;
 }
 
 function swipeCancel() {
   if (!sw) return;
+  // Die Zeile kann inzwischen ausgetauscht sein (ein Neuaufbau ersetzt das
+  // Element). Dann steckt der Versatz noch an einer Zeile, die keiner mehr
+  // sieht - und an der neuen darf keiner haengen. Also beides aufraeumen.
   sw.row.style.transform = '';
   sw.row.classList.remove('swiping');
+  for (const stale of el.list.querySelectorAll('.row.swiping')) {
+    stale.style.transform = '';
+    stale.classList.remove('swiping');
+  }
   el.swipe.hidden = true;
   sw = null;
+  // Ein waehrend der Geste aufgeschobener Neuaufbau wird jetzt nachgeholt.
+  if (renderPending) render();
 }
 
 function swipeFinish() {
@@ -2050,7 +2115,10 @@ function swipeFinish() {
   const active = sw.active;
   swipeCancel();
   if (!active) return;
-  suppressClickUntil = Date.now() + 500;
+  // Nur den Klick der Geste selbst abfangen - der kommt in wenigen
+  // Millisekunden. 500 ms hatten auch einen echten Tipper danach
+  // verschluckt.
+  suppressClickUntil = Date.now() + 350;
   if (far) runSwipeAction(dx > 0 ? swipeCfg.right : swipeCfg.left, ai);
 }
 
@@ -2062,27 +2130,29 @@ function runSwipeAction(key, ai) {
   if (key === 'fav') {
     const was = fav.has(id);
     was ? fav.delete(id) : fav.add(id);
-    saveFav(); scheduleSync(); render();
+    saveFav(); scheduleSync(); refreshAct(ai);
     toast(`${act.n}: ${was ? 'kein Favorit mehr' : 'als Favorit gemerkt'}`, 3200,
-          () => { was ? fav.add(id) : fav.delete(id); saveFav(); scheduleSync(); render(); });
+          () => { was ? fav.add(id) : fav.delete(id);
+                  saveFav(); scheduleSync(); refreshAct(ai); });
     return;
   }
   if (key === 'seen') {
     const was = seen.has(id);
     was ? seen.delete(id) : seen.add(id);
-    saveSeen(); scheduleSync(); render();
+    saveSeen(); scheduleSync(); refreshAct(ai);
     toast(`${act.n}: ${was ? 'nicht mehr als gesehen' : 'als gesehen markiert'}`, 3200,
-          () => { was ? seen.add(id) : seen.delete(id); saveSeen(); scheduleSync(); render(); });
+          () => { was ? seen.add(id) : seen.delete(id);
+                  saveSeen(); scheduleSync(); refreshAct(ai); });
     return;
   }
   const want = key === 'rate1' ? 1 : 5;
   const before = rate[id];
   if (+before === want) delete rate[id]; else rate[id] = want;
-  store.set('rate', rate); scheduleSync(); render();
+  store.set('rate', rate); scheduleSync(); refreshAct(ai);
   toast(`${act.n}: ${rate[id] ? 'Note ' + rateText(rate[id]) : 'Note entfernt'}`, 3200,
         () => {
           if (before === undefined) delete rate[id]; else rate[id] = before;
-          store.set('rate', rate); scheduleSync(); render();
+          store.set('rate', rate); scheduleSync(); refreshAct(ai);
         });
 }
 
@@ -2139,10 +2209,15 @@ function openQuick(ai) {
   if (!act) return;
   quickAct = ai;
   $('#quick-name').textContent = act.n;
-  // data-qr, nicht data-r: der Detaildialog hat einen eigenen Zuhoerer auf
-  // data-r, der seine eigene Act-Kennung liest.
+  // Dieselben data-r-Knoepfe wie im Detaildialog. Erst hatten sie data-qr,
+  // damit der gemeinsame Zuhoerer sie nicht faengt - aber das CSS zielt auf
+  // data-r, also fehlte der farbige Grund und eine gesetzte Note war dunkel
+  // auf dunkel, also unsichtbar. Jetzt liest der Zuhoerer den Act vom
+  // Dialog, und beide benutzen dieselben Knoepfe und dasselbe CSS.
+  el.quick.dataset.act = act.id;
+  el.quick.dataset.ai = ai;
   $('#quick-rate').innerHTML = RATES.map(([k, label]) =>
-    `<button data-qr="${k}" class="${Number.isInteger(k) ? '' : 'is-half'}"
+    `<button data-r="${k}" class="${Number.isInteger(k) ? '' : 'is-half'}"
       aria-pressed="${+rate[act.id] === k}"
       aria-label="${rateText(k)} - ${label}"><b>${rateText(k)}</b><small
       >${esc(label)}</small></button>`).join('');
@@ -2152,26 +2227,20 @@ function openQuick(ai) {
   syncDialogCount();
 }
 
+/* Die Noten selbst macht der gemeinsame data-r-Zuhoerer. Hier bleibt nur,
+   was es im Detaildialog nicht gibt. */
 el.quick.addEventListener('click', (e) => {
   if (quickAct == null) return;
   const id = S.data.acts[quickAct].id;
-  const r = e.target.closest('[data-qr]');
-  if (r) {
-    const val = +r.dataset.qr;
-    if (+rate[id] === val) delete rate[id]; else rate[id] = val;
-    store.set('rate', rate); scheduleSync(); render();
-    el.quick.close();
-    return;
-  }
   if (e.target.closest('#quick-fav')) {
     fav.has(id) ? fav.delete(id) : fav.add(id);
-    saveFav(); scheduleSync(); render();
+    saveFav(); scheduleSync(); refreshAct(quickAct);
     $('#quick-fav').setAttribute('aria-pressed', String(fav.has(id)));
     return;
   }
   if (e.target.closest('#quick-clear')) {
     delete rate[id];
-    store.set('rate', rate); scheduleSync(); render();
+    store.set('rate', rate); scheduleSync(); refreshAct(quickAct);
     el.quick.close();
   }
 });
