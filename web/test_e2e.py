@@ -851,8 +851,23 @@ with sync_playwright() as p:
       fire('touchend', x0 + dx, y0);
     }"""
 
+    # Wischen ist kalt gestellt: die Mechanik bleibt, loest aber nichts aus.
+    pg5.evaluate(SWIPE, [0, 120, 8]); pg5.wait_for_timeout(400)
+    check("Wischen ist standardmaessig aus",
+          pg5.evaluate("() => !document.querySelector('#quick').open")
+          and pg5.evaluate("() => document.querySelector('#swipe').hidden"))
+    # Nicht den Speicher pruefen: der wird absichtlich erst beschrieben, wenn
+    # man etwas umstellt. Der sichtbare Schalter ist die Wahrheit.
+    pg5.click("#btn-menu"); pg5.wait_for_timeout(300)
+    check("Der Schalter im Menue steht auf aus",
+          not pg5.is_checked("#sw-on"))
+    # Ab hier eingeschaltet - die Mechanik soll fuer eine spaetere Verwendung
+    # geprueft bleiben.
+    pg5.check("#sw-on")
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+
     pg5.evaluate(SWIPE, [0, 120, 8]); pg5.wait_for_timeout(500)
-    check("Wisch nach rechts oeffnet die Schnellbewertung",
+    check("Eingeschaltet oeffnet ein Wisch nach rechts die Schnellbewertung",
           pg5.evaluate("() => document.querySelector('#quick').open"))
     check("Der Detaildialog bleibt dabei zu",
           pg5.evaluate("() => !document.querySelector('#detail').open"))
@@ -1056,6 +1071,52 @@ with sync_playwright() as p:
                        " return !r || r.dataset.probe2 !== 'y'; }"))
     pg5.locator('#ratebox .chip[data-rate="3"]').click()
     pg5.click("#f-rate"); pg5.wait_for_timeout(300)
+
+    # --- Bewerten direkt in der Anspielleiste ---
+    pidx2 = pg5.evaluate("""() => [...document.querySelectorAll('.row')]
+      .findIndex(r => r.querySelector('.row-play').dataset.quickplay)""")
+    pg5.locator(".row").nth(pidx2).locator(".row-play").click()
+    pg5.wait_for_timeout(600)
+    psteps = pg5.locator("#player-rate button").evaluate_all(
+        "e => e.map(x => x.dataset.r)")
+    check("Anspielleiste hat die ganze Skala",
+          psteps == ["1", "1.5", "2", "2.5", "3", "4", "5"], psteps)
+    geo2 = pg5.evaluate("""() => {
+      const g = (s) => {
+        const b = document.querySelector(s);
+        const r = b.getBoundingClientRect();
+        return { w: Math.round(r.width), h: Math.round(r.height) };
+      };
+      return { ganz: g('#player-rate button[data-r=\"3\"]'),
+               halb: g('#player-rate button[data-r=\"2.5\"]') };
+    }""")
+    check("Punkte sind rund und die halben kleiner",
+          geo2["ganz"]["w"] == geo2["ganz"]["h"]
+          and geo2["halb"]["w"] < geo2["ganz"]["w"],
+          geo2)
+    # Note 4 statt 1,5: diese Zeile trug aus einem frueheren Schritt schon
+    # 1,5, und ein zweiter Griff auf dieselbe Note nimmt sie wieder weg.
+    pg5.locator('#player-rate button[data-r="4"]').click()
+    pg5.wait_for_timeout(400)
+    # pidx2 ist die Position in der Liste, nicht der Act-Index - data-act
+    # traegt den Act-Index, deshalb hier ueber nth() gehen.
+    check("Note aus der Leiste steht in der Zeile",
+          pg5.locator(".row").nth(pidx2).locator(".grade").inner_text() == "4",
+          pg5.locator(".row").nth(pidx2).locator(".grade").inner_text())
+    check("Der Punkt in der Leiste ist gefaerbt", pg5.evaluate("""() => {
+      const b = document.querySelector('#player-rate button[data-r=\"4\"]');
+      const o = document.querySelector('#player-rate button[data-r=\"3\"]');
+      return b.getAttribute('aria-pressed') === 'true'
+        && getComputedStyle(b).backgroundColor
+           !== getComputedStyle(o).backgroundColor;
+    }"""))
+    # Der Player laeuft weiter - eine Note darf ihn nicht neu laden.
+    check("Bewerten unterbricht das Anspielen nicht",
+          pg5.locator("#player-slot iframe").count() == 1
+          and not pg5.locator("#player").is_hidden())
+    pg5.click("#player-close"); pg5.wait_for_timeout(300)
+    check("Skala verschwindet mit der Leiste",
+          pg5.locator("#player-rate button").count() == 0)
 
     # Offscreen-Zeilen werden vom Browser uebersprungen - ohne das dauert ein
     # Neuaufbau fast eine Sekunde.

@@ -758,13 +758,88 @@ main { min-height: 60vh; }
   margin-bottom: .25rem;
 }
 .player-name {
-  flex: 1;
+  /* Kein flex:1 mehr - der Platz gehoert jetzt der Notenskala. Der volle
+     Name steht ohnehin im Spotify-Feld darunter. */
+  flex: 0 1 auto;
+  max-width: 6.5rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: .85rem;
+  font-size: .8rem;
   font-weight: 700;
+}
+
+/* Notenskala in der Anspielleiste: runde Punkte auf einer Linie, die halben
+   Stufen kleiner dazwischen. Erbt von .rate alle Farben fuer "gewaehlt", nur
+   das Layout ist anders.
+
+   Doppelte Klasse (.rate.rate-mini), damit die Groessen unabhaengig von der
+   Reihenfolge im Stylesheet gewinnen: ".rate button" hat dieselbe
+   Spezifitaet, stand weiter unten, und machte aus den Kreisen 50 px hohe
+   Pillen. */
+.rate.rate-mini {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+  position: relative;
+  min-width: 0;
+  padding: 0 .2rem;
+}
+/* Die Linie, die die Skala als Skala lesbar macht. */
+.rate.rate-mini::before {
+  content: "";
+  position: absolute;
+  left: .9rem;
+  right: .9rem;
+  top: 50%;
+  height: 1px;
+  background: var(--line);
+}
+.rate.rate-mini button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  font: 700 .78rem/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+/* Die sichtbaren Punkte sind klein, die Trefferflaeche darf das nicht sein:
+   dieses unsichtbare Feld macht sie 44 px hoch. */
+.rate.rate-mini button::after {
+  content: "";
+  position: absolute;
+  inset: -8px -3px;
+}
+.rate.rate-mini button.is-half {
+  width: 18px;
+  height: 18px;
+  font-size: .55rem;
+  border-style: dashed;
+  /* Ohne Fuellung: mit "background: var(--bg)" war der Punkt dunkler als die
+     Leiste selbst und sah aus wie ein Loch. */
+  background: transparent;
+}
+/* Die halben Stufen holen ihre Farbe sonst aus einer Regel fuer <b>, das es
+   hier nicht gibt. */
+.rate.rate-mini button[data-r="1.5"][aria-pressed="true"] {
+  background: color-mix(in srgb, var(--r1), var(--r2));
+  border-color: color-mix(in srgb, var(--r1), var(--r2));
+  border-style: solid;
+}
+.rate.rate-mini button[data-r="2.5"][aria-pressed="true"] {
+  background: color-mix(in srgb, var(--r2), var(--r3));
+  border-color: color-mix(in srgb, var(--r2), var(--r3));
+  border-style: solid;
 }
 .player-slot iframe {
   width: 100%;
@@ -774,7 +849,8 @@ main { min-height: 60vh; }
   display: block;
 }
 /* Damit die letzte Zeile nicht unter der Leiste verschwindet. */
-body.has-player { padding-bottom: calc(env(safe-area-inset-bottom) + 8.5rem); }
+/* Gemessen: die Leiste ist mit Notenskala 142 px hoch. */
+body.has-player { padding-bottom: calc(env(safe-area-inset-bottom) + 9.5rem); }
 
 /* Kurzmeldung, etwa fuer die Warnung vor dem Verlassen. */
 .toast {

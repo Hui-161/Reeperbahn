@@ -574,9 +574,23 @@ function row(sh, act) {
    filtert oder einen anderen Act oeffnet. */
 let playingAct = null;
 
-function openPlayer(src, name, actId) {
+/* Die Skala in der Anspielleiste. Rund und ohne Beschriftung - in der Leiste
+   ist kein Platz fuer "sehr gut", der Text steht im aria-label. */
+function renderPlayerRate(ai) {
+  const act = S.data && S.data.acts[ai];
+  if (!act) { $('#player-rate').innerHTML = ''; return; }
+  el.player.dataset.ai = ai;
+  $('#player-rate').innerHTML = RATES.map(([k, label]) =>
+    `<button data-r="${k}"${Number.isInteger(k) ? '' : ' class="is-half"'}
+      aria-pressed="${+rate[act.id] === k}"
+      title="${rateText(k)} — ${esc(label)}"
+      aria-label="Note ${rateText(k)} — ${esc(label)}">${rateText(k)}</button>`).join('');
+}
+
+function openPlayer(src, name, actId, ai) {
   playingAct = actId;
   $('#player-name').textContent = name;
+  renderPlayerRate(ai);
   // Nur neu setzen, wenn sich die Adresse aendert - sonst startet der
   // Player bei jedem Tippen von vorn.
   const slot = $('#player-slot');
@@ -593,6 +607,8 @@ function openPlayer(src, name, actId) {
 
 function closePlayer() {
   playingAct = null;
+  $('#player-rate').innerHTML = '';
+  delete el.player.dataset.ai;
   const slot = $('#player-slot');
   slot.innerHTML = '';
   delete slot.dataset.src;
@@ -1215,10 +1231,10 @@ document.addEventListener('click', (e) => {
   if (qp) {
     e.preventDefault(); e.stopPropagation();
     if (!qp.dataset.quickplay) return;            // kein Spotify-Link
-    const id = +qp.closest('.row').dataset.act;
-    const actId = S.data.acts[id].id;
+    const ai = +qp.closest('.row').dataset.act;
+    const actId = S.data.acts[ai].id;
     if (playingAct === actId) closePlayer();
-    else openPlayer(qp.dataset.quickplay, qp.dataset.playname, actId);
+    else openPlayer(qp.dataset.quickplay, qp.dataset.playname, actId, ai);
     return;
   }
 
@@ -1273,22 +1289,31 @@ document.addEventListener('click', (e) => {
 
   const rateBtn = t.closest('[data-r]');
   if (rateBtn) {
-    // Der Act haengt am DIALOG, nicht fest am Detaildialog: die
-    // Schnellbewertung benutzt dieselben Knoepfe. Vorher hatte sie eigene
-    // data-qr-Knoepfe, und weil das CSS auf data-r zielt, war eine gesetzte
-    // Note dort unsichtbar - dunkle Schrift auf dunklem Grund.
-    const dlg = rateBtn.closest('dialog') || el.detail;
-    const id = dlg.dataset.act;
+    /* EIN Zuhoerer fuer alle drei Orte, an denen bewertet wird: Detailansicht,
+       Schnellbewertung und Anspielleiste. Welcher Act gemeint ist, steht am
+       naechstgelegenen data-ai - nicht fest am Detaildialog. (Zeilen tragen
+       data-act, nicht data-ai, koennen hier also nicht dazwischenkommen.)
+
+       Vorher hatte die Schnellbewertung eigene data-qr-Knoepfe, damit dieser
+       Zuhoerer sie nicht faengt. Weil das CSS aber auf data-r zielt, war eine
+       gesetzte Note dort unsichtbar: dunkle Schrift auf dunklem Grund. */
+    const host = rateBtn.closest('[data-ai]') || el.detail;
+    const ai = +host.dataset.ai;
+    const act = S.data && S.data.acts[ai];
+    if (!act) return;
+    const id = act.id;
     const val = +rateBtn.dataset.r;
     if (+rate[id] === val) delete rate[id]; else rate[id] = val;
     store.set('rate', rate);
     scheduleSync();
-    for (const b of dlg.querySelectorAll('[data-r]')) {
+    for (const b of host.querySelectorAll('[data-r]')) {
       b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
     }
+    // Die Leiste zeigt vielleicht denselben Act - dann dort mitziehen.
+    if (host !== el.player && +el.player.dataset.ai === ai) renderPlayerRate(ai);
     // Die Schnellbewertung ist genau fuer diesen einen Griff da.
-    if (dlg === el.quick) dlg.close();
-    refreshAct(+dlg.dataset.ai);
+    if (host === el.quick) el.quick.close();
+    refreshAct(ai);
     return;
   }
 
@@ -2040,7 +2065,12 @@ $('#player-close').addEventListener('click', closePlayer);
    waagerecht aber nicht - er ueberlaesst uns die Richtung von selbst. Damit
    koennen alle Zuhoerer passiv bleiben, was auf schwachen Geraeten den
    Unterschied macht. */
-const SWIPE_DEFAULTS = { on: true, left: 'seen', right: 'quick', dist: 72 };
+/* Wischen ist AUSGESCHALTET. Die Mechanik bleibt vollstaendig erhalten -
+   sie taugt spaeter fuer etwas anderes -, aber sie loest nichts mehr aus, bis
+   man sie im Menue einschaltet. Bewertet wird jetzt in der Anspielleiste,
+   dafuer braucht es keine Geste. */
+const SWIPE_DEFAULTS = { on: false, left: 'seen', right: 'quick', dist: 72,
+                         v: 2 };
 const SWIPE_ACTIONS = {
   seen: { icon: '✓', text: 'Gesehen', cls: 'act-seen' },
   fav: { icon: '♥', text: 'Favorit', cls: 'act-fav' },
@@ -2050,6 +2080,13 @@ const SWIPE_ACTIONS = {
   off: null,
 };
 let swipeCfg = Object.assign({}, SWIPE_DEFAULTS, store.get('swipe', {}) || {});
+/* Einmalig abschalten, auch bei denen, die es schon eingeschaltet gespeichert
+   haben. Wer es danach im Menue wieder anmacht, behaelt das - die Marke v
+   verhindert, dass ihm hier ein zweites Mal dazwischengeredet wird. */
+if (swipeCfg.v !== 2) {
+  swipeCfg = Object.assign({}, swipeCfg, { on: false, v: 2 });
+  store.set('swipe', swipeCfg);
+}
 
 /* Zeilen, deren Beruehrung auf einem eigenen Bedienelement beginnt, wischen
    nicht - sonst kaeme man an Herz und Play nicht mehr sauber heran. */

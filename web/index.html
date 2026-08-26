@@ -134,7 +134,9 @@
 
     <div class="d-section">
       <h3>Wischen</h3>
-      <label class="opt"><input type="checkbox" id="sw-on" checked>
+      <p class="menu-note">Aus. Bewertet wird in der Anspielleiste — dafür
+      braucht es keine Geste. Wer es trotzdem will, schaltet es hier ein.</p>
+      <label class="opt"><input type="checkbox" id="sw-on">
         Wischen auf Künstlerzeilen</label>
       <label class="opt">Nach links wischen
         <select id="sw-left">
@@ -226,6 +228,10 @@
 <div id="player" class="player" hidden>
   <div class="player-head">
     <span class="player-name" id="player-name"></span>
+    <!-- Bewerten, waehrend man hoert - ohne Umweg ueber einen Dialog.
+         Dieselben data-r-Knoepfe wie in der Detailansicht, nur rund und
+         ohne Beschriftung; in der Leiste ist kein Platz fuer "sehr gut". -->
+    <div class="rate rate-mini" id="player-rate"></div>
     <button type="button" class="icon-btn" id="player-close"
             aria-label="Player schließen">✕</button>
   </div>
