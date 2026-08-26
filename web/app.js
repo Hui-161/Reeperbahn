@@ -147,20 +147,36 @@ const el = {
   filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
   player: $('#player'), toast: $('#toast'),
+  quick: $('#quick'), swipe: $('#swipe'),
 };
 
 /* Kurze Rueckmeldung ohne Dialog - fuer Dinge, die keine Bestaetigung
-   brauchen, aber sichtbar sein muessen. */
+   brauchen, aber sichtbar sein muessen. Mit undo bekommt sie einen Knopf:
+   eine Wischgeste passiert leicht versehentlich, und ohne Ruecknahme muesste
+   man den Act erst wieder suchen. */
 let toastTimer = null;
-function toast(text, ms = 2400) {
+let toastFade = null;
+function hideToast() {
+  clearTimeout(toastTimer); clearTimeout(toastFade);
+  el.toast.classList.remove('is-on');
+  toastFade = setTimeout(() => { el.toast.hidden = true; }, 200);
+}
+function toast(text, ms = 2400, undo = null) {
+  clearTimeout(toastTimer); clearTimeout(toastFade);
   el.toast.textContent = text;
+  if (undo) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast-undo';
+    b.textContent = 'Zurücknehmen';
+    b.addEventListener('click', () => { undo(); hideToast(); });
+    el.toast.append(b);
+  }
+  // Ohne Knopf darf die Meldung keine Tipper abfangen.
+  el.toast.style.pointerEvents = undo ? 'auto' : 'none';
   el.toast.hidden = false;
   el.toast.classList.add('is-on');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    el.toast.classList.remove('is-on');
-    setTimeout(() => { el.toast.hidden = true; }, 200);
-  }, ms);
+  toastTimer = setTimeout(hideToast, ms);
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -1558,6 +1574,7 @@ $('#btn-menu').addEventListener('click', () => {
   applyTheme();
   partnerInfo();
   teamInfo();
+  renderSwipeOpts();
   el.menu.showModal();
   syncDialogCount();
 });
@@ -1958,6 +1975,225 @@ addEventListener('visibilitychange', () => {
 
 $('#player-close').addEventListener('click', closePlayer);
 
+/* ---------- Wischen auf Kuenstlerzeilen ----------
+   Nach rechts: Bewertung waehlen. Nach links: als gesehen markieren.
+   Beide Richtungen sind im Menue umstellbar.
+
+   Bewusst OHNE Huellelement pro Zeile: das haette jede CSS-Regel und jeden
+   Test getroffen, der auf "#list > .row" baut. Stattdessen wird die Zeile
+   selbst verschoben und EIN gemeinsames Feld dahintergelegt, positioniert
+   nach der Bounding-Box der Zeile.
+
+   Kein preventDefault noetig: "touch-action: pan-y pinch-zoom" auf der Zeile
+   sagt dem Browser, dass senkrecht gescrollt und gezoomt werden darf,
+   waagerecht aber nicht - er ueberlaesst uns die Richtung von selbst. Damit
+   koennen alle Zuhoerer passiv bleiben, was auf schwachen Geraeten den
+   Unterschied macht. */
+const SWIPE_DEFAULTS = { on: true, left: 'seen', right: 'quick', dist: 72 };
+const SWIPE_ACTIONS = {
+  seen: { icon: '✓', text: 'Gesehen', cls: 'act-seen' },
+  fav: { icon: '♥', text: 'Favorit', cls: 'act-fav' },
+  rate1: { icon: '1', text: 'Note 1', cls: 'act-r1' },
+  rate5: { icon: '5', text: 'Note 5', cls: 'act-r5' },
+  quick: { icon: '★', text: 'Bewerten', cls: 'act-quick' },
+  off: null,
+};
+let swipeCfg = Object.assign({}, SWIPE_DEFAULTS, store.get('swipe', {}) || {});
+
+/* Zeilen, deren Beruehrung auf einem eigenen Bedienelement beginnt, wischen
+   nicht - sonst kaeme man an Herz und Play nicht mehr sauber heran. */
+const SWIPE_SKIP = '.row-fav, .row-play, .venue, .tag';
+
+let sw = null;                 // laufende Geste
+let suppressClickUntil = 0;    // ein Wisch darf die Zeile nicht oeffnen
+
+function swipeActionFor(dx) {
+  return SWIPE_ACTIONS[dx > 0 ? swipeCfg.right : swipeCfg.left] || null;
+}
+
+function swipePaint(dx) {
+  const box = el.swipe;
+  const act = swipeActionFor(dx);
+  const armed = Math.abs(dx) >= swipeCfg.dist;
+  box.className = 'swipe'
+    + (act ? ' ' + act.cls : ' act-none')
+    + (dx > 0 ? ' from-left' : ' from-right')
+    + (armed ? ' armed' : '');
+  box.querySelector('.swipe-icon').textContent = act ? act.icon : '·';
+  box.querySelector('.swipe-text').textContent = act ? act.text : '—';
+  sw.row.style.transform = `translateX(${dx}px)`;
+}
+
+function swipeStart(row, touch) {
+  const r = row.getBoundingClientRect();
+  sw = { row, ai: +row.dataset.act, x0: touch.clientX, y0: touch.clientY,
+         dx: 0, active: false };
+  const box = el.swipe;
+  box.style.top = `${r.top}px`;
+  box.style.left = `${r.left}px`;
+  box.style.width = `${r.width}px`;
+  box.style.height = `${r.height}px`;
+}
+
+function swipeCancel() {
+  if (!sw) return;
+  sw.row.style.transform = '';
+  sw.row.classList.remove('swiping');
+  el.swipe.hidden = true;
+  sw = null;
+}
+
+function swipeFinish() {
+  if (!sw) return;
+  const { dx, ai } = sw;
+  const far = Math.abs(dx) >= swipeCfg.dist;
+  const active = sw.active;
+  swipeCancel();
+  if (!active) return;
+  suppressClickUntil = Date.now() + 500;
+  if (far) runSwipeAction(dx > 0 ? swipeCfg.right : swipeCfg.left, ai);
+}
+
+function runSwipeAction(key, ai) {
+  const act = S.data.acts[ai];
+  if (!act || key === 'off') return;
+  const id = act.id;
+  if (key === 'quick') { openQuick(ai); return; }
+  if (key === 'fav') {
+    const was = fav.has(id);
+    was ? fav.delete(id) : fav.add(id);
+    saveFav(); scheduleSync(); render();
+    toast(`${act.n}: ${was ? 'kein Favorit mehr' : 'als Favorit gemerkt'}`, 3200,
+          () => { was ? fav.add(id) : fav.delete(id); saveFav(); scheduleSync(); render(); });
+    return;
+  }
+  if (key === 'seen') {
+    const was = seen.has(id);
+    was ? seen.delete(id) : seen.add(id);
+    saveSeen(); scheduleSync(); render();
+    toast(`${act.n}: ${was ? 'nicht mehr als gesehen' : 'als gesehen markiert'}`, 3200,
+          () => { was ? seen.add(id) : seen.delete(id); saveSeen(); scheduleSync(); render(); });
+    return;
+  }
+  const want = key === 'rate1' ? 1 : 5;
+  const before = rate[id];
+  if (+before === want) delete rate[id]; else rate[id] = want;
+  store.set('rate', rate); scheduleSync(); render();
+  toast(`${act.n}: ${rate[id] ? 'Note ' + rateText(rate[id]) : 'Note entfernt'}`, 3200,
+        () => {
+          if (before === undefined) delete rate[id]; else rate[id] = before;
+          store.set('rate', rate); scheduleSync(); render();
+        });
+}
+
+el.list.addEventListener('touchstart', (e) => {
+  if (!swipeCfg.on || e.touches.length !== 1) return;
+  // Eine haengengebliebene Geste aufraeumen statt die neue abzulehnen. Geht
+  // ein touchend verloren - Browser brechen eine Beruehrung auch mal ohne
+  // Ereignis ab -, waere sonst bis zum Neuladen kein Wischen mehr moeglich.
+  if (sw) swipeCancel();
+  const row = e.target.closest && e.target.closest('.row');
+  if (!row || e.target.closest(SWIPE_SKIP)) return;
+  swipeStart(row, e.touches[0]);
+}, { passive: true });
+
+el.list.addEventListener('touchmove', (e) => {
+  if (!sw || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const dx = t.clientX - sw.x0;
+  const dy = t.clientY - sw.y0;
+  if (!sw.active) {
+    // Erst ab einer klar waagerechten Bewegung uebernehmen. Ohne das
+    // verrutscht jeder Scrollversuch die Zeile.
+    if (Math.abs(dy) > Math.abs(dx) || Math.abs(dx) < 12) {
+      if (Math.abs(dy) > 12) swipeCancel();
+      return;
+    }
+    sw.active = true;
+    sw.row.classList.add('swiping');
+    el.swipe.hidden = false;
+  }
+  sw.dx = dx;
+  swipePaint(dx);
+}, { passive: true });
+
+el.list.addEventListener('touchend', swipeFinish, { passive: true });
+el.list.addEventListener('touchcancel', swipeCancel, { passive: true });
+
+/* Ein Wisch endet auf der Zeile und wuerde sonst als Tipper gelten. Der
+   Abfang laeuft in der Erfassungsphase, damit er vor jedem anderen
+   Zuhoerer greift. */
+el.list.addEventListener('click', (e) => {
+  if (Date.now() < suppressClickUntil) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);
+
+/* ---------- Schnellbewertung ---------- */
+
+let quickAct = null;
+
+function openQuick(ai) {
+  const act = S.data.acts[ai];
+  if (!act) return;
+  quickAct = ai;
+  $('#quick-name').textContent = act.n;
+  // data-qr, nicht data-r: der Detaildialog hat einen eigenen Zuhoerer auf
+  // data-r, der seine eigene Act-Kennung liest.
+  $('#quick-rate').innerHTML = RATES.map(([k, label]) =>
+    `<button data-qr="${k}" class="${Number.isInteger(k) ? '' : 'is-half'}"
+      aria-pressed="${+rate[act.id] === k}"
+      aria-label="${rateText(k)} - ${label}"><b>${rateText(k)}</b><small
+      >${esc(label)}</small></button>`).join('');
+  $('#quick-fav').setAttribute('aria-pressed', String(fav.has(act.id)));
+  $('#quick-clear').hidden = !rate[act.id];
+  el.quick.showModal();
+  syncDialogCount();
+}
+
+el.quick.addEventListener('click', (e) => {
+  if (quickAct == null) return;
+  const id = S.data.acts[quickAct].id;
+  const r = e.target.closest('[data-qr]');
+  if (r) {
+    const val = +r.dataset.qr;
+    if (+rate[id] === val) delete rate[id]; else rate[id] = val;
+    store.set('rate', rate); scheduleSync(); render();
+    el.quick.close();
+    return;
+  }
+  if (e.target.closest('#quick-fav')) {
+    fav.has(id) ? fav.delete(id) : fav.add(id);
+    saveFav(); scheduleSync(); render();
+    $('#quick-fav').setAttribute('aria-pressed', String(fav.has(id)));
+    return;
+  }
+  if (e.target.closest('#quick-clear')) {
+    delete rate[id];
+    store.set('rate', rate); scheduleSync(); render();
+    el.quick.close();
+  }
+});
+
+/* ---------- Einstellungen zum Wischen ---------- */
+
+function renderSwipeOpts() {
+  $('#sw-on').checked = !!swipeCfg.on;
+  $('#sw-left').value = swipeCfg.left;
+  $('#sw-right').value = swipeCfg.right;
+  $('#sw-dist').value = String(swipeCfg.dist);
+}
+
+for (const [id, key] of [['sw-on', 'on'], ['sw-left', 'left'],
+                         ['sw-right', 'right'], ['sw-dist', 'dist']]) {
+  $('#' + id).addEventListener('change', (e) => {
+    swipeCfg[key] = key === 'on' ? e.target.checked
+      : key === 'dist' ? +e.target.value : e.target.value;
+    store.set('swipe', swipeCfg);
+  });
+}
+
 /* ---------- Zurueck-Taste und Zurueck-Geste ----------
    Ohne das verlaesst ein Wisch von der Kante die App, obwohl gerade nur ein
    Dialog offen ist. Der Trick: beim Start einen Eintrag in die Historie
@@ -1969,6 +2205,7 @@ let leaveTimer = null;
 
 /* Was das Zurueck der Reihe nach schliesst. Erste zutreffende Ebene gewinnt. */
 function closeOneLayer() {
+  if (el.quick.open) { el.quick.close(); return true; }
   if (el.detail.open) { el.detail.close(); return true; }
   if (el.menu.open) { el.menu.close(); return true; }
   if (!el.player.hidden) { closePlayer(); return true; }
@@ -2002,13 +2239,12 @@ function rearmGuard() {
    popstate noch leer. Genau daran ist mein erster Versuch gescheitert, und
    in echtem Firefox waere er genauso gescheitert. Der Vergleich unten ist
    synchron. */
+const DIALOGS = [el.detail, el.menu, el.quick];
 let dialogsOpen = 0;
 function syncDialogCount() {
-  dialogsOpen = (el.detail.open ? 1 : 0) + (el.menu.open ? 1 : 0);
+  dialogsOpen = DIALOGS.filter((d) => d.open).length;
 }
-for (const dlg of [el.detail, el.menu]) {
-  dlg.addEventListener('close', syncDialogCount);
-}
+for (const dlg of DIALOGS) dlg.addEventListener('close', syncDialogCount);
 
 history.replaceState({ rbf: 'base' }, '');
 history.pushState({ rbf: 'guard' }, '');
@@ -2016,7 +2252,7 @@ history.pushState({ rbf: 'guard' }, '');
 addEventListener('popstate', () => {
   // Weniger Dialoge offen als zuletzt bekannt? Dann hat der Browser selbst
   // einen geschlossen, und diese Ebene ist schon verbraucht.
-  const nowOpen = (el.detail.open ? 1 : 0) + (el.menu.open ? 1 : 0);
+  const nowOpen = DIALOGS.filter((d) => d.open).length;
   if (nowOpen < dialogsOpen) { dialogsOpen = nowOpen; rearmGuard(); return; }
   if (closeOneLayer()) { syncDialogCount(); rearmGuard(); return; }
   if (!leaveArmed) {

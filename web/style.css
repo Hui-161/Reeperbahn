@@ -101,6 +101,16 @@
 
 * { box-sizing: border-box; }
 
+/* Eigener Fokusrahmen. Der Standardrahmen des Browsers kam in einer
+   Warnfarbe daher - in der Schnellbewertung sah der Schliessknopf damit
+   aus wie ein Fehler. Nur :focus-visible, damit ein Fingertipp keinen
+   Rahmen hinterlaesst. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* Muss sein: eigene display-Regeln (z. B. .searchbar/.genrebox mit
    display:flex) gewinnen sonst gegen das hidden-Attribut aus dem
    Browser-Stylesheet - die Kaesten blieben dauerhaft offen. */
@@ -332,7 +342,11 @@ main { min-height: 60vh; }
 
 .status { padding: 2rem 1rem; text-align: center; color: var(--ink-faint); }
 
-.list { padding: .5rem .75rem 3rem; }
+/* clip, nicht hidden: eine verschobene Zeile darf keinen waagerechten
+   Balken erzeugen, aber "hidden" wuerde die Liste zu einem Scrollbehaelter
+   machen - dann scrollt sie senkrecht in sich selbst statt mit der Seite.
+   Das gemeinsame Wischfeld liegt fixed und wird davon nicht beschnitten. */
+.list { padding: .5rem .75rem 3rem; overflow-x: clip; }
 
 .slot-head {
   position: sticky;
@@ -361,6 +375,48 @@ main { min-height: 60vh; }
   font: inherit;
   cursor: pointer;
 }
+/* pan-y erlaubt dem Browser das senkrechte Scrollen und ueberlaesst uns die
+   waagerechte Richtung - dadurch braucht die Wischgeste kein
+   preventDefault und alle Zuhoerer bleiben passiv. pinch-zoom bleibt
+   ausdruecklich erlaubt: das Zoomen wegzunehmen waere eine Zumutung. */
+.row { touch-action: pan-y pinch-zoom; }
+.row.swiping {
+  position: relative;
+  z-index: 401;
+  transition: none;
+  user-select: none;
+}
+
+/* EIN Feld fuer alle Zeilen, wird beim Wischen unter die jeweilige gelegt. */
+.swipe {
+  position: fixed;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 1rem;
+  border-radius: var(--r);
+  color: var(--on-scale);
+  font-weight: 700;
+  font-size: .9rem;
+  pointer-events: none;
+  overflow: hidden;
+}
+.swipe.from-left { justify-content: flex-start; }
+/* Nach links gewischt heisst: die Zeile geht nach links, frei wird rechts. */
+.swipe.from-right { flex-direction: row-reverse; }
+.swipe-icon { font-size: 1.2rem; line-height: 1; }
+.swipe.act-seen { background: var(--r1); }
+.swipe.act-fav { background: var(--accent); color: var(--accent-ink); }
+.swipe.act-quick { background: var(--accent); color: var(--accent-ink); }
+.swipe.act-r1 { background: var(--r1); }
+.swipe.act-r5 { background: var(--r5); }
+.swipe.act-none { background: var(--bg-sunken); color: var(--ink-faint); }
+/* Erst ab der Ausloeseweite volle Farbe - vorher sieht man, dass es noch
+   nicht reicht. */
+.swipe:not(.armed) { opacity: .45; }
+.swipe.armed .swipe-icon { transform: scale(1.15); }
+
 .row:hover { border-color: var(--ink-faint); }
 .row.rated-1 { border-left: 4px solid var(--r1); }
 .row.rated-2 { border-left: 4px solid var(--r2); }
@@ -723,6 +779,73 @@ body.has-player { padding-bottom: calc(env(safe-area-inset-bottom) + 8.5rem); }
   pointer-events: none;
 }
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.toast-undo {
+  margin-left: .6rem;
+  padding: .15rem .5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+}
+
+/* Schnellbewertung: sitzt unten, damit sie unter dem Daumen liegt. */
+.quick {
+  border: 0;
+  padding: 0;
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 34rem;
+  max-height: 90dvh;
+  border-radius: var(--r) var(--r) 0 0;
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.quick-wrap { padding: .8rem .8rem calc(.8rem + env(safe-area-inset-bottom)); }
+.quick-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .5rem;
+}
+.quick-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.quick-extra {
+  display: flex;
+  gap: .4rem;
+  margin-top: .5rem;
+  flex-wrap: wrap;
+}
+
+/* Einstellungszeilen im Menue. */
+.opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .35rem 0;
+  font-size: .9rem;
+}
+.opt select {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-sunken);
+  color: var(--ink);
+  font: inherit;
+  font-size: .85rem;
+  padding: .3rem .4rem;
+  min-height: var(--tap);
+}
+.opt input[type="checkbox"] { width: 1.15rem; height: 1.15rem; }
 body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }

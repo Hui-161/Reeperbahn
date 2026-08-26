@@ -133,6 +133,36 @@
     </div>
 
     <div class="d-section">
+      <h3>Wischen</h3>
+      <label class="opt"><input type="checkbox" id="sw-on" checked>
+        Wischen auf Künstlerzeilen</label>
+      <label class="opt">Nach links wischen
+        <select id="sw-left">
+          <option value="seen" selected>als gesehen markieren</option>
+          <option value="fav">als Favorit merken</option>
+          <option value="rate5">Note 5 — gar nicht</option>
+          <option value="off">nichts tun</option>
+        </select>
+      </label>
+      <label class="opt">Nach rechts wischen
+        <select id="sw-right">
+          <option value="quick" selected>Bewertung wählen</option>
+          <option value="fav">als Favorit merken</option>
+          <option value="rate1">Note 1 — sehr gut</option>
+          <option value="off">nichts tun</option>
+        </select>
+      </label>
+      <label class="opt">Weite bis zum Auslösen
+        <select id="sw-dist">
+          <option value="48">kurz</option>
+          <option value="72" selected>mittel</option>
+          <option value="104">lang</option>
+        </select>
+      </label>
+      <p class="menu-note">Nach dem Wischen erscheint kurz „Zurücknehmen“.</p>
+    </div>
+
+    <div class="d-section">
       <h3>Meine Auswahl</h3>
       <div class="menu-list">
         <button type="button" id="m-export">Auswahl sichern (JSON)</button>
@@ -160,6 +190,33 @@
         „Auswahl sichern“ und schicken sie sich zu — danach stehen die
         Markierungen beider Seiten nebeneinander.
       </p>
+    </div>
+  </div>
+</dialog>
+
+<!-- Wischanzeige: EIN Element fuer alle Zeilen, wird beim Wischen hinter die
+     jeweilige Zeile gelegt. So bleibt das Listenmarkup unveraendert - ein
+     Huellelement pro Zeile haette alle CSS-Regeln und Tests mitgerissen. -->
+<div id="swipe" class="swipe" hidden aria-hidden="true">
+  <span class="swipe-icon"></span>
+  <span class="swipe-text"></span>
+</div>
+
+<!-- Schnellbewertung nach dem Wischen nach rechts. Eigener Dialog, damit die
+     Zurueck-Geste ihn wie jede andere Ebene schliesst. -->
+<dialog id="quick" class="quick" aria-label="Schnell bewerten">
+  <div class="quick-wrap">
+    <div class="quick-head">
+      <span class="quick-name" id="quick-name"></span>
+      <button type="button" class="icon-btn" data-close
+              aria-label="Schließen">✕</button>
+    </div>
+    <div class="rate" id="quick-rate"></div>
+    <div class="quick-extra">
+      <button type="button" id="quick-fav" class="chip" aria-pressed="false">
+        <span class="heart" aria-hidden="true">♥</span> Favorit</button>
+      <button type="button" id="quick-clear" class="chip chip-ghost">
+        Note entfernen</button>
     </div>
   </div>
 </dialog>

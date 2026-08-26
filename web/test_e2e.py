@@ -821,6 +821,148 @@ with sync_playwright() as p:
           pg3.locator(".row.rated-gruen").count() == 0)
     ctx3.close()
 
+    # --- Wischen auf Kuenstlerzeilen ---
+    # Eigener Kontext MIT Touch: ohne has_touch gibt es keine Touch-Klasse
+    # und die Gesten liessen sich gar nicht nachbilden.
+    ctx5 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE",
+                         has_touch=True, is_mobile=True)
+    pg5 = ctx5.new_page()
+    err5 = []
+    pg5.on("pageerror", lambda e: err5.append(str(e)))
+    pg5.goto(BASE + "/", wait_until="load")
+    pg5.wait_for_selector(".row", timeout=20000)
+
+    # Eine Geste als Folge echter Touch-Ereignisse. Schrittweise, damit die
+    # Richtungserkennung dieselbe Kette sieht wie auf dem Geraet.
+    SWIPE = """([idx, dx, steps]) => {
+      const row = document.querySelectorAll('.row')[idx];
+      const r = row.getBoundingClientRect();
+      const x0 = r.left + 40, y0 = r.top + r.height / 2;
+      const fire = (type, x, y) => {
+        const t = new Touch({ identifier: 1, target: row, clientX: x,
+                              clientY: y, pageX: x, pageY: y });
+        const empty = type === 'touchend';
+        row.dispatchEvent(new TouchEvent(type, { bubbles: true,
+          cancelable: true, touches: empty ? [] : [t],
+          targetTouches: empty ? [] : [t], changedTouches: [t] }));
+      };
+      fire('touchstart', x0, y0);
+      for (let i = 1; i <= steps; i++) fire('touchmove', x0 + dx * i / steps, y0);
+      fire('touchend', x0 + dx, y0);
+    }"""
+
+    pg5.evaluate(SWIPE, [0, 120, 8]); pg5.wait_for_timeout(500)
+    check("Wisch nach rechts oeffnet die Schnellbewertung",
+          pg5.evaluate("() => document.querySelector('#quick').open"))
+    check("Der Detaildialog bleibt dabei zu",
+          pg5.evaluate("() => !document.querySelector('#detail').open"))
+    qsteps = pg5.locator("#quick-rate button").evaluate_all(
+        "e => e.map(x => x.dataset.qr)")
+    check("Schnellbewertung hat alle sieben Stufen",
+          qsteps == ["1", "1.5", "2", "2.5", "3", "4", "5"], qsteps)
+    pg5.locator('#quick-rate button[data-qr="1.5"]').click()
+    pg5.wait_for_timeout(400)
+    check("Note aus der Schnellbewertung landet in der Liste",
+          pg5.locator("#list .grade").first.inner_text() == "1,5",
+          pg5.locator("#list .grade").first.inner_text())
+
+    seen0 = pg5.locator("#list .seen-mark").count()
+    pg5.evaluate(SWIPE, [1, -120, 8]); pg5.wait_for_timeout(500)
+    check("Wisch nach links markiert als gesehen",
+          pg5.locator("#list .seen-mark").count() == seen0 + 1,
+          f"{seen0} -> {pg5.locator('#list .seen-mark').count()}")
+    check("Mit Ruecknahme-Knopf", pg5.locator("#toast .toast-undo").count() == 1,
+          pg5.inner_text("#toast"))
+    pg5.locator("#toast .toast-undo").click(); pg5.wait_for_timeout(400)
+    check("Ruecknahme stellt wieder her",
+          pg5.locator("#list .seen-mark").count() == seen0)
+
+    # Ein zu kurzer Wisch darf nichts tun, sonst loest jedes Verrutschen aus.
+    rates0 = pg5.evaluate(
+        "() => Object.keys(JSON.parse(localStorage.getItem('rbf26.rate')||'{}')).length")
+    pg5.evaluate(SWIPE, [2, 30, 4]); pg5.wait_for_timeout(400)
+    check("Zu kurzer Wisch loest nichts aus",
+          pg5.evaluate("() => !document.querySelector('#quick').open")
+          and pg5.evaluate("() => Object.keys(JSON.parse("
+                           "localStorage.getItem('rbf26.rate')||'{}')).length")
+              == rates0)
+
+    # Senkrecht muss Scrollen bleiben - sonst verrutscht bei jedem Wischen
+    # durch die Liste eine Zeile.
+    VERT = """([idx]) => {
+      const row = document.querySelectorAll('.row')[idx];
+      const r = row.getBoundingClientRect();
+      const x0 = r.left + 40, y0 = r.top + r.height / 2;
+      const fire = (type, x, y) => {
+        const t = new Touch({ identifier: 1, target: row, clientX: x,
+                              clientY: y, pageX: x, pageY: y });
+        const empty = type === 'touchend';
+        row.dispatchEvent(new TouchEvent(type, { bubbles: true,
+          cancelable: true, touches: empty ? [] : [t],
+          targetTouches: empty ? [] : [t], changedTouches: [t] }));
+      };
+      fire('touchstart', x0, y0);
+      for (let i = 1; i <= 6; i++) fire('touchmove', x0 + 4, y0 - i * 20);
+      fire('touchend', x0 + 4, y0 - 120);
+      return document.querySelector('#swipe').hidden;
+    }"""
+    check("Senkrechte Geste bleibt Scrollen", pg5.evaluate(VERT, [3]))
+
+    # Auf dem Herz beginnt keine Geste, sonst kaeme man nicht mehr sauber ran.
+    ON_HEART = """() => {
+      const h = document.querySelector('.row .row-fav');
+      const r = h.getBoundingClientRect();
+      const fire = (type, x, y) => {
+        const t = new Touch({ identifier: 1, target: h, clientX: x, clientY: y,
+                              pageX: x, pageY: y });
+        const empty = type === 'touchend';
+        h.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true,
+          touches: empty ? [] : [t], targetTouches: empty ? [] : [t],
+          changedTouches: [t] }));
+      };
+      fire('touchstart', r.left + 5, r.top + r.height / 2);
+      for (let i = 1; i <= 6; i++) fire('touchmove', r.left + 5 + i * 20,
+                                        r.top + r.height / 2);
+      fire('touchend', r.left + 125, r.top + r.height / 2);
+      return document.querySelector('#swipe').hidden
+             && !document.querySelector('#quick').open;
+    }"""
+    check("Auf dem Herz beginnt keine Geste", pg5.evaluate(ON_HEART))
+
+    pg5.click("#btn-menu"); pg5.wait_for_timeout(400)
+    check("Wisch-Einstellungen stehen im Menue",
+          pg5.locator("#sw-left").count() == 1
+          and pg5.locator("#sw-right").count() == 1
+          and pg5.locator("#sw-dist").count() == 1)
+    pg5.select_option("#sw-left", "fav")
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(400)
+    fav0 = pg5.evaluate(
+        "() => JSON.parse(localStorage.getItem('rbf26.fav')||'[]').length")
+    pg5.evaluate(SWIPE, [4, -120, 8]); pg5.wait_for_timeout(500)
+    check("Umgestellte Richtung wirkt",
+          pg5.evaluate("() => JSON.parse("
+                       "localStorage.getItem('rbf26.fav')||'[]').length") == fav0 + 1)
+
+    pg5.click("#btn-menu"); pg5.wait_for_timeout(300)
+    pg5.uncheck("#sw-on")
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+    pg5.evaluate(SWIPE, [5, -120, 8]); pg5.wait_for_timeout(400)
+    check("Abgeschaltet passiert nichts",
+          pg5.evaluate("() => document.querySelector('#swipe').hidden"))
+
+    pg5.click("#btn-menu"); pg5.wait_for_timeout(300)
+    pg5.check("#sw-on")
+    pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
+    pg5.evaluate(SWIPE, [6, 120, 8]); pg5.wait_for_timeout(500)
+    check("Zurueck schliesst die Schnellbewertung",
+          pg5.evaluate("() => document.querySelector('#quick').open"))
+    pg5.go_back(); pg5.wait_for_timeout(500)
+    check("Und die App laeuft weiter",
+          pg5.evaluate("() => !document.querySelector('#quick').open")
+          and pg5.locator(".row").count() > 0)
+    check("Keine JS-Fehler beim Wischen", not err5, str(err5[:2]))
+    ctx5.close()
+
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e
             and e not in csp]
