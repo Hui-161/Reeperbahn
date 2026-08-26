@@ -710,7 +710,7 @@ function renderPlan() {
 
 function showPlan(on) {
   S.planOn = on;
-  if (on) { S.mapOn = false; $('#btn-map').setAttribute('aria-pressed', 'false'); }
+  if (on) mapOffQuiet();
   openBox(null);
   render();
   scrollTo({ top: 0, behavior: 'instant' });
@@ -941,6 +941,7 @@ function openDetail(ai) {
 
   el.detail.dataset.act = act.id;
   if (!el.detail.open) el.detail.showModal();
+  syncDialogCount();
 }
 
 /* Notiz: verzoegert speichern, damit nicht bei jedem Tastendruck geschrieben wird. */
@@ -1143,8 +1144,7 @@ document.addEventListener('click', (e) => {
     const i = +only.dataset.onlyvenue;
     S.venues.clear(); S.venues.add(i);
     S.day = null;
-    S.mapOn = false;
-    $('#btn-map').setAttribute('aria-pressed', 'false');
+    mapOffQuiet();
     renderDays();
     renderVenues();
     render();
@@ -1244,7 +1244,7 @@ document.addEventListener('click', (e) => {
   if (day) {
     S.day = day.dataset.day || null;
     for (const b of el.days.children) b.setAttribute('aria-selected', String(b === day));
-    if (S.mapOn) { S.mapOn = false; $('#btn-map').setAttribute('aria-pressed', 'false'); }
+    mapOffQuiet();
     render();
     return;
   }
@@ -1299,16 +1299,9 @@ document.addEventListener('click', (e) => {
 /* Wunsch 4: Tastatur muss sich oeffnen. Auf iOS darf focus() nur INNERHALB
    der Nutzergeste passieren - kein await, kein Timeout davor. Deshalb steht
    das Feld schon im DOM und wird hier direkt fokussiert. */
-$('#btn-search').addEventListener('click', () => {
-  const open = el.searchbar.hidden;
-  el.searchbar.hidden = !open;
-  if (open) el.q.focus({ preventScroll: true });
-  else { el.q.value = ''; S.q = ''; render(); }
-});
+$('#btn-search').addEventListener('click', () => setSearch(el.searchbar.hidden));
 
-$('#q-clear').addEventListener('click', () => {
-  el.q.value = ''; S.q = ''; el.searchbar.hidden = true; render();
-});
+$('#q-clear').addEventListener('click', () => setSearch(false));
 
 let qTimer = null;
 el.q.addEventListener('input', () => {
@@ -1376,15 +1369,40 @@ $('#f-reset').addEventListener('click', () => {
   render();
 });
 
-$('#btn-map').addEventListener('click', (e) => {
-  if (S.planOn) S.planOn = false;
-  S.mapOn = !S.mapOn;
-  if (!S.mapOn) clearRoute();
-  e.currentTarget.setAttribute('aria-pressed', String(S.mapOn));
-  if (S.mapOn) openBox(null);
+/* Karte und Suche als Funktion, nicht als Knopfdruck. Der Zurueck-Handler
+   hat vorher $('#btn-map').click() aufgerufen - das laeuft durch den ganzen
+   Klick-Verteiler und zeichnet die Liste neu, mitten in einer laufenden
+   Verlaufsnavigation. Firefox fuer Android hat das mit einer leeren Seite
+   quittiert. */
+function setMap(on) {
+  if (on && S.planOn) S.planOn = false;
+  S.mapOn = on;
+  if (!on) clearRoute();
+  $('#btn-map').setAttribute('aria-pressed', String(on));
+  if (on) openBox(null);
   render();
-  if (S.mapOn) { const m = ensureMap(); setTimeout(() => m.invalidateSize(), 60); }
-});
+  if (on) { const m = ensureMap(); setTimeout(() => m.invalidateSize(), 60); }
+}
+
+/* Karte aus, ohne selbst neu zu zeichnen - fuer Stellen, die gleich danach
+   ohnehin rendern. Wichtig ist das clearRoute(): ohne das blieb die Klasse
+   route-on stehen, und beim naechsten Oeffnen lagen die Ortsmarker mit 38 %
+   Deckkraft unter einer alten Route. */
+function mapOffQuiet() {
+  if (!S.mapOn) return;
+  S.mapOn = false;
+  clearRoute();
+  $('#btn-map').setAttribute('aria-pressed', 'false');
+}
+
+function setSearch(on) {
+  el.searchbar.hidden = !on;
+  if (on) { el.q.focus({ preventScroll: true }); return; }
+  el.q.value = '';
+  if (S.q) { S.q = ''; render(); }
+}
+
+$('#btn-map').addEventListener('click', () => setMap(!S.mapOn));
 
 /* Die Kopfhoehe schwankt (Suchleiste, Genre-Kaesten). Statt sie in CSS zu
    raten, wird sie gemessen. */
@@ -1541,6 +1559,7 @@ $('#btn-menu').addEventListener('click', () => {
   partnerInfo();
   teamInfo();
   el.menu.showModal();
+  syncDialogCount();
 });
 
 el.menu.addEventListener('click', (e) => {
@@ -1955,25 +1974,57 @@ function closeOneLayer() {
   if (!el.player.hidden) { closePlayer(); return true; }
   if (BOXES.some((n) => !el[n].hidden)) { openBox(null); return true; }
   if (S.planOn) { showPlan(false); return true; }
-  if (S.mapOn) { $('#btn-map').click(); return true; }
-  if (!el.searchbar.hidden) { $('#q-clear').click(); return true; }
+  if (S.mapOn) { setMap(false); return true; }
+  if (!el.searchbar.hidden) { setSearch(false); return true; }
   return false;
+}
+
+/* Der Wachposten wird VERZOEGERT neu gelegt, nicht synchron im Handler.
+   history.pushState() mitten in der Abarbeitung von popstate ist in Firefox
+   fuer Android eine bekannt wacklige Stelle. Der gemeinsame Timer sorgt
+   ausserdem dafuer, dass zwei Aufrufe im selben Durchlauf zu EINEM Eintrag
+   werden - sonst braeuchte es hinterher zwei Zurueck fuer eine Ebene. */
+let guardTimer = null;
+function rearmGuard() {
+  clearTimeout(guardTimer);
+  guardTimer = setTimeout(() => {
+    try { history.pushState({ rbf: 'guard' }, ''); } catch (e) { /* egal */ }
+  }, 0);
+}
+
+/* Browser schliessen einen modalen Dialog beim Zurueck teils SELBST. Chrome
+   verbraucht den Druck dabei und loest kein popstate aus, Firefox fuer
+   Android loest es zusaetzlich aus. Ohne Gegenmassnahme geht dort eine Ebene
+   zu viel zu.
+
+   Erkannt wird das durch ZAEHLEN, nicht ueber das close-Ereignis. Das kommt
+   erst im naechsten Durchlauf - ein Zeitstempel daraus ist zum Zeitpunkt des
+   popstate noch leer. Genau daran ist mein erster Versuch gescheitert, und
+   in echtem Firefox waere er genauso gescheitert. Der Vergleich unten ist
+   synchron. */
+let dialogsOpen = 0;
+function syncDialogCount() {
+  dialogsOpen = (el.detail.open ? 1 : 0) + (el.menu.open ? 1 : 0);
+}
+for (const dlg of [el.detail, el.menu]) {
+  dlg.addEventListener('close', syncDialogCount);
 }
 
 history.replaceState({ rbf: 'base' }, '');
 history.pushState({ rbf: 'guard' }, '');
 
 addEventListener('popstate', () => {
-  if (closeOneLayer()) {
-    history.pushState({ rbf: 'guard' }, '');
-    return;
-  }
+  // Weniger Dialoge offen als zuletzt bekannt? Dann hat der Browser selbst
+  // einen geschlossen, und diese Ebene ist schon verbraucht.
+  const nowOpen = (el.detail.open ? 1 : 0) + (el.menu.open ? 1 : 0);
+  if (nowOpen < dialogsOpen) { dialogsOpen = nowOpen; rearmGuard(); return; }
+  if (closeOneLayer()) { syncDialogCount(); rearmGuard(); return; }
   if (!leaveArmed) {
     leaveArmed = true;
     toast('Nochmal zurück zum Verlassen der App', 2600);
     clearTimeout(leaveTimer);
     leaveTimer = setTimeout(() => { leaveArmed = false; }, 2600);
-    history.pushState({ rbf: 'guard' }, '');
+    rearmGuard();
     return;
   }
   // Vorgewarnt und nichts mehr offen: nichts neu auflegen, der Browser geht.

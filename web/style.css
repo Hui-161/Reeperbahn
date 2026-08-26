@@ -136,6 +136,17 @@ body {
   padding: max(env(safe-area-inset-top), .5rem) .75rem .5rem;
 }
 
+/* backdrop-filter auf einer sticky- oder fixed-Leiste ist in Gecko fuer
+   Android eine bekannte Quelle fuer schwarze oder zerrissene Flaechen.
+   -moz-appearance gibt es nur in Gecko, also bekommt nur Firefox eine
+   deckende Leiste ohne Weichzeichner. Kostet dort einen dezenten Effekt und
+   nimmt ein Risiko weg, das ausgerechnet die immer sichtbare Kopfzeile
+   trifft. Laesst sich zurueckdrehen, falls es doch nicht die Ursache war. */
+@supports (-moz-appearance: none) {
+  .top { background: var(--bg); backdrop-filter: none; }
+  .player { background: var(--bg-raised); backdrop-filter: none; }
+}
+
 .top-row { display: flex; align-items: center; gap: .5rem; }
 
 h1 {
@@ -733,7 +744,15 @@ body.has-player .toast { bottom: calc(9.4rem + env(safe-area-inset-bottom)); }
 @media (min-width: 40rem) {
   .detail { margin: auto; border-radius: var(--r); }
 }
-.detail::backdrop { background: rgb(0 0 0 / .55); }
+/* [open] ist hier entscheidend, nicht Kosmetik.
+   Firefox fuer Android schliesst einen modalen Dialog beim Zurueck selbst.
+   Raeumt der Browser die Top-Layer-Ebene dabei nicht sofort ab, blieb mit
+   ".detail::backdrop" eine 55 % schwarze Flaeche ueber der ganzen Seite
+   stehen - das war der schwarze Bildschirm. Mit [open] kann der Backdrop
+   nicht ueberleben, egal wie der Browser sich verhaelt. */
+dialog[open]::backdrop { background: rgb(0 0 0 / .55); }
+dialog:not([open]) { display: none; }
+dialog:not([open])::backdrop { background: transparent; }
 
 .d-wrap { padding: 1rem 1rem 1.5rem; }
 .d-head { display: flex; gap: .5rem; align-items: start; }

@@ -243,6 +243,54 @@ with sync_playwright() as p:
           "Nochmal zurück" in pg.inner_text("#toast"), pg.inner_text("#toast"))
     check("App laeuft noch", pg.locator(".row").count() > 0)
 
+    # --- Der schwarze Bildschirm in Firefox fuer Android ---
+    # Ursache war ".detail::backdrop": die 55 % schwarze Flaeche galt auch fuer
+    # einen GESCHLOSSENEN Dialog. Raeumt der Browser die Top-Layer-Ebene beim
+    # Zurueck nicht sofort ab, bleibt sie ueber der ganzen Seite stehen. Mit
+    # dialog[open]::backdrop kann das nicht passieren - unabhaengig davon, wie
+    # sich der Browser verhaelt.
+    bd = pg.evaluate("""() => {
+      const d = document.querySelector('#menu');
+      const shut = getComputedStyle(d, '::backdrop').backgroundColor;
+      return { open: d.open, shut };
+    }""")
+    check("Geschlossener Dialog malt keine dunkle Flaeche",
+          not bd["open"] and bd["shut"] in
+          ("rgba(0, 0, 0, 0)", "transparent", ""), bd)
+    pg.click("#btn-menu"); pg.wait_for_timeout(300)
+    bd2 = pg.evaluate("""() => getComputedStyle(
+      document.querySelector('#menu'), '::backdrop').backgroundColor""")
+    check("Offener Dialog hat weiter seine Abdunklung",
+          bd2 == "rgba(0, 0, 0, 0.55)", bd2)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+
+    # Firefox fuer Android schliesst einen modalen Dialog beim Zurueck SELBST
+    # und loest zusaetzlich popstate aus. Chrome verbraucht den Druck. Hier
+    # wird der Firefox-Fall nachgestellt: Dialog von aussen schliessen, dann
+    # popstate. Es darf NICHT zusaetzlich eine zweite Ebene zugehen.
+    pg.click("#btn-search"); pg.wait_for_timeout(200)
+    pg.click("#btn-menu"); pg.wait_for_timeout(300)
+    pg.evaluate("""() => {
+      document.querySelector('#menu').close();       // wie der Browser es tut
+      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    }""")
+    pg.wait_for_timeout(300)
+    check("Selbst geschlossener Dialog kostet nur EINE Ebene",
+          not pg.locator("#searchbar").is_hidden(),
+          "Suchleiste noch offen"
+          if not pg.locator("#searchbar").is_hidden()
+          else "Suchleiste zu — es ging eine Ebene zu viel zu")
+    pg.click("#q-clear"); pg.wait_for_timeout(200)
+
+    # Der Zurueck-Handler darf keine Knopfdruecke nachbilden: das laeuft durch
+    # den ganzen Klick-Verteiler und zeichnet mitten in der Navigation neu.
+    src = pg.evaluate("() => document.querySelector('script[src*=\"app.js\"]').src")
+    js = pg.request.get(src).text()
+    body = js[js.index("function closeOneLayer"):]
+    body = body[:body.index("\n}")]
+    check("closeOneLayer klickt keine Knoepfe", ".click()" not in body,
+          body[:120])
+
     # Wunsch 4: Suche fokussiert
     pg.click("#btn-search"); pg.wait_for_timeout(150)
     focused = pg.evaluate("document.activeElement && document.activeElement.id")
