@@ -64,10 +64,55 @@ const minutesOf = (iso) => {
 
 /**
  * @param {Array} items  [{id, actId, name, startIso, venue:{lat,lng,name}, value}]
- * @returns {{stops:Array, dropped:Array, totalValue:number, walkTotal:number}}
+ * @returns {{stops:Array, dropped:Array, totalValue:number, walkTotal:number,
+ *            dedupedActs:Array}}
+ *
+ * 62 der 342 Acts spielen mehrfach (60 zweimal, 2 dreimal). Beide Termine
+ * gehoeren in die Auswahl - welcher besser passt, entscheidet erst die
+ * Rechnung. Zweimal DENSELBEN Act einzuplanen ist aber verschwendeter Abend.
+ *
+ * "Hoechstens einer je Act" laesst sich nicht in dieselbe Rechnung packen:
+ * gewichtete Intervallauswahl MIT Gruppenbeschraenkung ist NP-schwer. Also
+ * wird geloest, ein doppelter Act erkannt, der schlechtere Termin gestrichen
+ * und neu geloest. Das ist ein Verfahren, kein Beweis - aber es rechnet nach
+ * jedem Streichen den ganzen Abend neu, und die Faelle sind selten.
  */
 function buildPlan(items, opt = {}) {
   const o = { ...PLAN_DEFAULTS, ...opt };
+  if (o.oneShowPerAct === false) return solvePlan(items, o);
+  let pool = items;
+  const deduped = [];
+  for (let round = 0; round < 12; round++) {
+    const res = solvePlan(pool, o);
+    const seen = new Map();
+    let drop = null;
+    for (const s of res.stops) {
+      // Ohne Act-Kennung gibt es keine Doppelung zu erkennen. Das ist nicht
+      // theoretisch: die Tests hier arbeiten mit Auftritten ohne actId, und
+      // ohne diese Zeile galten sie alle als derselbe Act.
+      if (s.actId === undefined || s.actId === null) continue;
+      const prev = seen.get(s.actId);
+      if (prev) {
+        /* Bei gleichem Wert - und das ist der Normalfall, beide Termine haben
+           dieselbe Note - den SPAETEREN streichen. Der fruehere laesst mehr
+           Abend uebrig. */
+        drop = (s.value < prev.value) ? s
+             : (s.value > prev.value) ? prev
+             : (s.start >= prev.start ? s : prev);
+        break;
+      }
+      seen.set(s.actId, s);
+    }
+    if (!drop) { res.dedupedActs = deduped; return res; }
+    deduped.push({ id: drop.id, name: drop.name, startIso: drop.startIso });
+    pool = pool.filter((x) => x.id !== drop.id);
+  }
+  const res = solvePlan(pool, o);
+  res.dedupedActs = deduped;
+  return res;
+}
+
+function solvePlan(items, o) {
   const shows = items
     .filter((s) => s.startIso)
     .map((s) => {

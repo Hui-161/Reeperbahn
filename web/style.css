@@ -470,6 +470,21 @@ main { min-height: 60vh; }
 .grade-p-5 { color: var(--r5); }
 .heart-p { margin-left: .3rem; font-size: .8rem; color: var(--accent); opacity: .75; }
 
+/* Wie oft der Act ueberhaupt spielt. Bewusst zurueckhaltend - es ist eine
+   Randnotiz, keine Bewertung, und darf die Note nicht ueberstrahlen. */
+.multi {
+  display: inline-block;
+  margin-left: .3rem;
+  padding: 0 .25rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink-faint);
+  font-size: .68rem;
+  font-weight: 700;
+  vertical-align: .1em;
+  white-space: nowrap;
+}
+
 #ratebox .chip[aria-pressed="true"][data-rate="1"] { background: var(--r1); border-color: var(--r1); color: var(--on-scale); }
 #ratebox .chip[aria-pressed="true"][data-rate="2"] { background: var(--r2); border-color: var(--r2); color: var(--on-scale); }
 #ratebox .chip[aria-pressed="true"][data-rate="3"] { background: var(--r3); border-color: var(--r3); color: var(--on-scale); }
@@ -629,6 +644,45 @@ main { min-height: 60vh; }
   font-weight: 700;
 }
 .stop .row { flex: 1; margin-bottom: 0; }
+
+/* Festhalten und Ausschliessen an jeder Station. Klein, aber mit 44 px
+   Trefferflaeche - das sind Knoepfe, die man mitten im Getuemmel trifft. */
+.stop-acts { display: flex; flex-direction: column; gap: .2rem; }
+.pill {
+  min-width: 34px;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  font-size: .85rem;
+  line-height: 1;
+  cursor: pointer;
+  position: relative;
+}
+.pill::after { content: ""; position: absolute; inset: -5px; }
+.pill.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.plan-drop .pill { margin-right: .35rem; vertical-align: -.4em; }
+
+.plan-warn {
+  margin: .5rem 0;
+  padding: .5rem .6rem;
+  border-radius: var(--r);
+  border: 1px solid var(--r4);
+  background: color-mix(in srgb, var(--r4) 12%, transparent);
+  font-size: .85rem;
+}
+.plan-note {
+  margin: .4rem 0;
+  font-size: .8rem;
+  color: var(--ink-faint);
+}
 
 .plan-drop { margin-top: 1.4rem; }
 .plan-drop h3 {

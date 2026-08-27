@@ -547,6 +547,66 @@ with sync_playwright() as p:
     check("Aenderung der Spielzeit wird verarbeitet",
           pg.locator("#plan-body").inner_text() != "", "")
 
+    # --- Den Plan von Hand nachjustieren ---
+    # Verglichen wird ueber die Auftritts-Kennung, nicht ueber den Namen: ein
+    # Act kann mehrfach spielen, und dann steht derselbe Name zu Recht wieder
+    # da - nur mit anderer Uhrzeit.
+    PLAN_IDS = ("() => [...document.querySelectorAll('#plan-body .stop .row')]"
+                ".map(r => r.dataset.show)")
+    ids0 = pg.evaluate(PLAN_IDS)
+    check("Jede Station hat Festhalten und Ausschliessen",
+          pg.locator("#plan-body .stop [data-pin]").count() == len(ids0)
+          and pg.locator("#plan-body .stop [data-skip]").count() == len(ids0),
+          f"{len(ids0)} Stationen")
+    if pg.locator("#plan-body .plan-drop li [data-pin]").count():
+        want = pg.locator("#plan-body .plan-drop li [data-pin]").first \
+            .get_attribute("data-pin")
+        pg.locator("#plan-body .plan-drop li [data-pin]").first.click()
+        pg.wait_for_timeout(700)
+        ids1 = pg.evaluate(PLAN_IDS)
+        check("Festgehaltener Termin kommt in den Plan", want in ids1,
+              f"{want} in {ids1}")
+        check("Der Plan wird darum herum neu gerechnet", ids0 != ids1)
+        check("Der Knopf zeigt, dass er gesetzt ist",
+              pg.locator(f'#plan-body [data-pin="{want}"].on').count() >= 1)
+        check("Die Handauswahl wird benannt",
+              "Von Hand gesetzt" in pg.locator("#plan-body").inner_text())
+
+        drop = pg.locator("#plan-body .stop [data-skip]").first \
+            .get_attribute("data-skip")
+        pg.locator("#plan-body .stop [data-skip]").first.click()
+        pg.wait_for_timeout(700)
+        ids2 = pg.evaluate(PLAN_IDS)
+        check("Ausgeschlossener Termin faellt heraus", drop not in ids2,
+              f"{drop} in {ids2}")
+        check("Der Plan bleibt dabei bestueckt", len(ids2) > 0, len(ids2))
+
+        pg.click("#plan-reset-manual"); pg.wait_for_timeout(700)
+        check("Zuruecknehmen stellt den Vorschlag wieder her",
+              pg.evaluate(PLAN_IDS) == ids0,
+              f"{pg.evaluate(PLAN_IDS)} gegen {ids0}")
+
+    # 62 Acts spielen mehrfach - zweimal derselbe waere verschwendeter Abend.
+    check("Kein Act steht zweimal im Plan", pg.evaluate("""() => {
+      const a = [...document.querySelectorAll('#plan-body .stop .row')]
+        .map(r => r.dataset.act);
+      return a.length === new Set(a).size;
+    }"""))
+
+    # --- Mehrfachauftritte in der Liste ---
+    multi = pg.evaluate("""() => {
+      const all = [...document.querySelectorAll('.multi')]
+        .map(e => e.textContent.trim());
+      const first = document.querySelector('.multi');
+      return { n: all.length, kinds: [...new Set(all)].sort(),
+               title: first ? first.getAttribute('title') : null };
+    }""")
+    check("Mehrfachauftritte sind markiert", multi["n"] > 0, multi["n"])
+    check("Nur die tatsaechlich vorkommenden Zahlen",
+          set(multi["kinds"]) <= {"\u00d72", "\u00d73"}, multi["kinds"])
+    check("Der Titel nennt, der wievielte Auftritt es ist",
+          "Auftritt" in (multi["title"] or ""), multi["title"])
+
     # Route auf der Karte
     pg.click("#plan-map"); pg.wait_for_timeout(1200)
     check("Route liegt auf der Karte", pg.locator("#map").is_visible())

@@ -452,6 +452,39 @@ function showMap() {
   return showById;
 }
 
+/* Wie oft ein Act ueberhaupt spielt. 62 der 342 Acts treten mehrfach auf
+   (60 zweimal, 2 dreimal) - ohne Hinweis in der Liste plant man den falschen
+   Termin ein oder haelt einen fuer verpasst, den man noch sehen kann. */
+let showsPerAct = null;
+function actShowCount(ai) {
+  if (!showsPerAct) {
+    showsPerAct = new Map();
+    for (const s of S.data.shows) {
+      showsPerAct.set(s.a, (showsPerAct.get(s.a) || 0) + 1);
+    }
+  }
+  return showsPerAct.get(ai) || 1;
+}
+
+/* Der wievielte Auftritt dieses Acts ist das? Nach Zeit sortiert, damit
+   "2 von 2" auch stimmt. */
+let showOrdinal = null;
+function actShowOrdinal(sh) {
+  if (!showOrdinal) {
+    showOrdinal = new Map();
+    const byAct = new Map();
+    for (const s of S.data.shows) {
+      if (!byAct.has(s.a)) byAct.set(s.a, []);
+      byAct.get(s.a).push(s);
+    }
+    for (const list of byAct.values()) {
+      list.sort((a, b) => String(a.t || '').localeCompare(String(b.t || '')));
+      list.forEach((s, i) => showOrdinal.set(String(s.id), i + 1));
+    }
+  }
+  return showOrdinal.get(String(sh.id)) || 1;
+}
+
 function refreshAct(ai) {
   if (!Number.isFinite(ai) || !S.data) { render(); return; }
   // Ein aktiver Filter auf Note, Favorit, Gesehen oder Team entscheidet ueber
@@ -535,11 +568,16 @@ function row(sh, act) {
   const rb = rateBucket(r);
   const pb = rateBucket(pRate(act.id));
   const tags = act.g.map((i) => `<span class="tag">${esc(S.data.genres[i])}</span>`).join('');
+  const total = actShowCount(sh.a);
+  const nth = total > 1 ? actShowOrdinal(sh) : 1;
+  const multi = total > 1
+    ? `<span class="multi" title="Spielt ${total}× beim Festival — das hier ist Auftritt ${nth}">×${total}</span>`
+    : '';
   return `<button class="row${rb ? ' rated-' + rb : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
-        seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${
+        seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${multi}${
         rb ? `<span class="grade grade-${rb}${Number.isInteger(+r) ? '' : ' grade-half'}"
               title="Meine Note: ${rateText(r)}">${rateText(r)}</span>`
           : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
@@ -602,10 +640,15 @@ function openPlayer(src, name, actId, ai) {
   }
   el.player.hidden = false;
   document.body.classList.add('has-player');
-  render();
+  /* NUR die betroffene Zeile auffrischen, kein render(). Ein voller Neuaufbau
+     ruft restoreAnchor(), und das rechnet direkt nach dem Aufbau mit den
+     geschaetzten Zeilenhoehen von content-visibility - gemessen sprang die
+     Liste dadurch um 719 Pixel. */
+  refreshAct(ai);
 }
 
 function closePlayer() {
+  const wasAi = +el.player.dataset.ai;
   playingAct = null;
   $('#player-rate').innerHTML = '';
   delete el.player.dataset.ai;
@@ -614,7 +657,8 @@ function closePlayer() {
   delete slot.dataset.src;
   el.player.hidden = true;
   document.body.classList.remove('has-player');
-  render();
+  // Auch hier nur die Zeile: sonst springt die Liste beim Schliessen.
+  refreshAct(wasAi);
 }
 
 /* ---------- Scrollposition halten (Wunsch 2) ---------- */
@@ -663,6 +707,24 @@ function planValue(actId, opts) {
   return v;
 }
 
+/* ---------- Abendplan von Hand nachjustieren ----------
+   Der Vorschlag rechnet mit Noten, aber der Abend gehoert dem Nutzer: ein
+   Act, den man trotz mittlerer Note sehen will, muss rein; ein anderer raus.
+   Zwei Mengen von Auftritts-Kennungen reichen dafuer.
+
+   Feste Termine kommen mit einem sehr hohen Wert in die Rechnung - dann nimmt
+   sie die Optimierung von selbst, solange sie ueberhaupt zusammenpassen.
+   Widersprechen sich zwei feste Termine, faellt einer heraus, und das wird
+   gemeldet statt verschwiegen. */
+let planPin = new Set(store.get('planpin', []) || []);
+let planSkip = new Set(store.get('planskip', []) || []);
+const PIN_VALUE = 1000;
+
+function savePlanChoice() {
+  store.set('planpin', [...planPin]);
+  store.set('planskip', [...planSkip]);
+}
+
 function planOptions() {
   return {
     maxNote: +($('#plan-max') || {}).value || 2,
@@ -691,12 +753,15 @@ function collectPlanItems(opts) {
       continue;
     }
     if (S.day && sh.d !== S.day) continue;
+    if (planSkip.has(sh.id)) continue;          // von Hand ausgeschlossen
     const act = S.data.acts[sh.a];
     const r = rateBucket(rate[act.id]);
-    const eligible = (r && r <= opts.maxNote)
+    const pinned = planPin.has(sh.id);
+    // Ein fester Termin braucht keine gute Note - genau darum geht es.
+    const eligible = pinned || (r && r <= opts.maxNote)
       || (opts.withFav && fav.has(act.id));
     if (!eligible) continue;
-    const value = planValue(act.id, opts);
+    const value = pinned ? PIN_VALUE : planValue(act.id, opts);
     if (value <= 0) continue;
     const v = sh.v != null ? S.data.venues[sh.v] : null;
     items.push({
@@ -704,6 +769,7 @@ function collectPlanItems(opts) {
       startIso: sh.t, value,
       venue: v ? { lat: v.lat, lng: v.lng, name: v.n } : null,
       venueIdx: sh.v,
+      pinned,
       note: +rate[act.id] || 0,     // die echte Note, auch 1,5
     });
   }
@@ -736,6 +802,8 @@ function renderPlan() {
 
   const plan = window.RBFPlan.buildPlan(items, { setMinutes: opts.setMinutes });
   lastPlan = plan;
+  const pinnedOut = items.filter((x) => x.pinned)
+    .filter((x) => !plan.stops.some((s) => s.id === x.id));
 
   const last = plan.stops[plan.stops.length - 1];
   const end = last
@@ -746,6 +814,26 @@ function renderPlan() {
     ${plan.stops.length ? `· bis etwa ${esc(end)}` : ''}
     ${items.undatedCount ? `<br>${items.undatedCount} passende Acts haben noch
       keine Uhrzeit und fehlen deshalb.` : ''}</p>`;
+
+  // Ein fester Termin, der trotzdem nicht reinpasst, muss auffallen - sonst
+  // sucht man ihn im Plan und wundert sich.
+  if (pinnedOut.length) {
+    html += `<p class="plan-warn"><b>Nicht alle festen Termine passen
+      zusammen.</b> Draußen bleibt: ${pinnedOut.map((x) =>
+        `${esc(x.name)} ${hhmm(x.startIso)}`).join(', ')}. Einen davon lösen,
+      dann rechnet der Plan neu.</p>`;
+  }
+  if (plan.dedupedActs && plan.dedupedActs.length) {
+    html += `<p class="plan-note">${plan.dedupedActs.map((d) =>
+      `${esc(d.name)} spielt mehrfach — eingeplant ist der andere Termin`)
+      .join('. ')}.</p>`;
+  }
+  if (planPin.size || planSkip.size) {
+    html += `<p class="plan-note">Von Hand gesetzt:
+      ${planPin.size} fest, ${planSkip.size} ausgeschlossen ·
+      <button type="button" class="linkish" id="plan-reset-manual">alles
+      zurücknehmen</button></p>`;
+  }
 
   plan.stops.forEach((s, i) => {
     if (i > 0) {
@@ -760,20 +848,35 @@ function renderPlan() {
         ${tight ? ' — knapp' : ''}${gap ? ' — große Lücke, da passt noch was rein'
           : ''}</div>`;
     }
-    const sh = S.data.shows.find((x) => x.id === s.id);
+    const sh = showMap().get(String(s.id));
+    const total = actShowCount(s.actIdx);
     html += `<div class="stop"><span class="stop-no">${i + 1}</span>
-      ${row(sh, S.data.acts[s.actIdx])}</div>`;
+      ${row(sh, S.data.acts[s.actIdx])}
+      <span class="stop-acts">
+        <button type="button" class="pill${planPin.has(s.id) ? ' on' : ''}"
+          data-pin="${esc(s.id)}" aria-pressed="${planPin.has(s.id)}"
+          title="Diesen Termin festhalten">📌</button>
+        <button type="button" class="pill" data-skip="${esc(s.id)}"
+          title="${total > 1 ? 'Diesen Termin nicht — der andere darf rein'
+                             : 'Diesen Auftritt heute nicht'}">✕</button>
+      </span></div>`;
   });
 
   if (plan.dropped.length) {
     const inPlan = new Set(plan.stops.map((s) => s.actId));
+    // Mit einem Griff hereinholen: DAS ist "doch den anderen waehlen".
     html += `<div class="plan-drop"><h3>Passt nicht mehr rein
-      (${plan.dropped.length})</h3><ul>${plan.dropped.slice(0, 12).map((d) =>
-        `<li>${esc(d.name)} — ${hhmm(d.startIso)}${
-          inPlan.has(d.actId) ? ' (zweiter Auftritt, steht schon im Plan)'
+      (${plan.dropped.length})</h3><ul>${plan.dropped.slice(0, 20).map((d) =>
+        `<li><button type="button" class="pill${planPin.has(d.id) ? ' on' : ''}"
+            data-pin="${esc(d.id)}" aria-pressed="${planPin.has(d.id)}"
+            title="Diesen Termin festhalten — der Plan rechnet neu">📌</button>
+          ${esc(d.name)} — ${hhmm(d.startIso)}${
+          inPlan.has(d.actId) ? ' (spielt mehrfach, ein Termin steht schon im Plan)'
             : (d.clashesWith ? `, überschneidet sich mit ${esc(d.clashesWith)}` : '')
         }</li>`).join('')}
-      </ul></div>`;
+      </ul>
+      <p class="menu-note">Auf 📌 tippen heißt: dieser Termin muss rein. Der
+      Plan rechnet dann alles andere darum herum neu.</p></div>`;
   }
   el.planBody.innerHTML = html;
 }
@@ -1220,6 +1323,35 @@ document.addEventListener('click', (e) => {
     renderVenues();
     render();
     scrollTo({ top: 0, behavior: 'instant' });
+    return;
+  }
+
+  /* Abendplan von Hand: festhalten, ausschliessen, zuruecknehmen. Muss VOR
+     dem Spielort- und dem Zeilen-Handler stehen, weil die Knoepfe innerhalb
+     einer Zeile im Plan sitzen. */
+  const pinBtn = t.closest('[data-pin]');
+  if (pinBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const id = pinBtn.dataset.pin;
+    if (planPin.has(id)) planPin.delete(id); else { planPin.add(id); planSkip.delete(id); }
+    savePlanChoice();
+    renderPlan();
+    return;
+  }
+  const skipBtn = t.closest('[data-skip]');
+  if (skipBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const id = skipBtn.dataset.skip;
+    planSkip.add(id); planPin.delete(id);
+    savePlanChoice();
+    renderPlan();
+    return;
+  }
+  if (t.closest('#plan-reset-manual')) {
+    e.preventDefault(); e.stopPropagation();
+    planPin.clear(); planSkip.clear();
+    savePlanChoice();
+    renderPlan();
     return;
   }
 
