@@ -678,6 +678,64 @@ main { min-height: 60vh; }
   background: color-mix(in srgb, var(--r4) 12%, transparent);
   font-size: .85rem;
 }
+/* Marke an einer Zeile, deren Termin sich geaendert hat. */
+.chg {
+  display: block;
+  margin-top: .15rem;
+  font-size: .8rem;
+  line-height: 1;
+  color: var(--r4);
+}
+.chg-removed { color: var(--r5); }
+.chg-added { color: var(--r1); }
+
+/* Kurz aufleuchten, wenn man aus der Aenderungsliste hierher springt. */
+@keyframes flash {
+  from { background: color-mix(in srgb, var(--accent) 30%, var(--bg-raised)); }
+  to { background: var(--bg-raised); }
+}
+.row.flash { animation: flash 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .row.flash { animation: none; outline: 2px solid var(--accent); }
+}
+
+/* Liste der Aenderungen. */
+.news-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem;
+  margin-bottom: .25rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.news-kind {
+  flex: 0 0 auto;
+  padding: .1rem .35rem;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--ink-soft);
+  font-size: .68rem;
+  font-weight: 700;
+}
+.news-moved .news-kind { background: var(--r4); color: var(--on-scale); }
+.news-added .news-kind { background: var(--r1); color: var(--on-scale); }
+.news-removed .news-kind { background: var(--r5); color: var(--on-scale); }
+.news-main { flex: 1; min-width: 0; font-size: .9rem; }
+.news-what { color: var(--ink-soft); font-size: .82rem; }
+
+/* Hinweis, dass ein alter Stand angezeigt wird. Muss auffallen: man plant
+   sonst nach Daten von letzter Woche. */
+.stale {
+  margin: .5rem .75rem 0;
+  padding: .55rem .7rem;
+  border-radius: var(--r);
+  border: 1px solid var(--r4);
+  background: color-mix(in srgb, var(--r4) 14%, transparent);
+  font-size: .85rem;
+}
+
 .plan-note {
   margin: .4rem 0;
   font-size: .8rem;

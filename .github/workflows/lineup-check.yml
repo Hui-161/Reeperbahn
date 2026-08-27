@@ -49,6 +49,11 @@ jobs:
       - name: Web-Daten neu bauen
         run: python3 build_web.py
 
+      # Muss NACH build_web laufen und immer, nicht nur bei Aenderungen:
+      # sonst faellt die Datei beim naechsten Lauf ohne Aenderung weg.
+      - name: Aenderungsliste fuer die App bauen
+        run: python3 build_changes.py
+
       - name: Aenderungen in die Job-Zusammenfassung
         if: steps.sync.outputs.code == '10'
         run: |

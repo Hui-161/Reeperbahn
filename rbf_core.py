@@ -175,7 +175,11 @@ def diff(old: list[Show], new: list[Show]) -> dict:
             if getattr(before, field) != getattr(after, field)
         }
         if deltas:
-            changed.append({"artist": after.artist, "show_id": show_id, "changes": deltas})
+            # ext_id mitgeben: nur damit kann die Web-App den geaenderten
+            # Auftritt in ihrer eigenen Liste wiederfinden - show_id ist ein
+            # Hash und steht dort nicht.
+            changed.append({"artist": after.artist, "show_id": show_id,
+                            "ext_id": after.ext_id, "changes": deltas})
 
     return {
         "added_shows": [s.to_dict() for i, s in new_by_id.items() if i not in old_by_id],

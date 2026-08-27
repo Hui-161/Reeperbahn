@@ -143,6 +143,7 @@ const el = {
   genrebox: $('#genrebox'), venuebox: $('#venuebox'),
   ratebox: $('#ratebox'), filterbox: $('#filterbox'),
   plan: $('#plan'), planBody: $('#plan-body'),
+  news: $('#news'), newsBody: $('#news-body'),
   detail: $('#detail'), menu: $('#menu'), meta: $('#meta'),
   filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
@@ -200,16 +201,105 @@ const fold = (s) => String(s ?? '').toLowerCase()
 
 /* ---------- Laden ---------- */
 
+/* ---------- Aenderungen am Programm ----------
+   Uhrzeiten verschieben sich beim Reeperbahn Festival dauernd: sie stehen
+   zuerst als Platzhalter im System und werden spaeter praezisiert. Wer sich
+   einen Abend gebaut hat, muss das mitbekommen - sonst steht er vor der
+   falschen Tuer.
+
+   build_changes.py vergleicht die Snapshots und legt web/data/changes.json
+   ab. Fehlt die Datei, laeuft die App normal weiter: sie ist eine Zugabe,
+   keine Voraussetzung. */
+let changes = { entries: [] };
+let changeByShow = new Map();
+
+async function loadChanges() {
+  try {
+    const res = await fetch('data/changes.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const d = await res.json();
+    if (!d || !Array.isArray(d.entries)) return;
+    changes = d;
+    changeByShow = new Map();
+    for (const e of d.entries) {
+      if (!e.show) continue;
+      const key = String(e.show);
+      if (!changeByShow.has(key)) changeByShow.set(key, []);
+      changeByShow.get(key).push(e);
+    }
+  } catch (e) { /* ohne Aenderungsliste laeuft die App genauso */ }
+}
+
+const CHANGE_KIND = { moved: 'verschoben', added: 'neu',
+                      removed: 'gestrichen' };
+
+function changeNote(showId) {
+  const list = changeByShow.get(String(showId));
+  if (!list || !list.length) return null;
+  const e = list[0];
+  const when = new Date(e.at);
+  const day = isNaN(when) ? e.at : when.toLocaleDateString('de-DE');
+  return {
+    kind: e.kind,
+    text: e.kind === 'moved'
+      ? `${e.what}: ${e.from} → ${e.to} (bemerkt am ${day})`
+      : `${e.what} (bemerkt am ${day})`,
+  };
+}
+
+/* Der letzte brauchbare Stand, im Browser abgelegt.
+
+   Der Service Worker hat schon einen Zwischenspeicher, und offline
+   funktioniert die App damit auch (gemessen: 406 Zeilen nach dem Neuladen
+   ohne Netz). Er deckt aber zwei Faelle NICHT ab: der Browser kann seinen
+   Zwischenspeicher unter Platzmangel wegwerfen, und wenn der Server mit 200
+   antwortet, aber Unsinn liefert - ein kaputter Build zum Beispiel -, wird
+   der gute Stand vom schlechten ueberschrieben.
+
+   Deshalb hier eine zweite, unabhaengige Kopie plus eine Plausibilitaets-
+   pruefung: was keine Acts und keine Auftritte hat, wird nicht uebernommen.
+   370 KB sind viel fuer localStorage, passen aber in die ueblichen 5 MB. */
+const LAST_GOOD = 'lineup';
+
+function looksUsable(d) {
+  return !!(d && Array.isArray(d.acts) && d.acts.length
+            && Array.isArray(d.shows) && d.shows.length
+            && Array.isArray(d.days) && Array.isArray(d.venues));
+}
+
+let usingFallback = null;   // Datum des angezeigten Standes, falls Notkopie
+
 async function load() {
+  let fresh = null;
+  let why = '';
   try {
     const res = await fetch(DATA_URL, { cache: 'no-cache' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    S.data = await res.json();
+    const parsed = await res.json();
+    if (!looksUsable(parsed)) throw new Error('Datei unvollständig');
+    fresh = parsed;
   } catch (err) {
-    el.status.innerHTML = '<b>Programm konnte nicht geladen werden.</b><br>' +
-      esc(err.message) + '<br><small>Ohne Netz zeigt die App den letzten ' +
-      'gespeicherten Stand — beim ersten Aufruf gibt es den noch nicht.</small>';
-    return;
+    why = err.message;
+  }
+
+  if (fresh) {
+    S.data = fresh;
+    usingFallback = null;
+    // Nach dem ersten Zeichnen ablegen, damit der Start nicht warten muss.
+    setTimeout(() => {
+      try { store.set(LAST_GOOD, fresh); } catch (e) { /* Speicher voll */ }
+    }, 1200);
+  } else {
+    const kept = store.get(LAST_GOOD, null);
+    if (looksUsable(kept)) {
+      S.data = kept;
+      usingFallback = kept.generated_at || null;
+    } else {
+      el.status.innerHTML = '<b>Programm konnte nicht geladen werden.</b><br>'
+        + esc(why) + '<br><small>Und es gibt noch keinen gespeicherten Stand — '
+        + 'beim ersten Aufruf braucht die App einmal Netz.</small>';
+      return;
+    }
   }
   // Waehrend des Festivals der heutige Tag, sonst alles - vorher will man
   // stoebern, waehrenddessen den Abend.
@@ -225,7 +315,40 @@ async function load() {
   renderSavedFilters();
   render();
   metaLine();
+  showStaleBanner();
 }
+
+/* Ein alter Stand muss dranstehen. Sonst plant man den Abend nach Daten von
+   letzter Woche und merkt es nicht.
+
+   Zwei Faelle, und der zweite war beim ersten Versuch nicht abgedeckt:
+
+   1. Der Abruf ist gescheitert und die eigene Notkopie hat uebernommen.
+   2. Der Abruf hat GEKLAPPT, aber der Service Worker hat aus seinem
+      Zwischenspeicher geantwortet, weil kein Netz da ist. Dann kommt gueltig
+      aussehende Ware an, die beliebig alt sein kann - der Grund, warum die
+      Liste ohne Netz ueberhaupt noch da ist. Ohne Hinweis haelt man sie fuer
+      aktuell. Erkannt an navigator.onLine: ist das falsch, kann nichts
+      frisch sein, egal wer geantwortet hat. */
+function showStaleBanner() {
+  const bar = $('#stale');
+  if (!bar) return;
+  const offline = navigator.onLine === false;
+  const stamp = usingFallback || (offline && S.data ? S.data.generated_at : null);
+  if (!stamp) { bar.hidden = true; return; }
+  const d = new Date(stamp);
+  bar.innerHTML = '<b>Kein Netz.</b> Angezeigt wird der gespeicherte Stand vom '
+    + esc(isNaN(d) ? String(stamp) : d.toLocaleString('de-DE'))
+    + '. Verschiebungen danach fehlen.';
+  bar.hidden = false;
+}
+
+/* Kommt das Netz zurueck, muss der Hinweis weg - und der frische Stand her. */
+addEventListener('online', () => {
+  showStaleBanner();
+  load().then(loadChanges).then(() => { if (S.data) render(); });
+});
+addEventListener('offline', showStaleBanner);
 
 /* Die Fusszeile sagt jetzt auch, ob der Team-Abgleich laeuft. Vorher stand das
    nur im Menue - man musste es aufklappen, um zu sehen, dass gar kein Team
@@ -520,6 +643,13 @@ function render() {
   $('#f-venue').classList.toggle('on', S.venues.size > 0);
   $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
 
+  if (S.newsOn) {
+    el.list.hidden = true; el.mapBox.hidden = true;
+    el.plan.hidden = true; el.news.hidden = false;
+    renderNews();
+    return;
+  }
+  el.news.hidden = true;
   if (S.planOn) {
     el.list.hidden = true; el.mapBox.hidden = true; el.plan.hidden = false;
     renderPlan();
@@ -568,13 +698,17 @@ function row(sh, act) {
   const rb = rateBucket(r);
   const pb = rateBucket(pRate(act.id));
   const tags = act.g.map((i) => `<span class="tag">${esc(S.data.genres[i])}</span>`).join('');
+  const chg = changeNote(sh.id);
+  const changeMark = chg
+    ? `<span class="chg chg-${chg.kind}" title="${esc(chg.text)}">⟳</span>`
+    : '';
   const total = actShowCount(sh.a);
   const nth = total > 1 ? actShowOrdinal(sh) : 1;
   const multi = total > 1
     ? `<span class="multi" title="Spielt ${total}× beim Festival — das hier ist Auftritt ${nth}">×${total}</span>`
     : '';
   return `<button class="row${rb ? ' rated-' + rb : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
-    <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}</span>
+    <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}${changeMark}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
         seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${multi}${
@@ -881,9 +1015,58 @@ function renderPlan() {
   el.planBody.innerHTML = html;
 }
 
+function renderNews() {
+  const n = changes.entries.length;
+  const from = changes.generated_from
+    ? new Date(changes.generated_from) : null;
+  $('#news-meta').textContent = n
+    ? `${changes.total || n} Änderungen seit Beginn der Beobachtung, `
+      + `${changes.compared || 0} Stände verglichen. Stand `
+      + (from && !isNaN(from) ? from.toLocaleString('de-DE')
+                              : String(changes.generated_from))
+    : 'Noch keine Änderungen bemerkt. Die App vergleicht das Programm täglich.';
+
+  if (!n) {
+    el.newsBody.innerHTML = `<p class="empty"><b>Alles unverändert.</b>
+      Sobald ein Konzert verschoben, verlegt oder gestrichen wird, steht es
+      hier — und an der betroffenen Zeile in der Liste.</p>`;
+    return;
+  }
+  // Nach Tag gruppieren: "was kam heute dazu" ist die Frage.
+  let html = '';
+  let head = '';
+  for (const e of changes.entries) {
+    const when = new Date(e.at);
+    const day = isNaN(when) ? e.at : when.toLocaleDateString('de-DE');
+    if (day !== head) {
+      head = day;
+      html += `<div class="slot-head">bemerkt am ${esc(day)}</div>`;
+    }
+    const arrow = e.kind === 'moved'
+      ? `${esc(e.from)} <b>→ ${esc(e.to)}</b>`
+      : esc(e.to || e.from || '');
+    html += `<div class="news-row news-${esc(e.kind)}">
+      <span class="news-kind">${esc(CHANGE_KIND[e.kind] || e.kind)}</span>
+      <span class="news-main"><b>${esc(e.act)}</b><br>
+        <span class="news-what">${esc(e.what)}: ${arrow}</span></span>
+      ${e.show ? `<button type="button" class="pill" data-findshow="${esc(e.show)}"
+        title="In der Liste zeigen">→</button>` : ''}
+    </div>`;
+  }
+  el.newsBody.innerHTML = html;
+}
+
+function showNews(on) {
+  S.newsOn = on;
+  if (on) { S.planOn = false; mapOffQuiet(); }
+  openBox(null);
+  render();
+  scrollTo({ top: 0, behavior: 'instant' });
+}
+
 function showPlan(on) {
   S.planOn = on;
-  if (on) mapOffQuiet();
+  if (on) { S.newsOn = false; mapOffQuiet(); }
   openBox(null);
   render();
   scrollTo({ top: 0, behavior: 'instant' });
@@ -1352,6 +1535,32 @@ document.addEventListener('click', (e) => {
     planPin.clear(); planSkip.clear();
     savePlanChoice();
     renderPlan();
+    return;
+  }
+
+  const findShow = t.closest('[data-findshow]');
+  if (findShow) {
+    e.preventDefault(); e.stopPropagation();
+    const id = findShow.dataset.findshow;
+    const sh = showMap().get(String(id));
+    // Filter aufheben, sonst sucht man eine Zeile, die gerade weggefiltert ist.
+    S.newsOn = false;
+    S.day = sh ? (sh.d || null) : null;
+    S.q = ''; el.q.value = '';
+    S.favOnly = false; S.seenOnly = false; S.teamOnly = false;
+    S.rates.clear(); S.genres.clear(); S.venues.clear();
+    renderDays(); renderGenres(); renderVenues(); renderRates();
+    render();
+    const node = el.list.querySelector(`.row[data-show="${CSS.escape(String(id))}"]`);
+    if (node) {
+      const top = document.querySelector('.top').offsetHeight;
+      requestAnimationFrame(() => {
+        const y = node.getBoundingClientRect().top + scrollY - top - 8;
+        scrollTo({ top: Math.max(0, y), behavior: 'instant' });
+        node.classList.add('flash');
+        setTimeout(() => node.classList.remove('flash'), 1600);
+      });
+    }
     return;
   }
 
@@ -2090,6 +2299,7 @@ $('#m-team-leave').addEventListener('click', () => {
 $('#m-sync').addEventListener('click', () => { el.menu.close(); runSync(false); });
 
 $('#m-plan').addEventListener('click', () => { el.menu.close(); showPlan(true); });
+$('#m-news').addEventListener('click', () => { el.menu.close(); showNews(true); });
 
 for (const id of ['plan-max', 'plan-set', 'plan-fav', 'plan-team']) {
   const node = $('#' + id);
@@ -2491,6 +2701,7 @@ function closeOneLayer() {
   if (el.menu.open) { el.menu.close(); return true; }
   if (!el.player.hidden) { closePlayer(); return true; }
   if (BOXES.some((n) => !el[n].hidden)) { openBox(null); return true; }
+  if (S.newsOn) { showNews(false); return true; }
   if (S.planOn) { showPlan(false); return true; }
   if (S.mapOn) { setMap(false); return true; }
   if (!el.searchbar.hidden) { setSearch(false); return true; }
@@ -2547,6 +2758,11 @@ addEventListener('popstate', () => {
   // Vorgewarnt und nichts mehr offen: nichts neu auflegen, der Browser geht.
 });
 
+/* Erst das Programm, dann die Aenderungen: die Liste soll nicht auf eine
+   Zusatzdatei warten. Danach einmal neu zeichnen, damit die Marken sitzen. */
 load().then(() => {
   if (team && team.config) { runSync(true); startPulling(); }
+  return loadChanges();
+}).then(() => {
+  if (S.data && changeByShow.size) render();
 });

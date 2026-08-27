@@ -27,6 +27,9 @@ jobs:
       - name: Web-Daten aus dem eingecheckten Snapshot bauen
         run: python3 build_web.py --offline || python3 build_web.py
 
+      - name: Aenderungsliste bauen
+        run: python3 build_changes.py
+
       - name: Browser installieren
         run: |
           pip install --quiet playwright

@@ -78,9 +78,17 @@
 </header>
 
 <main>
+  <p id="stale" class="stale" role="status" hidden></p>
   <p id="status" class="status" role="status">Lade Programm…</p>
   <div id="list" class="list"></div>
   <div id="map" class="map" hidden></div>
+
+  <section id="news" class="plan" hidden aria-label="Änderungen am Programm">
+    <div class="plan-head">
+      <p class="menu-note" id="news-meta"></p>
+    </div>
+    <div id="news-body"></div>
+  </section>
 
   <section id="plan" class="plan" hidden aria-label="Abendplan">
     <div class="plan-head">
@@ -170,6 +178,7 @@
         <button type="button" id="m-export">Auswahl sichern (JSON)</button>
         <button type="button" id="m-import">Datei laden</button>
         <button type="button" id="m-plan">Abendplan öffnen</button>
+        <button type="button" id="m-news">Änderungen am Programm</button>
         <button type="button" id="m-seen">Gesehen-Liste exportieren (CSV)</button>
       </div>
       <p class="menu-note" id="m-stats"></p>

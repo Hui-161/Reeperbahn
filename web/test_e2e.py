@@ -1188,6 +1188,92 @@ with sync_playwright() as p:
           cv["cv"] == "auto" and "80px" in cv["size"], cv)
     ctx5.close()
 
+    # --- Aenderungen am Programm ---
+    # Uhrzeiten verschieben sich beim Reeperbahn Festival dauernd. Wer sich
+    # einen Abend gebaut hat, muss das mitbekommen.
+    marks = pg.evaluate("""() => {
+      const m = [...document.querySelectorAll('.chg')];
+      return { n: m.length, titel: m.length ? m[0].getAttribute('title') : null };
+    }""")
+    if marks["n"]:
+        check("Geaenderte Termine sind in der Liste markiert", True, marks["n"])
+        check("Die Marke nennt die Verschiebung",
+              "\u2192" in (marks["titel"] or ""), marks["titel"])
+    else:
+        check("Keine Aenderungen, also keine Marken", True,
+              "changes.json ohne Eintraege")
+    pg.click("#btn-menu"); pg.wait_for_timeout(300)
+    check("Menuepunkt fuer Aenderungen", pg.locator("#m-news").count() == 1)
+    pg.click("#m-news"); pg.wait_for_timeout(700)
+    check("Aenderungsansicht oeffnet", not pg.locator("#news").is_hidden())
+    check("Kopfzeile nennt den Stand",
+          pg.locator("#news-meta").inner_text().strip() != "",
+          pg.locator("#news-meta").inner_text()[:70])
+    if pg.locator("#news-body [data-findshow]").count():
+        pg.locator("#news-body [data-findshow]").first.click()
+        pg.wait_for_timeout(900)
+        check("Sprung fuehrt zur Zeile in der Liste",
+              pg.locator("#news").is_hidden() and pg.locator(".row").count() > 0)
+        check("Und hebt sie kurz hervor", pg.locator(".row.flash").count() == 1,
+              pg.locator(".row.flash").count())
+    else:
+        pg.click("#btn-menu"); pg.wait_for_timeout(250)
+        pg.locator("#menu [data-close]").click(); pg.wait_for_timeout(250)
+    pg.click("#btn-menu"); pg.wait_for_timeout(250)
+    pg.click("#m-news"); pg.wait_for_timeout(600)
+    pg.go_back(); pg.wait_for_timeout(600)
+    check("Zurueck schliesst die Aenderungsansicht",
+          pg.locator("#news").is_hidden())
+
+    # --- Der letzte Stand, wenn die Liste nicht mehr kommt ---
+    # EIGENER Kontext mit blockiertem Service Worker. Sonst antwortet dessen
+    # Zwischenspeicher - und seine Anfragen gehen an Playwrights Routing
+    # vorbei. Genau daran ist der erste Versuch dieses Tests vorbeigelaufen:
+    # die Zeilen kamen vom Worker, nicht von der eigenen Notkopie.
+    ctx6 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE",
+                         service_workers="block")
+    pg6 = ctx6.new_page()
+    err6 = []
+    pg6.on("pageerror", lambda e: err6.append(str(e)))
+    pg6.goto(BASE + "/", wait_until="load")
+    pg6.wait_for_selector(".row", timeout=20000)
+    pg6.wait_for_timeout(1800)
+    check("Kein Service Worker in diesem Kontext",
+          pg6.evaluate("() => !navigator.serviceWorker.controller"))
+    check("Der Stand wird im Browser abgelegt",
+          pg6.evaluate("() => { const s = localStorage.getItem('rbf26.lineup');"
+                       " return s ? JSON.parse(s).acts.length : 0; }") > 0)
+
+    # 200, aber Unsinn - ein kaputter Build darf einen guten Stand nicht
+    # verdraengen.
+    pg6.route("**/data/lineup.json", lambda r: r.fulfill(
+        status=200, content_type="application/json",
+        body='{"acts":[],"shows":[],"days":[],"venues":[]}'))
+    pg6.reload(wait_until="load")
+    pg6.wait_for_selector(".row", timeout=15000)
+    check("Unbrauchbare Datei wird nicht uebernommen",
+          pg6.locator(".row").count() > 0, pg6.locator(".row").count())
+    check("Und der alte Stand wird als solcher benannt",
+          not pg6.locator("#stale").is_hidden(),
+          pg6.locator("#stale").inner_text()[:70])
+    pg6.unroute("**/data/lineup.json")
+
+    pg6.route("**/data/lineup.json", lambda r: r.abort())
+    pg6.reload(wait_until="load")
+    pg6.wait_for_selector(".row", timeout=15000)
+    check("Auch bei Netzfehler bleibt die Liste da",
+          pg6.locator(".row").count() > 0, pg6.locator(".row").count())
+    check("Mit Hinweis auf den alten Stand",
+          not pg6.locator("#stale").is_hidden())
+    pg6.unroute("**/data/lineup.json")
+
+    pg6.reload(wait_until="load")
+    pg6.wait_for_selector(".row", timeout=15000)
+    check("Danach wieder frischer Stand, ohne Hinweis",
+          pg6.locator("#stale").is_hidden())
+    check("Keine JS-Fehler im Notstands-Kontext", not err6, str(err6[:2]))
+    ctx6.close()
+
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e
             and e not in csp]
