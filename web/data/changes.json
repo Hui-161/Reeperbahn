@@ -1,16 +1,124 @@
 {
-  "generated_from": "2026-08-26T05:56:34",
-  "compared": 2,
-  "total": 2,
+  "generated_from": "2026-08-27T16:36:32",
+  "compared": 3,
+  "total": 15,
   "entries": [
     {
-      "at": "2026-08-26T05:56:34",
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "RIP Swirl",
+      "show": "12790",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:40"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "Le Ren",
+      "show": "12783",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "Hand of Juno",
+      "show": "12806",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "DeVere",
+      "show": "12808",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "Avralize",
+      "show": "12801",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "ANTONÍ",
+      "show": "12782",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "Slackrr",
-      "show": "11310",
+      "act": "Dotan",
+      "show": "11652",
       "what": "Uhrzeit",
-      "from": "21:00",
-      "to": "22:00"
+      "from": "stand noch nicht fest",
+      "to": "20:50"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Dolphin Love",
+      "show": "12573",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "18:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Mudfight",
+      "show": "11322",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "LNA",
+      "show": "12574",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "19:45"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "cherice",
+      "show": "12581",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "WizTheMc",
+      "show": "11653",
+      "what": "Uhrzeit",
+      "from": "23:20",
+      "to": "23:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Jo The Man The Music",
+      "show": "12572",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "16:45"
     },
     {
       "at": "2026-08-26T05:56:34",
@@ -20,6 +128,15 @@
       "what": "Uhrzeit",
       "from": "stand fest",
       "to": "ist wieder offen"
+    },
+    {
+      "at": "2026-08-26T05:56:34",
+      "kind": "moved",
+      "act": "Slackrr",
+      "show": "11310",
+      "what": "Uhrzeit",
+      "from": "21:00",
+      "to": "22:00"
     }
   ]
 }
