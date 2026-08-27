@@ -14,7 +14,7 @@
  * fetch sofort fehl und der Cache greift; bei schlechtem Empfang bricht der
  * Timeout nach 2,5 s ab.
  */
-const V = 'rbf26-v12';
+const V = 'rbf26-v13';
 const TIMEOUT_MS = 2500;
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'team.js', 'plan.js', 'icon.svg',

@@ -68,6 +68,14 @@ KV_FIRST_SEEN_LAG = float(os.environ.get("RBF_KV_LAG", "30"))
 FIRST_WRITE: dict[tuple, float] = {}
 
 
+# Der Freibetrag von Workers KV hat drei getrennte Tagesdeckel: 100.000
+# Lesevorgaenge, 1.000 Schreibvorgaenge, 1.000 Verzeichnis-Abfragen. Der
+# kleinste bindet - und genau den hat die App aufgebraucht, weil jeder
+# Abgleich ein list() ausgeloest hat. Hier wird mitgezaehlt, damit sich das
+# Budget messen laesst statt schaetzen: GET /api/kvops liefert die Zaehler.
+KV_OPS = {"read": 0, "write": 0, "list": 0, "delete": 0}
+
+
 def visible_members(team: str) -> list[dict]:
     """Was ein Listing JETZT zeigen wuerde."""
     now = time.monotonic()
@@ -101,6 +109,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _auth(self, team):
+        KV_OPS["read"] += 1          # der Worker liest hier auth:{team}
         token = self.headers.get("X-Team-Token") or ""
         if len(token) < 20:
             return "missing"
@@ -112,6 +121,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def _team_request(self):
         """True, wenn die Anfrage von der Team-API beantwortet wurde."""
+        if self.path.split("?")[0] == "/api/kvops":
+            if self.command == "DELETE":
+                for k in KV_OPS:
+                    KV_OPS[k] = 0
+            self._reply(dict(KV_OPS))
+            return True
         team, member = self._api_parts()
         if team is None:
             if self.path.startswith("/api/"):
@@ -130,7 +145,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._reply({"error": "token_invalid"}, 403); return True
 
         if self.command == "GET" and member is None:
-            self._reply({"team": team, "members": visible_members(team)})
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            want = [m for m in (q.get("members", [""])[0]).split(",") if m]
+            if want:
+                if not all(MEMBER_RE.match(m) for m in want):
+                    self._reply({"error": "bad_member"}, 400); return True
+                out = []
+                for mid in want[:MAX_MEMBERS]:
+                    KV_OPS["read"] += 1
+                    doc = DOCS.get((team, mid))
+                    if doc is None:
+                        continue
+                    born = FIRST_WRITE.get((team, mid), 0.0)
+                    if time.monotonic() - born < KV_FIRST_SEEN_LAG:
+                        continue
+                    out.append({"id": mid, **doc})
+                self._reply({"team": team, "members": out, "listed": False})
+                return True
+            KV_OPS["list"] += 1
+            members = visible_members(team)
+            KV_OPS["read"] += len(members)
+            self._reply({"team": team, "members": members, "listed": True})
             return True
 
         if self.command == "PUT" and member:
@@ -146,6 +182,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             current = [k for k in DOCS if k[0] == team]
             if (team, member) not in DOCS and len(current) >= MAX_MEMBERS:
                 self._reply({"error": "team_full", "max": MAX_MEMBERS}, 409); return True
+            KV_OPS["read"] += 1                       # gibt es das Dokument schon?
+            if (team, member) not in DOCS:
+                KV_OPS["list"] += 1                     # nur dann das Verzeichnis
+            KV_OPS["write"] += 1
             stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
             FIRST_WRITE.setdefault((team, member), time.monotonic())
             DOCS[(team, member)] = {"iv": payload["iv"], "ct": payload["ct"],
@@ -153,6 +193,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._reply({"ok": True, "updated": stamp}); return True
 
         if self.command == "DELETE" and member:
+            KV_OPS["delete"] += 1
             DOCS.pop((team, member), None)
             FIRST_WRITE.pop((team, member), None)
             self._reply({"ok": True}); return True

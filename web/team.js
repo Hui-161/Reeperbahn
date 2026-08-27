@@ -124,12 +124,23 @@ function createTeamClient(storage) {
       });
     },
 
-    /** Die Dokumente der anderen holen. Guenstig, darf oft laufen. */
-    async pull() {
+    /** Die Dokumente der anderen holen.
+
+        Mit einer Liste bekannter Mitglieder holt der Server sie einzeln, ohne
+        Verzeichnis-Abfrage. Das ist der teure Teil: der Freibetrag erlaubt
+        1.000 list() pro Tag, aber 100.000 get(). Bei einem list() je Takt war
+        der Tag nach vier Stunden aufgebraucht - genau das ist passiert.
+        Ohne Liste sucht der Server nach neuen Mitgliedern; das ruft die App
+        nur selten auf. */
+    async pull(knownIds) {
       const c = conf();
       const { key, token } = await ensureKeys();
-      const data = await apiFetch(c.teamId, token);
+      const q = (knownIds && knownIds.length)
+        ? `${c.teamId}?members=${encodeURIComponent(knownIds.join(','))}`
+        : c.teamId;
+      const data = await apiFetch(q, token);
       const others = [];
+      others.listed = !!data.listed;
       for (const m of (data.members || [])) {
         if (m.id === c.memberId) continue;
         try {
@@ -142,9 +153,9 @@ function createTeamClient(storage) {
       return others;
     },
 
-    async sync(myDoc) {
+    async sync(myDoc, knownIds) {
       await this.push(myDoc);
-      return this.pull();
+      return this.pull(knownIds);
     },
   };
 }

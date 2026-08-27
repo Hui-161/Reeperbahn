@@ -21,6 +21,19 @@ const MEMBER_RE = /^[A-Za-z0-9_-]{1,24}$/;
 const MAX_BODY = 128 * 1024;          // unsere Nutzlast liegt bei wenigen KB
 const MAX_MEMBERS = 8;
 const TTL_SECONDS = 180 * 24 * 3600;  // verwaiste Teams raeumen sich selbst auf
+/* Der Schluessel mit dem Schreib-Token muss die Dokumente UEBERLEBEN. Faellt
+   er zuerst aus, wuerde checkToken() das Team beim naechsten Zugriff neu
+   anlegen - mit irgendeinem Token. Deshalb deutlich laenger. */
+const AUTH_TTL_SECONDS = 400 * 24 * 3600;
+
+/* Der Freibetrag von Workers KV hat DREI getrennte Deckel pro Tag:
+   100.000 Lesevorgaenge, 1.000 Schreibvorgaenge und 1.000 Verzeichnis-
+   Abfragen (list). Der kleinste bindet.
+
+   Ein list() bei jedem Abgleich hat den Tag in vier Stunden aufgebraucht.
+   Der Abgleich nennt deshalb jetzt die Mitglieder, die er kennt, und holt
+   sie einzeln (get, 100.000er Topf). Ein list() gibt es nur noch, wenn
+   wirklich jemand Neues gesucht wird. */
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -54,7 +67,7 @@ async function checkToken(env, teamId, token) {
   const hash = await sha256Hex(token);
   if (stored === null) {
     // Erster Schreibzugriff legt das Team an.
-    await env.TEAM.put(key, hash, { expirationTtl: TTL_SECONDS });
+    await env.TEAM.put(key, hash, { expirationTtl: AUTH_TTL_SECONDS });
     return 'created';
   }
   return safeEqual(stored, hash) ? 'ok' : 'denied';
@@ -80,17 +93,34 @@ async function handle(request, env) {
   if (state === 'denied') return json({ error: 'token_invalid' }, 403);
 
   if (request.method === 'GET' && !memberId) {
-    const list = await env.TEAM.list({ prefix: `doc:${teamId}:`, limit: MAX_MEMBERS + 1 });
+    // Bekannte Mitglieder: direkt holen, kein Verzeichnis.
+    const want = (url.searchParams.get('members') || '')
+      .split(',').map((s) => s.trim()).filter(Boolean).slice(0, MAX_MEMBERS);
+    if (want.length && !want.every((m) => MEMBER_RE.test(m))) {
+      return json({ error: 'bad_member' }, 400);
+    }
+    let names;
+    let listed = false;
+    if (want.length) {
+      names = want.map((m) => `doc:${teamId}:${m}`);
+    } else {
+      const list = await env.TEAM.list({ prefix: `doc:${teamId}:`,
+                                         limit: MAX_MEMBERS + 1 });
+      names = list.keys.map((k) => k.name);
+      listed = true;
+    }
     const members = [];
-    for (const k of list.keys) {
-      const raw = await env.TEAM.get(k.name);
+    for (const name of names) {
+      const raw = await env.TEAM.get(name);
       if (!raw) continue;
       try {
         const doc = JSON.parse(raw);
-        members.push({ id: k.name.slice(`doc:${teamId}:`.length), ...doc });
+        members.push({ id: name.slice(`doc:${teamId}:`.length), ...doc });
       } catch (e) { /* beschaedigten Eintrag ueberspringen */ }
     }
-    return json({ team: teamId, members });
+    // listed sagt der App, ob wirklich gesucht wurde - sonst weiss sie nicht,
+    // ob "keine weiteren" heisst "keine da" oder "nicht nachgesehen".
+    return json({ team: teamId, members, listed });
   }
 
   if (request.method === 'PUT' && memberId) {
@@ -101,21 +131,28 @@ async function handle(request, env) {
     if (typeof payload.iv !== 'string' || typeof payload.ct !== 'string') {
       return json({ error: 'bad_payload' }, 400);
     }
-    const existing = await env.TEAM.list({ prefix: `doc:${teamId}:`, limit: MAX_MEMBERS + 1 });
-    const known = existing.keys.some((k) => k.name === `doc:${teamId}:${memberId}`);
-    if (!known && existing.keys.length >= MAX_MEMBERS) {
-      return json({ error: 'team_full', max: MAX_MEMBERS }, 409);
+    /* Die Obergrenze fuer Mitglieder braucht ein Verzeichnis - aber nur,
+       wenn wirklich jemand Neues dazukommt. Ob das Dokument schon da ist,
+       sagt ein get(), und das kommt aus dem grossen Topf. Vorher lief bei
+       JEDEM Hochladen ein list(). */
+    const key = `doc:${teamId}:${memberId}`;
+    const known = (await env.TEAM.get(key)) !== null;
+    if (!known) {
+      const existing = await env.TEAM.list({ prefix: `doc:${teamId}:`,
+                                             limit: MAX_MEMBERS + 1 });
+      if (existing.keys.length >= MAX_MEMBERS) {
+        return json({ error: 'team_full', max: MAX_MEMBERS }, 409);
+      }
     }
     const doc = {
       iv: payload.iv,
       ct: payload.ct,
       updated: new Date().toISOString(),
     };
-    await env.TEAM.put(`doc:${teamId}:${memberId}`, JSON.stringify(doc),
-                       { expirationTtl: TTL_SECONDS });
-    // Team-Auth mitverlaengern, sonst faellt sie vor den Dokumenten aus.
-    await env.TEAM.put(`auth:${teamId}`, await sha256Hex(token),
-                       { expirationTtl: TTL_SECONDS });
+    await env.TEAM.put(key, JSON.stringify(doc), { expirationTtl: TTL_SECONDS });
+    /* Die Auth wird NICHT bei jedem Hochladen erneuert - das war ein zweiter
+       Schreibvorgang pro Aenderung, bei 1.000 pro Tag die Haelfte des
+       Budgets. Sie haelt von sich aus laenger als die Dokumente. */
     return json({ ok: true, updated: doc.updated });
   }
 

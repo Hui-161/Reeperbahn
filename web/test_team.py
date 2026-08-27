@@ -189,6 +189,42 @@ with sync_playwright() as p:
           "Team-Abgleich an" in B.locator("#meta").inner_text(),
           B.locator("#meta").inner_text()[-60:])
 
+    # ---------- Das Tagesbudget des Speichers ----------
+    # Der Freibetrag hat DREI Deckel: 100.000 Lesevorgaenge, aber nur je 1.000
+    # Schreibvorgaenge und Verzeichnis-Abfragen. Ein list() bei jedem Abgleich
+    # hat den Tag in vier Stunden aufgebraucht - genau so ist es passiert.
+    # Geprueft wird deshalb die Eigenschaft: ein stiller Abgleich darf WEDER
+    # das Verzeichnis abfragen NOCH schreiben.
+    import urllib.request as _u
+
+    def kvops(reset=False):
+        r = _u.Request(BASE + "/api/kvops", method="DELETE" if reset else "GET")
+        return json.load(_u.urlopen(r))
+
+    if "127.0.0.1" in BASE or "localhost" in BASE:
+        kvops(reset=True)
+        B.evaluate("() => runSync(true, true)")
+        B.wait_for_timeout(1200)
+        o = kvops()
+        check("Stiller Abgleich ohne Verzeichnis-Abfrage", o["list"] == 0, o)
+        check("Stiller Abgleich ohne Schreibvorgang", o["write"] == 0, o)
+        # Ein Abgleich liest zwei Schluessel: die Team-Auth und das Dokument
+        # der Gegenseite. Die Grenze liegt hoeher, weil im Zeitfenster ein
+        # zweiter Takt dazwischenfallen kann - die Aussage, auf die es
+        # ankommt, steht in den beiden Pruefungen darueber. Lesevorgaenge
+        # haben ohnehin den hundertfachen Deckel.
+        check("Und er liest nur wenige Schluessel", o["read"] <= 8, o)
+
+        # Nach neuen Mitgliedern SUCHEN darf eine Abfrage kosten - aber nur,
+        # wenn wirklich gesucht wird.
+        kvops(reset=True)
+        B.evaluate("() => { lastDiscover = 0; }")
+        B.evaluate("() => runSync(true, true)")
+        B.wait_for_timeout(1200)
+        o2 = kvops()
+        check("Die Suche nach Mitgliedern kostet genau eine Abfrage",
+              o2["list"] == 1, o2)
+
     real = [e for e in errsA + errsB
             if "openstreetmap" not in e.lower() and "ERR_" not in e]
     check("Keine JS-Fehler", not real, str(real[:2]))

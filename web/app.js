@@ -1681,7 +1681,8 @@ function teamInfo() {
   }
   const ago = lastSyncAt ? relTime(lastSyncAt) : 'noch nicht';
   note.innerHTML = `<b class="sync-on">Abgleich läuft automatisch</b> — `
-    + `alle ${PULL_FAST_MS / 1000} Sekunden, solange die App offen ist. `
+    + `alle ${PULL_FAST_MS / 1000} Sekunden, wenn etwas passiert, sonst `
+    + `alle ${PULL_SLOW_MS / 1000}. `
     + `Letzter Abgleich: ${esc(ago)}.<br>`
     + `Du erscheinst als „${esc(c.name)}“. Ende-zu-Ende verschlüsselt — der `
     + 'Server sieht nur Chiffrat. Wer Link und Passphrase hat, ist im Team.';
@@ -1758,9 +1759,15 @@ function scheduleSync() {
    15 Sekunden im Vordergrund, nach 10 Minuten ohne Neuigkeiten auf 60
    Sekunden gedrosselt. Zwei Geraete, die den ganzen Tag offen sind, kommen
    damit auf gut 10.000 Leseanfragen - ein Zehntel des Freibetrags. */
-const PULL_FAST_MS = 15000;
-const PULL_SLOW_MS = 60000;
-const IDLE_BEFORE_SLOW_MS = 10 * 60 * 1000;
+/* Takt. 15 Sekunden waren zu dicht: zusammen mit einer Verzeichnis-Abfrage
+   je Takt war der Tagesdeckel des Speichers nach vier Stunden erreicht. Die
+   Abfrage ist jetzt weg (siehe runSync), und der Takt geht schneller in den
+   Ruhezustand - solange nichts passiert, fragt die App nur noch alle
+   anderthalb Minuten. Sobald von der Gegenseite etwas kommt, ist sie wieder
+   schnell. */
+const PULL_FAST_MS = 20000;
+const PULL_SLOW_MS = 90000;
+const IDLE_BEFORE_SLOW_MS = 2 * 60 * 1000;
 let pullTimer = null;
 let lastRemoteChange = 0;
 
@@ -1797,8 +1804,17 @@ function scheduleCatchUp() {
    jeder App-Start einen Schreibzugriff, und die sind knapp. */
 let pushedSignature = null;
 
+/* Wen wir schon kennen. Damit holt der Server die Dokumente einzeln statt
+   ueber ein Verzeichnis - siehe die Erklaerung in team.js. */
+let knownMembers = store.get('teammembers', []) || [];
+let lastDiscover = 0;
+const DISCOVER_EVERY_MS = 10 * 60 * 1000;
+
+let throttledUntil = 0;
+
 async function runSync(quiet, pullOnly) {
   if (!team || !team.config || syncing) return;
+  if (Date.now() < throttledUntil && quiet) return;
   syncing = true;
   const note = $('#m-team-note');
   if (note && !quiet) note.textContent = 'Abgleich läuft …';
@@ -1807,13 +1823,30 @@ async function runSync(quiet, pullOnly) {
     // at ist ein Zeitstempel und aendert sich immer - fuer den Vergleich raus.
     const sig = JSON.stringify([doc.fav, doc.seen, doc.rate]);
     const needPush = !pullOnly && sig !== pushedSignature;
+    /* Nach neuen Mitgliedern SUCHEN kostet eine Verzeichnis-Abfrage, und davon
+       gibt es nur 1.000 am Tag. Also nur, wenn es einen Grund gibt: wir kennen
+       noch niemanden, jemand hat von Hand angestossen, oder es ist zehn
+       Minuten her. */
+    const discover = !knownMembers.length || !quiet
+      || Date.now() - lastDiscover > DISCOVER_EVERY_MS;
+    const ids = discover ? null : knownMembers;
+    if (discover) lastDiscover = Date.now();
     let others;
     if (needPush) {
-      others = await team.sync(doc);
+      others = await team.sync(doc, ids);
       pushedSignature = sig;
       scheduleCatchUp();
     } else {
-      others = await team.pull();
+      others = await team.pull(ids);
+    }
+    // Nur ein echtes Suchen darf die Liste ersetzen; eine gezielte Abfrage
+    // kann per Bauart niemanden Neues enthalten.
+    if (others.listed) {
+      const found = others.map((o) => o.id).sort();
+      if (JSON.stringify(found) !== JSON.stringify([...knownMembers].sort())) {
+        knownMembers = found;
+        store.set('teammembers', knownMembers);
+      }
     }
     const before = partnerSignature();
     const n = adoptOthers(others);
@@ -1853,11 +1886,21 @@ async function runSync(quiet, pullOnly) {
         + 'Passphrase ab. Beide brauchen genau dieselbe.';
     }
   } catch (err) {
-    const msg = err.code === 'token_invalid'
-      ? 'Die Passphrase passt nicht zu diesem Team.'
-      : `Abgleich fehlgeschlagen: ${err.message}`;
-    if (note) note.textContent = msg;
-    if (!quiet) alert(msg);
+    if (err.status === 429) {
+      /* Tagesbudget des Speichers erreicht. Weiter im Sekundentakt zu fragen
+         macht es nur schlimmer - also lange Pause und Bescheid sagen. */
+      throttledUntil = Date.now() + 30 * 60 * 1000;
+      const msg = 'Der Speicher hat sein Tagesbudget erreicht. Der Abgleich '
+        + 'pausiert eine halbe Stunde. Deine Auswahl bleibt auf dem Gerät.';
+      if (note) note.textContent = msg;
+      if (!quiet) alert(msg);
+    } else {
+      const msg = err.code === 'token_invalid'
+        ? 'Die Passphrase passt nicht zu diesem Team.'
+        : `Abgleich fehlgeschlagen: ${err.message}`;
+      if (note) note.textContent = msg;
+      if (!quiet) alert(msg);
+    }
   } finally {
     syncing = false;
   }
