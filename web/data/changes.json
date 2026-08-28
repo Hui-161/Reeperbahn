@@ -1,8 +1,107 @@
 {
-  "generated_from": "2026-08-27T16:36:32",
-  "compared": 3,
-  "total": 15,
+  "generated_from": "2026-08-28T17:31:40",
+  "compared": 4,
+  "total": 26,
   "entries": [
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "removed",
+      "act": "The SoapGirls",
+      "show": "11702",
+      "what": "aus dem Programm genommen",
+      "from": "21:30",
+      "to": ""
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "WAIT//LESS",
+      "show": "12093",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Nothing But Thieves",
+      "show": "12900",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Karen Dió",
+      "show": "12924",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Hukies",
+      "show": "12906",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Ebow",
+      "show": "12902",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Lucky Iris",
+      "show": "12403",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "22:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Ruby Duff",
+      "show": "12477",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "19:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Marketplace",
+      "show": "12401",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "16:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "JERUB",
+      "show": "12456",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Hana Lili",
+      "show": "12079",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:30"
+    },
     {
       "at": "2026-08-27T16:36:32",
       "kind": "added",
@@ -60,15 +159,6 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "Dotan",
-      "show": "11652",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "20:50"
-    },
-    {
-      "at": "2026-08-27T16:36:32",
-      "kind": "moved",
       "act": "Dolphin Love",
       "show": "12573",
       "what": "Uhrzeit",
@@ -78,20 +168,11 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "Mudfight",
-      "show": "11322",
+      "act": "Dotan",
+      "show": "11652",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-08-27T16:36:32",
-      "kind": "moved",
-      "act": "LNA",
-      "show": "12574",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "19:45"
+      "to": "20:50"
     },
     {
       "at": "2026-08-27T16:36:32",
@@ -121,13 +202,22 @@
       "to": "16:45"
     },
     {
-      "at": "2026-08-26T05:56:34",
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "LNA",
+      "show": "12574",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "19:45"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
       "kind": "moved",
       "act": "Mudfight",
       "show": "11322",
       "what": "Uhrzeit",
-      "from": "stand fest",
-      "to": "ist wieder offen"
+      "from": "stand noch nicht fest",
+      "to": "21:00"
     },
     {
       "at": "2026-08-26T05:56:34",
@@ -137,6 +227,15 @@
       "what": "Uhrzeit",
       "from": "21:00",
       "to": "22:00"
+    },
+    {
+      "at": "2026-08-26T05:56:34",
+      "kind": "moved",
+      "act": "Mudfight",
+      "show": "11322",
+      "what": "Uhrzeit",
+      "from": "stand fest",
+      "to": "ist wieder offen"
     }
   ]
 }
