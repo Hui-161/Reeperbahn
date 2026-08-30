@@ -1,6 +1,6 @@
 {
-  "generated_from": "2026-08-28T17:31:40",
-  "compared": 4,
+  "generated_from": "2026-08-30T10:33:41",
+  "compared": 5,
   "total": 26,
   "entries": [
     {
@@ -60,11 +60,11 @@
     {
       "at": "2026-08-28T17:31:40",
       "kind": "moved",
-      "act": "Marketplace",
-      "show": "12401",
+      "act": "Lucky Iris",
+      "show": "12403",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "16:30"
+      "to": "22:30"
     },
     {
       "at": "2026-08-28T17:31:40",
@@ -78,20 +78,20 @@
     {
       "at": "2026-08-28T17:31:40",
       "kind": "moved",
-      "act": "Lucky Iris",
-      "show": "12403",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "22:30"
-    },
-    {
-      "at": "2026-08-28T17:31:40",
-      "kind": "moved",
       "act": "Ruby Duff",
       "show": "12477",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
       "to": "19:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Marketplace",
+      "show": "12401",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "16:30"
     },
     {
       "at": "2026-08-28T17:31:40",
@@ -159,6 +159,24 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
+      "act": "Mudfight",
+      "show": "11322",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Jo The Man The Music",
+      "show": "12572",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "16:45"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
       "act": "LNA",
       "show": "12574",
       "what": "Uhrzeit",
@@ -177,11 +195,11 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "WizTheMc",
-      "show": "11653",
+      "act": "Dotan",
+      "show": "11652",
       "what": "Uhrzeit",
-      "from": "23:20",
-      "to": "23:00"
+      "from": "stand noch nicht fest",
+      "to": "20:50"
     },
     {
       "at": "2026-08-27T16:36:32",
@@ -195,29 +213,11 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "Dotan",
-      "show": "11652",
+      "act": "WizTheMc",
+      "show": "11653",
       "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "20:50"
-    },
-    {
-      "at": "2026-08-27T16:36:32",
-      "kind": "moved",
-      "act": "Mudfight",
-      "show": "11322",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-08-27T16:36:32",
-      "kind": "moved",
-      "act": "Jo The Man The Music",
-      "show": "12572",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "16:45"
+      "from": "23:20",
+      "to": "23:00"
     },
     {
       "at": "2026-08-26T05:56:34",
