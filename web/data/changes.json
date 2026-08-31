@@ -1,8 +1,17 @@
 {
-  "generated_from": "2026-08-30T10:33:41",
-  "compared": 5,
-  "total": 26,
+  "generated_from": "2026-08-31T11:42:16",
+  "compared": 6,
+  "total": 27,
   "entries": [
+    {
+      "at": "2026-08-31T11:42:16",
+      "kind": "added",
+      "act": "Sun Atlas",
+      "show": "12937",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:00"
+    },
     {
       "at": "2026-08-28T17:31:40",
       "kind": "removed",
@@ -60,29 +69,29 @@
     {
       "at": "2026-08-28T17:31:40",
       "kind": "moved",
-      "act": "Lucky Iris",
-      "show": "12403",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "22:30"
-    },
-    {
-      "at": "2026-08-28T17:31:40",
-      "kind": "moved",
-      "act": "Hana Lili",
-      "show": "12079",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "21:30"
-    },
-    {
-      "at": "2026-08-28T17:31:40",
-      "kind": "moved",
       "act": "Ruby Duff",
       "show": "12477",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
       "to": "19:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "JERUB",
+      "show": "12456",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Lucky Iris",
+      "show": "12403",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "22:30"
     },
     {
       "at": "2026-08-28T17:31:40",
@@ -96,11 +105,11 @@
     {
       "at": "2026-08-28T17:31:40",
       "kind": "moved",
-      "act": "JERUB",
-      "show": "12456",
+      "act": "Hana Lili",
+      "show": "12079",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "17:30"
+      "to": "21:30"
     },
     {
       "at": "2026-08-27T16:36:32",
@@ -159,20 +168,11 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "Mudfight",
-      "show": "11322",
+      "act": "Dolphin Love",
+      "show": "12573",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-08-27T16:36:32",
-      "kind": "moved",
-      "act": "Jo The Man The Music",
-      "show": "12572",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "16:45"
+      "to": "18:15"
     },
     {
       "at": "2026-08-27T16:36:32",
@@ -186,11 +186,11 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "cherice",
-      "show": "12581",
+      "act": "Jo The Man The Music",
+      "show": "12572",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "21:15"
+      "to": "16:45"
     },
     {
       "at": "2026-08-27T16:36:32",
@@ -204,11 +204,20 @@
     {
       "at": "2026-08-27T16:36:32",
       "kind": "moved",
-      "act": "Dolphin Love",
-      "show": "12573",
+      "act": "Mudfight",
+      "show": "11322",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "18:15"
+      "to": "21:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "cherice",
+      "show": "12581",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:15"
     },
     {
       "at": "2026-08-27T16:36:32",
