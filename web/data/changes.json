@@ -1,8 +1,359 @@
 {
-  "generated_from": "2026-08-26T05:56:34",
-  "compared": 2,
-  "total": 2,
+  "generated_from": "2026-09-01T10:16:14",
+  "compared": 7,
+  "total": 41,
   "entries": [
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "yola",
+      "show": "12529",
+      "what": "aus dem Programm genommen",
+      "from": "19:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "panicbaby",
+      "show": "11743",
+      "what": "aus dem Programm genommen",
+      "from": "22:50",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "liska",
+      "show": "11742",
+      "what": "aus dem Programm genommen",
+      "from": "21:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "DAYTIME TV",
+      "show": "12183",
+      "what": "aus dem Programm genommen",
+      "from": "23:30",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "CARLI",
+      "show": "11745",
+      "what": "aus dem Programm genommen",
+      "from": "20:30",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "Big Truck",
+      "show": "12227",
+      "what": "aus dem Programm genommen",
+      "from": "19:15",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "removed",
+      "act": "beslik",
+      "show": "11746",
+      "what": "aus dem Programm genommen",
+      "from": "22:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "yola",
+      "show": "13000",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:00"
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "panicbaby",
+      "show": "12996",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "22:50"
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "liska",
+      "show": "12995",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:00"
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "DAYTIME TV",
+      "show": "13003",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "23:30"
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "CARLI",
+      "show": "13001",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:30"
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "Big Truck",
+      "show": "12994",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:15"
+    },
+    {
+      "at": "2026-09-01T10:16:14",
+      "kind": "added",
+      "act": "beslik",
+      "show": "13002",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-08-31T11:42:16",
+      "kind": "added",
+      "act": "Sun Atlas",
+      "show": "12937",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "removed",
+      "act": "The SoapGirls",
+      "show": "11702",
+      "what": "aus dem Programm genommen",
+      "from": "21:30",
+      "to": ""
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "WAIT//LESS",
+      "show": "12093",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Nothing But Thieves",
+      "show": "12900",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Karen Dió",
+      "show": "12924",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Hukies",
+      "show": "12906",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "added",
+      "act": "Ebow",
+      "show": "12902",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Hana Lili",
+      "show": "12079",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Lucky Iris",
+      "show": "12403",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "22:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Ruby Duff",
+      "show": "12477",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "19:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "Marketplace",
+      "show": "12401",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "16:30"
+    },
+    {
+      "at": "2026-08-28T17:31:40",
+      "kind": "moved",
+      "act": "JERUB",
+      "show": "12456",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "RIP Swirl",
+      "show": "12790",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:40"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "Le Ren",
+      "show": "12783",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "Hand of Juno",
+      "show": "12806",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "DeVere",
+      "show": "12808",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "Avralize",
+      "show": "12801",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "added",
+      "act": "ANTONÍ",
+      "show": "12782",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Dolphin Love",
+      "show": "12573",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "18:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Dotan",
+      "show": "11652",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "20:50"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "LNA",
+      "show": "12574",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "19:45"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "WizTheMc",
+      "show": "11653",
+      "what": "Uhrzeit",
+      "from": "23:20",
+      "to": "23:00"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Jo The Man The Music",
+      "show": "12572",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "16:45"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "cherice",
+      "show": "12581",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:15"
+    },
+    {
+      "at": "2026-08-27T16:36:32",
+      "kind": "moved",
+      "act": "Mudfight",
+      "show": "11322",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:00"
+    },
     {
       "at": "2026-08-26T05:56:34",
       "kind": "moved",
