@@ -500,6 +500,27 @@ with sync_playwright() as p:
     check("Chip sagt dann 'Unbewertet', nicht 'Bewertet (1)'",
           pg.locator("#f-rate").inner_text().strip() == "Unbewertet",
           pg.locator("#f-rate").inner_text())
+
+    # Der gemeldete Fall: waehrend "noch nicht bewertet" gefiltert ist,
+    # einen Act bewerten - er darf nicht sofort verschwinden, sonst verliert
+    # man beim Durcharbeiten der Liste die Stelle. Erst ein erneuter
+    # Filterwechsel darf ihn wegnehmen.
+    target_ai = pg.locator(".row").first.get_attribute("data-act")
+    # Acts mit zwei Auftritten stellen zwei Zeilen - der Filter greift pro
+    # Act, also muessen nach dem Wechsel beide verschwinden, nicht nur eine.
+    target_rows = pg.locator(f'.row[data-act="{target_ai}"]').count()
+    pg.locator(".row").first.click()
+    pg.wait_for_selector("#detail[open]")
+    pg.locator('#detail .rate button[data-r="3"]').click(); pg.wait_for_timeout(300)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Frisch bewerteter Act bleibt vorerst im Unbewertet-Filter stehen",
+          pg.locator(".row").count() == unrated_rows, f"{pg.locator('.row').count()}")
+    pg.locator('#ratebox .chip[data-rate="0"]').click(); pg.wait_for_timeout(300)
+    pg.locator('#ratebox .chip[data-rate="0"]').click(); pg.wait_for_timeout(300)
+    check("Nach erneutem Filterwechsel ist er weg",
+          pg.locator(".row").count() == unrated_rows - target_rows,
+          f"{pg.locator('.row').count()} erwartet {unrated_rows - target_rows}")
+
     pg.locator('#ratebox .chip[data-rate="0"]').click(); pg.wait_for_timeout(250)
     check("Andere Kaesten sind zu",
           pg.locator("#genrebox").is_hidden() and pg.locator("#venuebox").is_hidden())

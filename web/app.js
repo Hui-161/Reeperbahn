@@ -43,6 +43,11 @@ const seen = new Set(store.get('seen', []));
    selbst noch nicht bewertet hat - siehe teamRowMark(). */
 const revealed = new Set(store.get('revealed', []));
 const saveRevealed = () => store.set('revealed', [...revealed]);
+/* Acts, die durch eine eigene Aenderung (Note, Favorit, Gesehen) gerade aus
+   dem aktiven Filter fallen wuerden, aber bewusst noch nicht verschwinden -
+   siehe refreshAct(). NICHT gespeichert: das ist Sitzungszustand, keine
+   Auswahl, und beim naechsten Filterwechsel sowieso wieder leer. */
+let filterKeep = new Set();
 let note = store.get('note', {});
 let rate = store.get('rate', {});
 (() => {
@@ -199,6 +204,19 @@ const bothWant = (id) => {
   const theirs = pFav(id) || (rateBucket(pRate(id)) > 0 && rateBucket(pRate(id)) <= 2);
   return mine && theirs;
 };
+
+/* Die vier Filterachsen, die durch eine eigene Aenderung am Act selbst
+   wackeln koennen (Note, Favorit, Gesehen, Team) - getrennt von Tag/Suche/
+   Genre/Spielort, die sich nur durch einen Klick auf den Filter aendern.
+   Fuer filterKeep() muss klar sein, WELCHE Aenderung einen Act zum
+   Verschwinden bringen wuerde. */
+function matchesUserFilters(id) {
+  if (S.favOnly && !fav.has(id)) return false;
+  if (S.rates.size && !S.rates.has(rateBucket(rate[id]))) return false;
+  if (S.seenOnly && !seen.has(id)) return false;
+  if (S.teamOnly && !bothWant(id)) return false;
+  return true;
+}
 
 /* Ob es zu einem Act ueberhaupt eine Team-Meinung gibt (Note oder Favorit -
    "gesehen" allein zaehlt nicht, das ist keine Wertung). */
@@ -561,6 +579,7 @@ function describeFilter(f) {
 }
 
 function applyFilter(f) {
+  filterKeep.clear();
   S.day = f.day ?? null;
   S.favOnly = !!f.fav;
   S.seenOnly = !!f.seen;
@@ -616,10 +635,10 @@ function visibleShows() {
     // Ueber alle Tage: bei aktiver Suche und wenn "Alle" gewaehlt ist.
     if (!spanAll && sh.d && sh.d !== S.day) continue;
 
-    if (S.favOnly && !fav.has(act.id)) continue;
-    if (S.rates.size && !S.rates.has(rateBucket(rate[act.id]))) continue;
-    if (S.seenOnly && !seen.has(act.id)) continue;
-    if (S.teamOnly && !bothWant(act.id)) continue;
+    // filterKeep: ein Act, der GERADE durch eine eigene Note/Favorit/Gesehen
+    // aus dem Filter gefallen ist, bleibt bis zum naechsten Filterwechsel
+    // sichtbar - sonst verschwindet er beim Bewerten unter der Hand.
+    if (!matchesUserFilters(act.id) && !filterKeep.has(act.id)) continue;
 
     if (S.venues.size && (sh.v == null || !S.venues.has(sh.v))) continue;
 
@@ -695,8 +714,18 @@ function actShowOrdinal(sh) {
 function refreshAct(ai) {
   if (!Number.isFinite(ai) || !S.data) { render(); return; }
   // Ein aktiver Filter auf Note, Favorit, Gesehen oder Team entscheidet ueber
-  // die Sichtbarkeit - dann hilft Flicken nicht.
-  if (S.rates.size || S.favOnly || S.seenOnly || S.teamOnly) { render(); return; }
+  // die Sichtbarkeit - dann hilft Flicken nicht, es muss neu gefiltert
+  // werden. War der Act davor sichtbar und faellt er durch genau diese
+  // Aenderung jetzt raus, bleibt er trotzdem stehen (filterKeep) - sonst
+  // verschwindet er beim Durcharbeiten der Liste unter der Hand, noch bevor
+  // man den naechsten Klick gemacht hat.
+  if (S.rates.size || S.favOnly || S.seenOnly || S.teamOnly) {
+    const act = S.data.acts[ai];
+    const wasVisible = act && el.list.querySelector(`.row[data-act="${ai}"]`);
+    if (wasVisible && !matchesUserFilters(act.id)) filterKeep.add(act.id);
+    render();
+    return;
+  }
   const rows = el.list.querySelectorAll(`.row[data-act="${ai}"]`);
   if (!rows.length) return;
   const act = S.data.acts[ai];
@@ -1626,6 +1655,7 @@ document.addEventListener('click', (e) => {
     S.q = ''; el.q.value = '';
     S.favOnly = false; S.seenOnly = false; S.teamOnly = false;
     S.rates.clear(); S.genres.clear(); S.venues.clear();
+    filterKeep.clear();
     renderDays(); renderGenres(); renderVenues(); renderRates();
     render();
     const node = el.list.querySelector(`.row[data-show="${CSS.escape(String(id))}"]`);
@@ -1678,7 +1708,13 @@ document.addEventListener('click', (e) => {
         on ? ' Favorit' : ' Als Favorit merken'; }
       else n.textContent = on ? '♥' : '♡';
     }
-    if (S.favOnly) render();
+    if (S.favOnly) {
+      // Dieselbe Ausnahme wie in refreshAct(): entfavorisiert man einen Act,
+      // der gerade im Favoriten-Filter steht, bleibt er bis zum naechsten
+      // Filterwechsel stehen statt sofort zu verschwinden.
+      if (!matchesUserFilters(id)) filterKeep.add(id);
+      render();
+    }
     return;
   }
 
@@ -1780,6 +1816,7 @@ document.addEventListener('click', (e) => {
     const n = +rateChip.dataset.rate;
     S.rates.has(n) ? S.rates.delete(n) : S.rates.add(n);
     rateChip.setAttribute('aria-pressed', String(S.rates.has(n)));
+    filterKeep.clear();
     render();
     return;
   }
@@ -1838,6 +1875,7 @@ el.q.addEventListener('input', () => {
 $('#f-fav').addEventListener('click', (e) => {
   S.favOnly = !S.favOnly;
   e.currentTarget.setAttribute('aria-pressed', String(S.favOnly));
+  filterKeep.clear();
   render();
 });
 
@@ -1846,12 +1884,14 @@ $('#f-rate').addEventListener('click', () => { renderRates(); openBox('ratebox')
 $('#f-seen').addEventListener('click', (e) => {
   S.seenOnly = !S.seenOnly;
   e.currentTarget.setAttribute('aria-pressed', String(S.seenOnly));
+  filterKeep.clear();
   render();
 });
 
 $('#f-team').addEventListener('click', (e) => {
   S.teamOnly = !S.teamOnly;
   e.currentTarget.setAttribute('aria-pressed', String(S.teamOnly));
+  filterKeep.clear();
   render();
 });
 
@@ -1885,6 +1925,7 @@ $('#filtername').addEventListener('keydown', (e) => {
 $('#f-reset').addEventListener('click', () => {
   S.favOnly = S.seenOnly = S.teamOnly = false;
   S.rates.clear(); S.genres.clear(); S.venues.clear(); S.q = '';
+  filterKeep.clear();
   el.q.value = ''; el.searchbar.hidden = true;
   $('#f-fav').setAttribute('aria-pressed', 'false');
   $('#f-seen').setAttribute('aria-pressed', 'false');
@@ -2446,6 +2487,7 @@ $('#m-partner-clear').addEventListener('click', () => {
   partner = null;
   store.set('partner', null);
   S.teamOnly = false;
+  filterKeep.clear();
   $('#f-team').setAttribute('aria-pressed', 'false');
   partnerInfo();
   render();
