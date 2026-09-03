@@ -164,8 +164,8 @@ with sync_playwright() as p:
     pg.click("#f-rate"); pg.wait_for_timeout(300)
     chips = pg.locator("#ratebox .chip").evaluate_all(
         "els => els.map(e => e.dataset.rate)")
-    check("Filter bleibt bei fuenf Stufen",
-          chips == ["1", "2", "3", "4", "5"], chips)
+    check("Filter bleibt bei fuenf Noten plus 'noch nicht bewertet'",
+          chips == ["1", "2", "3", "4", "5", "0"], chips)
     check("Chip nennt die Zwischennote",
           "1,5" in pg.locator('#ratebox .chip[data-rate="1"]').inner_text(),
           pg.locator('#ratebox .chip[data-rate="1"]').inner_text())
@@ -404,9 +404,41 @@ with sync_playwright() as p:
     if pg.locator("#menu[open]").count():
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     check("Team-Chip erscheint mit Partner:in", pg.locator("#f-team").is_visible())
-    check("Partner-Note steht in der Liste", pg.locator("#list .grade-p").count() >= 1,
+    # Team-Meinung ist verdeckt, bis ich selbst bewertet habe - sonst faerbt
+    # die fremde Note die eigene ein, bevor sie entsteht.
+    check("Partner-Note ist verdeckt, solange ich selbst nicht bewertet habe",
+          pg.locator("#list .grade-p").count() == 0,
           f"{pg.locator('#list .grade-p').count()}")
-    check("Partner-Favorit steht in der Liste", pg.locator("#list .heart-p").count() >= 1)
+    check("Partner-Favorit ist verdeckt, solange ich selbst nicht bewertet habe",
+          pg.locator("#list .heart-p").count() == 0,
+          f"{pg.locator('#list .heart-p').count()}")
+    check("Stattdessen steht ein neutraler Punkt in der Liste",
+          pg.locator(f'.row[data-act="{idx[1]}"] .team-hidden').count() >= 1)
+
+    # Eigene Note (bewusst 5, nicht 1-2, damit "Beide" gleich unten nicht
+    # faelschlich anspringt) schaltet die Team-Note fuer diesen Act frei.
+    pg.locator(f'.row[data-act="{idx[1]}"]').first.click()
+    pg.wait_for_selector("#detail[open]")
+    check("Detail zeigt den Aufdecken-Knopf, solange ich nicht bewertet habe",
+          pg.locator("#detail [data-reveal]").count() == 1)
+    pg.locator('#detail .rate button[data-r="5"]').click(); pg.wait_for_timeout(300)
+    check("Team-Note im Detail jetzt sichtbar",
+          "Note 1" in pg.locator("#d-team .suggestion").inner_text(),
+          pg.locator("#d-team .suggestion").inner_text())
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Partner-Note steht jetzt in der Liste",
+          pg.locator(f'.row[data-act="{idx[1]}"] .grade-p').count() == 1)
+
+    # "Trotzdem anzeigen" deckt es auch ohne eigene Note auf.
+    pg.locator(f'.row[data-act="{idx[0]}"]').first.click()
+    pg.wait_for_selector("#detail[open]")
+    pg.locator("#detail [data-reveal]").click(); pg.wait_for_timeout(300)
+    check("Aufdecken-Knopf verschwindet nach dem Klick",
+          pg.locator("#detail [data-reveal]").count() == 0)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Nach 'Trotzdem anzeigen' steht der Favorit in der Liste",
+          pg.locator(f'.row[data-act="{idx[0]}"] .heart-p').count() == 1)
+
     # Erst wenn ICH denselben Act auch mag, darf "Beide" anspringen.
     pg.click("#f-team"); pg.wait_for_timeout(400)
     check("'Beide' ist leer, solange nur eine Seite will",
@@ -429,10 +461,17 @@ with sync_playwright() as p:
           and pg.locator("#f-team").get_attribute("aria-pressed") == "false"
           and pg.locator("#f-reset").is_hidden())
 
-    # --- Bewertungsfilter als Kasten mit 1 bis 5 ---
+    # --- Bewertungsfilter als Kasten mit 1 bis 5 plus "noch nicht bewertet" ---
     pg.click("#f-rate"); pg.wait_for_selector("#ratebox .chip")
-    check("Notenkasten hat fuenf Stufen", pg.locator("#ratebox .chip").count() == 5,
+    check("Notenkasten hat sechs Stufen (1-5 plus unbewertet)",
+          pg.locator("#ratebox .chip").count() == 6,
           f"{pg.locator('#ratebox .chip').count()}")
+    all_rows = pg.locator(".row").count()
+    pg.locator('#ratebox .chip[data-rate="0"]').click(); pg.wait_for_timeout(350)
+    unrated_rows = pg.locator(".row").count()
+    check("'Noch nicht bewertet' filtert auf unbewertete Acts",
+          0 < unrated_rows < all_rows, f"{unrated_rows} von {all_rows}")
+    pg.locator('#ratebox .chip[data-rate="0"]').click(); pg.wait_for_timeout(250)
     check("Andere Kaesten sind zu",
           pg.locator("#genrebox").is_hidden() and pg.locator("#venuebox").is_hidden())
     pg.locator('#ratebox .chip[data-rate="1"]').click(); pg.wait_for_timeout(350)

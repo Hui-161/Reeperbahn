@@ -39,6 +39,10 @@ const store = {
 
 const fav = new Set(store.get('fav', []));
 const seen = new Set(store.get('seen', []));
+/* Acts, bei denen die Team-Meinung bewusst aufgedeckt wurde, obwohl man
+   selbst noch nicht bewertet hat - siehe teamRowMark(). */
+const revealed = new Set(store.get('revealed', []));
+const saveRevealed = () => store.set('revealed', [...revealed]);
 let note = store.get('note', {});
 let rate = store.get('rate', {});
 (() => {
@@ -195,6 +199,58 @@ const bothWant = (id) => {
   const theirs = pFav(id) || (rateBucket(pRate(id)) > 0 && rateBucket(pRate(id)) <= 2);
   return mine && theirs;
 };
+
+/* Ob es zu einem Act ueberhaupt eine Team-Meinung gibt (Note oder Favorit -
+   "gesehen" allein zaehlt nicht, das ist keine Wertung). */
+const teamHasOpinion = (id) => rateBucket(pRate(id)) > 0 || pFav(id);
+/* Erst zeigen, wenn man selbst bewertet hat, sonst faerbt die fremde Note die
+   eigene ein, bevor sie entsteht - oder wenn bewusst aufgedeckt wurde. */
+const teamOpinionShown = (id) => rateBucket(rate[id]) > 0 || revealed.has(id);
+
+/* In der Zeile: solange verdeckt, nur ein neutraler Punkt statt Note/Herz. */
+function teamRowMark(id, rb) {
+  if (!teamHasOpinion(id)) return '';
+  if (rb <= 0 && !teamOpinionShown(id)) {
+    return `<span class="team-hidden"
+      title="${esc(partnerName())} hat schon bewertet — sichtbar, sobald du selbst bewertest"
+      >●</span>`;
+  }
+  const pb = rateBucket(pRate(id));
+  return `${pb ? `<span class="grade grade-p grade-p-${pb}"
+      title="${esc(partnerName())}: Note ${rateText(pRate(id))}">${
+      rateText(pRate(id))}</span>` : ''}${
+    pFav(id) ? `<span class="heart-p" title="${esc(partnerName())}: Favorit">♥</span>` : ''}`;
+}
+
+/* In der Detailansicht: derselbe Schutz, aber mit Knopf zum bewussten
+   Aufdecken statt nur dem stummen Punkt. */
+function teamSuggestion(id) {
+  const seenNote = pSeen(id) ? ' · gesehen' : '';
+  if (!teamHasOpinion(id)) {
+    return `<span>${esc(partnerName())}: noch keine Angabe${seenNote}</span>`;
+  }
+  if (!teamOpinionShown(id)) {
+    return `<span>${esc(partnerName())} hat schon bewertet — noch nicht sichtbar,
+      damit deine eigene Einschätzung unvoreingenommen bleibt.${seenNote}</span>
+      <button type="button" class="chip chip-ghost" data-reveal="${id}"
+        >Trotzdem anzeigen</button>`;
+  }
+  return `<span>${esc(partnerName())}:
+    ${pRate(id) ? `<b>Note ${rateText(pRate(id))}</b>` : 'keine Note'}${
+      pFav(id) ? ' · <b>Favorit</b>' : ''}${seenNote}${
+      bothWant(id) ? ' — <b>ihr wollt beide hin</b>' : ''}</span>`;
+}
+
+/* Zieht das Team-Feld im offenen Detaildialog nach, falls er gerade genau
+   diesen Act zeigt - etwa wenn die eigene Note eben erst die Ansicht
+   freigeschaltet hat. */
+function refreshTeamBox(ai) {
+  const box = document.getElementById('d-team');
+  if (!box || +el.detail.dataset.ai !== ai) return;
+  const act = S.data.acts[ai];
+  const inner = box.querySelector('.suggestion');
+  if (inner && act) inner.innerHTML = teamSuggestion(act.id);
+}
 const fold = (s) => String(s ?? '').toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/ø/g, 'o').replace(/ß/g, 'ss');
@@ -430,19 +486,28 @@ function openBox(which) {
    passt sie nicht zu dem, was der Filter dann zeigt. */
 function renderRates() {
   const counts = new Map();
+  let unrated = 0;
   for (const a of S.data.acts) {
     const b = rateBucket(rate[a.id]);
     if (b) counts.set(b, (counts.get(b) || 0) + 1);
+    else unrated++;
   }
   const halves = new Map();
   for (const [n] of RATES) if (!Number.isInteger(n)) halves.set(rateBucket(n), n);
-  el.ratebox.innerHTML = RATES.filter(([n]) => Number.isInteger(n))
+  const numbered = RATES.filter(([n]) => Number.isInteger(n))
     .map(([n, label]) => {
       const half = halves.get(n);
       return `<button class="chip" data-rate="${n}" aria-pressed="${S.rates.has(n)}"
         >${n}${half ? ` und ${rateText(half)}` : ''} ${esc(label)}
         <span class="tag">${counts.get(n) || 0}</span></button>`;
     }).join('');
+  // Eigener Eimer 0: Acts ohne eigene Note. Kein regulaerer RATES-Wert, weil
+  // 0 keine Note ist, sondern ihr Fehlen - filtert aber ueber denselben
+  // rateBucket()-Vergleich mit, der fuer unbewertete Acts ohnehin 0 liefert.
+  const none = `<button class="chip chip-ghost" data-rate="0" aria-pressed="${S.rates.has(0)}"
+    >noch nicht bewertet
+    <span class="tag">${unrated}</span></button>`;
+  el.ratebox.innerHTML = numbered + none;
 }
 
 /* ---------- Filterspeicher ---------- */
@@ -466,7 +531,13 @@ function describeFilter(f) {
   if (f.fav) bits.push('Favoriten');
   if (f.seen) bits.push('gesehen');
   if (f.team) bits.push('beide');
-  if (f.rates && f.rates.length) bits.push('Note ' + f.rates.join('/'));
+  if (f.rates && f.rates.length) {
+    const nums = f.rates.filter((n) => n !== 0);
+    const parts = [];
+    if (nums.length) parts.push('Note ' + nums.join('/'));
+    if (f.rates.includes(0)) parts.push('unbewertet');
+    bits.push(parts.join(' + '));
+  }
   if (f.genres && f.genres.length) {
     bits.push(f.genres.map((i) => i === NO_GENRE ? 'ohne Angabe' : S.data.genres[i]).join(', '));
   }
@@ -696,7 +767,6 @@ function row(sh, act) {
   // Randfarbe und Notenfarbe folgen dem Eimer, weil es fuer 1,5 keine eigene
   // Farbe gibt und braucht: die genaue Note steht als Zahl daneben.
   const rb = rateBucket(r);
-  const pb = rateBucket(pRate(act.id));
   const tags = act.g.map((i) => `<span class="tag">${esc(S.data.genres[i])}</span>`).join('');
   const chg = changeNote(sh.id);
   const changeMark = chg
@@ -716,11 +786,7 @@ function row(sh, act) {
               title="Meine Note: ${rateText(r)}">${rateText(r)}</span>`
           : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
               title="Vorschlag: ${esc(hint[act.id].v)}"></span>` : '')}${
-        pb ? `<span class="grade grade-p grade-p-${pb}"
-          title="${esc(partnerName())}: Note ${rateText(pRate(act.id))}">${
-          rateText(pRate(act.id))}</span>` : ''}${
-        pFav(act.id) ? `<span class="heart-p"
-          title="${esc(partnerName())}: Favorit">♥</span>` : ''}</span>
+        teamRowMark(act.id, rb)}</span>
       <span class="row-sub">${venue
         ? `<span class="venue" data-venue="${sh.v}">${esc(venue.n)}</span>`
         : 'Spielort offen'}
@@ -1212,15 +1278,9 @@ function openDetail(ai) {
       <button class="icon-btn d-close" data-close aria-label="Schließen">✕</button>
     </div>
 
-    ${partner ? `<div class="d-section">
+    ${partner ? `<div class="d-section" id="d-team">
       <h3>Team</h3>
-      <div class="suggestion">
-        <span>${esc(partnerName())}:
-        ${pRate(act.id) ? `<b>Note ${rateText(pRate(act.id))}</b>` : 'keine Note'}${
-          pFav(act.id) ? ' · <b>Favorit</b>' : ''}${
-          pSeen(act.id) ? ' · gesehen' : ''}${
-          bothWant(act.id) ? ' — <b>ihr wollt beide hin</b>' : ''}</span>
-      </div>
+      <div class="suggestion">${teamSuggestion(act.id)}</div>
     </div>` : ''}
 
     ${hint[act.id] ? `<div class="d-section">
@@ -1655,6 +1715,20 @@ document.addEventListener('click', (e) => {
     // Die Schnellbewertung ist genau fuer diesen einen Griff da.
     if (host === el.quick) el.quick.close();
     refreshAct(ai);
+    refreshTeamBox(ai);
+    return;
+  }
+
+  const revealBtn = t.closest('[data-reveal]');
+  if (revealBtn) {
+    // Bewusstes Aufdecken der Team-Meinung, obwohl noch keine eigene Note
+    // steht - der Ausweg fuer "ich will es trotzdem wissen".
+    const id = +revealBtn.dataset.reveal;
+    revealed.add(id);
+    saveRevealed();
+    const host = revealBtn.closest('[data-ai]');
+    const ai = host ? +host.dataset.ai : NaN;
+    if (Number.isFinite(ai)) { refreshTeamBox(ai); refreshAct(ai); }
     return;
   }
 

@@ -95,22 +95,37 @@ with sync_playwright() as p:
         B.keyboard.press("Escape"); B.wait_for_timeout(300)
 
     check("B sieht A als Team-Chip", B.locator("#f-team").is_visible())
-    check("B sieht As Favorit-Marke", B.locator("#list .heart-p").count() >= 1,
+    # Verdeckt, solange B selbst noch nichts bewertet hat - sonst faerbt As
+    # Meinung Bs eigene ein, bevor sie entsteht.
+    check("As Favorit-Marke ist fuer B noch verdeckt",
+          B.locator("#list .heart-p").count() == 0,
           f"{B.locator('#list .heart-p').count()}")
-    check("B sieht As Note", B.locator("#list .grade-p").count() >= 1,
+    check("As Note ist fuer B noch verdeckt",
+          B.locator("#list .grade-p").count() == 0,
           f"{B.locator('#list .grade-p').count()}")
 
-    # B setzt eigene Note 2 auf denselben Act wie As Favorit -> "Beide"
+    # B setzt eigene Note 2 auf denselben Act wie As Favorit -> "Beide",
+    # und schaltet damit gleichzeitig As Favorit-Marke fuer diesen Act frei.
     B.locator(f'.row[data-act="{idxA[0]}"] .row-time').first.click()
     B.wait_for_selector("#detail .rate")
     check("Detail nennt die Team-Einschaetzung",
           B.locator("#detail .suggestion").count() >= 1)
     B.locator(".rate button[data-r='2']").click()
     B.keyboard.press("Escape"); B.wait_for_timeout(300)
+    check("As Favorit-Marke steht jetzt fuer diesen Act in der Liste",
+          B.locator(f'.row[data-act="{idxA[0]}"] .heart-p').count() == 1)
     B.click("#f-team"); B.wait_for_timeout(400)
     check("'Beide' findet den gemeinsamen Act", B.locator(".row").count() >= 1,
           f"{B.locator('.row').count()}")
     B.click("#f-team"); B.wait_for_timeout(200)
+
+    # As Note (auf dem anderen Act) bleibt verdeckt, bis B sie bewusst aufdeckt.
+    B.locator(f'.row[data-act="{idxA[1]}"] .row-time').first.click()
+    B.wait_for_selector("#detail .suggestion")
+    B.locator("#detail [data-reveal]").click(); B.wait_for_timeout(300)
+    B.keyboard.press("Escape"); B.wait_for_timeout(300)
+    check("As Note steht nach 'Trotzdem anzeigen' in der Liste",
+          B.locator(f'.row[data-act="{idxA[1]}"] .grade-p').count() == 1)
     # Der automatische Abgleich laeuft verzoegert - abwarten statt Knopf druecken.
     B.wait_for_timeout(6000)
 
@@ -119,9 +134,19 @@ with sync_playwright() as p:
     A.click("#m-sync"); A.wait_for_timeout(3500)
     if A.locator("#menu[open]").count():
         A.keyboard.press("Escape"); A.wait_for_timeout(300)
-    check("A sieht nach dem Abgleich Bs Marken", A.locator("#list .grade-p").count() >= 1,
-          f"{A.locator('#list .grade-p').count()} | Dialoge: "
+    # A hat idxA[0] nur favorisiert, nicht bewertet - Bs Note bleibt also
+    # verdeckt, bis A sie bewusst aufdeckt. Genau dieser Schutz ist der Punkt.
+    check("Bs Note ist fuer A zunaechst verdeckt (Daten kamen an, sind aber nicht sichtbar)",
+          A.locator(f'.row[data-act="{idxA[0]}"] .team-hidden').count() == 1,
+          f"grade-p={A.locator('#list .grade-p').count()} | Dialoge: "
           + " | ".join(dlgA.seen[-2:])[:90])
+    A.locator(f'.row[data-act="{idxA[0]}"] .row-time').first.click()
+    A.wait_for_selector("#detail [data-reveal]")
+    A.locator("#detail [data-reveal]").click(); A.wait_for_timeout(300)
+    A.keyboard.press("Escape"); A.wait_for_timeout(300)
+    check("A sieht nach dem Abgleich und Aufdecken Bs Note",
+          A.locator(f'.row[data-act="{idxA[0]}"] .grade-p').count() == 1,
+          f"{A.locator('#list .grade-p').count()}")
 
     # ---------- Falsche Passphrase ----------
     ctxC = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")

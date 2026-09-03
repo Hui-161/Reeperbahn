@@ -470,6 +470,17 @@ main { min-height: 60vh; }
 .grade-p-5 { color: var(--r5); }
 .heart-p { margin-left: .3rem; font-size: .8rem; color: var(--accent); opacity: .75; }
 
+/* Team hat eine Meinung, aber sie ist noch verdeckt: nur ein stummer Punkt,
+   keine Farbe und keine Zahl - genau das, was "noch nicht sichtbar" bedeutet.
+   Erst nach eigener Note oder bewusstem Aufdecken wird daraus .grade-p. */
+.team-hidden {
+  display: inline-block;
+  margin-left: .35rem;
+  font-size: .55rem;
+  color: var(--ink-faint);
+  vertical-align: .2em;
+}
+
 /* Wie oft der Act ueberhaupt spielt. Bewusst zurueckhaltend - es ist eine
    Randnotiz, keine Bewertung, und darf die Note nicht ueberstrahlen. */
 .multi {
@@ -490,6 +501,7 @@ main { min-height: 60vh; }
 #ratebox .chip[aria-pressed="true"][data-rate="3"] { background: var(--r3); border-color: var(--r3); color: var(--on-scale); }
 #ratebox .chip[aria-pressed="true"][data-rate="4"] { background: var(--r4); border-color: var(--r4); color: var(--on-scale); }
 #ratebox .chip[aria-pressed="true"][data-rate="5"] { background: var(--r5); border-color: var(--r5); color: var(--on-scale); }
+#ratebox .chip[aria-pressed="true"][data-rate="0"] { background: var(--ink-faint); border-color: var(--ink-faint); color: var(--on-scale); }
 
 .grade-1 { background: var(--r1); }
 .grade-2 { background: var(--r2); }
@@ -1352,6 +1364,7 @@ dialog:not([open])::backdrop { background: transparent; }
 
 .suggestion {
   display: flex;
+  flex-wrap: wrap;
   gap: .5rem;
   align-items: baseline;
   padding: .5rem .6rem;
