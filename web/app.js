@@ -206,6 +206,15 @@ const teamHasOpinion = (id) => rateBucket(pRate(id)) > 0 || pFav(id);
 /* Erst zeigen, wenn man selbst bewertet hat, sonst faerbt die fremde Note die
    eigene ein, bevor sie entsteht - oder wenn bewusst aufgedeckt wurde. */
 const teamOpinionShown = (id) => rateBucket(rate[id]) > 0 || revealed.has(id);
+/* Beim eigenen Bewerten festhalten, dass die Team-Meinung damit sichtbar
+   wurde. Sonst verschwaende sie wieder hinter dem "?", wenn man die eigene
+   Note spaeter loescht - obwohl man sie laengst gesehen hat. */
+function noteOwnRating(id) {
+  if (rateBucket(rate[id]) > 0 && teamHasOpinion(id) && !revealed.has(id)) {
+    revealed.add(id);
+    saveRevealed();
+  }
+}
 
 /* In der Zeile: solange verdeckt, dieselbe Marke wie eine echte Note -
    nur mit "?" statt Zahl und ohne Farbe nach Note, damit die Farbe selbst
@@ -713,7 +722,11 @@ function render() {
   $('#f-genre').classList.toggle('on', S.genres.size > 0);
   $('#f-genre').textContent = S.genres.size ? `Genres (${S.genres.size})` : 'Genres';
   $('#f-rate').classList.toggle('on', S.rates.size > 0);
-  $('#f-rate').textContent = S.rates.size ? `Bewertet (${S.rates.size})` : 'Bewertet';
+  // "Bewertet (1)" waere irrefuehrend, wenn genau der Eimer "noch nicht
+  // bewertet" gewaehlt ist - dann steht das auch so am Chip.
+  const onlyUnrated = S.rates.size === 1 && S.rates.has(0);
+  $('#f-rate').textContent = onlyUnrated ? 'Unbewertet'
+    : S.rates.size ? `Bewertet (${S.rates.size})` : 'Bewertet';
   $('#f-team').hidden = !partner;
   $('#f-venue').classList.toggle('on', S.venues.size > 0);
   $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
@@ -1716,6 +1729,7 @@ document.addEventListener('click', (e) => {
     const val = +rateBtn.dataset.r;
     if (+rate[id] === val) delete rate[id]; else rate[id] = val;
     store.set('rate', rate);
+    noteOwnRating(id);
     scheduleSync();
     for (const b of host.querySelectorAll('[data-r]')) {
       b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
@@ -1957,6 +1971,7 @@ function exportChoice() {
   download('reeperbahn-auswahl.json', JSON.stringify({
     kind: 'rbf26-auswahl', version: 3,
     fav: [...fav], seen: [...seen], note, rate, hint,
+    revealed: [...revealed],
   }, null, 2), 'application/json');
 }
 
@@ -2001,10 +2016,11 @@ el.file.addEventListener('change', async () => {
   if (data.kind === 'rbf26-auswahl') {
     (data.fav || []).forEach((id) => fav.add(+id));
     (data.seen || []).forEach((id) => seen.add(+id));
+    (data.revealed || []).forEach((id) => revealed.add(+id));
     Object.assign(note, data.note || {});
     Object.assign(rate, data.rate || {});
     Object.assign(hint, data.hint || {});
-    saveFav(); saveSeen();
+    saveFav(); saveSeen(); saveRevealed();
     store.set('note', note); store.set('rate', rate); store.set('hint', hint);
     alert('Auswahl übernommen.');
   } else if (data.suggested) {
@@ -2654,7 +2670,7 @@ function runSwipeAction(key, ai) {
   const want = key === 'rate1' ? 1 : 5;
   const before = rate[id];
   if (+before === want) delete rate[id]; else rate[id] = want;
-  store.set('rate', rate); scheduleSync(); refreshAct(ai);
+  store.set('rate', rate); noteOwnRating(id); scheduleSync(); refreshAct(ai);
   toast(`${act.n}: ${rate[id] ? 'Note ' + rateText(rate[id]) : 'Note entfernt'}`, 3200,
         () => {
           if (before === undefined) delete rate[id]; else rate[id] = before;

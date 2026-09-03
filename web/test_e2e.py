@@ -442,7 +442,18 @@ with sync_playwright() as p:
           pg.locator("#d-team .suggestion").inner_text())
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     check("Partner-Note steht jetzt in der Liste",
-          pg.locator(f'.row[data-act="{idx[1]}"] .grade-p').count() == 1)
+          pg.locator(f'.row[data-act="{idx[1]}"] .grade-p:not(.team-hidden)').count() == 1)
+    # Einmal gesehen ist gesehen: die eigene Note wieder loeschen darf die
+    # Team-Note nicht erneut hinter dem "?" verstecken.
+    pg.locator(f'.row[data-act="{idx[1]}"]').first.click()
+    pg.wait_for_selector("#detail[open]")
+    pg.locator('#detail .rate button[data-r="5"]').click(); pg.wait_for_timeout(300)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    check("Eigene Note ist wieder weg",
+          pg.locator(f'.row[data-act="{idx[1]}"] .grade:not(.grade-p)').count() == 0)
+    check("Team-Note bleibt trotzdem sichtbar",
+          pg.locator(f'.row[data-act="{idx[1]}"] .grade-p:not(.team-hidden)').count() == 1
+          and pg.locator(f'.row[data-act="{idx[1]}"] .team-hidden').count() == 0)
 
     # "Trotzdem anzeigen" deckt es auch ohne eigene Note auf.
     pg.locator(f'.row[data-act="{idx[0]}"]').first.click()
@@ -486,6 +497,9 @@ with sync_playwright() as p:
     unrated_rows = pg.locator(".row").count()
     check("'Noch nicht bewertet' filtert auf unbewertete Acts",
           0 < unrated_rows < all_rows, f"{unrated_rows} von {all_rows}")
+    check("Chip sagt dann 'Unbewertet', nicht 'Bewertet (1)'",
+          pg.locator("#f-rate").inner_text().strip() == "Unbewertet",
+          pg.locator("#f-rate").inner_text())
     pg.locator('#ratebox .chip[data-rate="0"]').click(); pg.wait_for_timeout(250)
     check("Andere Kaesten sind zu",
           pg.locator("#genrebox").is_hidden() and pg.locator("#venuebox").is_hidden())
