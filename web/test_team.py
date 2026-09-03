@@ -8,7 +8,7 @@ Geprueft wird die ganze Kette: Team anlegen, beitreten, verschluesselt
 hochladen, entschluesselt zurueckbekommen, gemeinsame Treffer finden -
 und dass eine falsche Passphrase abgewiesen wird.
 """
-import json, os, sys
+import json, os, sys, time as _t
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8898")
@@ -90,19 +90,36 @@ with sync_playwright() as p:
     dlgB.expect(team_id, "Linda", PASS)
     B.click("#btn-menu"); B.wait_for_selector("#menu[open]")
     B.click("#m-team-join")
-    B.wait_for_timeout(4000)
+    B.wait_for_timeout(500)
     if B.locator("#menu[open]").count():
         B.keyboard.press("Escape"); B.wait_for_timeout(300)
 
-    check("B sieht A als Team-Chip", B.locator("#f-team").is_visible())
+    # Ein frischer Beitritt trifft auf den echten KV_FIRST_SEEN_LAG aus
+    # serve_local.py: As gerade erst geschriebener Mitgliedseintrag ist fuer
+    # ein Verzeichnis-Listing rund 30 s lang unsichtbar (siehe Kommentar dort,
+    # gegen die echte Cloudflare-API gemessen). Gemessen in dieser Sandbox
+    # kam As Note bei B nach 35 s an. Eine feste kurze Pause hier war der
+    # eigentliche Fehler in diesem Test, nicht der Abgleich selbst - also wie
+    # beim "kommt es ohne Knopfdruck an"-Test weiter unten in einer Schleife
+    # warten statt einmal fest zu schlafen.
+    t_join = _t.time(); joined = False
+    while _t.time() - t_join < 50:
+        if not B.locator("#f-team").is_hidden():
+            joined = True
+            break
+        B.wait_for_timeout(1000)
+    check("B sieht A als Team-Chip", joined, f"nach {_t.time() - t_join:.0f} s")
     # Verdeckt, solange B selbst noch nichts bewertet hat - sonst faerbt As
     # Meinung Bs eigene ein, bevor sie entsteht.
     check("As Favorit-Marke ist fuer B noch verdeckt",
           B.locator("#list .heart-p").count() == 0,
           f"{B.locator('#list .heart-p').count()}")
+    # .grade-p sitzt jetzt auch auf der verdeckten "?"-Marke (bewusst dieselbe
+    # Form wie eine echte Note) - "verdeckt" heisst also: keine ECHTE Note
+    # ausserhalb von .team-hidden, nicht "gar kein .grade-p".
     check("As Note ist fuer B noch verdeckt",
-          B.locator("#list .grade-p").count() == 0,
-          f"{B.locator('#list .grade-p').count()}")
+          B.locator("#list .grade-p:not(.team-hidden)").count() == 0,
+          f"{B.locator('#list .grade-p:not(.team-hidden)').count()}")
 
     # B setzt eigene Note 2 auf denselben Act wie As Favorit -> "Beide",
     # und schaltet damit gleichzeitig As Favorit-Marke fuer diesen Act frei.
@@ -112,8 +129,9 @@ with sync_playwright() as p:
           B.locator("#detail .suggestion").count() >= 1)
     B.locator(".rate button[data-r='2']").click()
     B.keyboard.press("Escape"); B.wait_for_timeout(300)
+    # idxA[0] spielt zweimal, also zwei Zeilen - deshalb >=1, nicht ==1.
     check("As Favorit-Marke steht jetzt fuer diesen Act in der Liste",
-          B.locator(f'.row[data-act="{idxA[0]}"] .heart-p').count() == 1)
+          B.locator(f'.row[data-act="{idxA[0]}"] .heart-p').count() >= 1)
     B.click("#f-team"); B.wait_for_timeout(400)
     check("'Beide' findet den gemeinsamen Act", B.locator(".row").count() >= 1,
           f"{B.locator('.row').count()}")
@@ -137,16 +155,16 @@ with sync_playwright() as p:
     # A hat idxA[0] nur favorisiert, nicht bewertet - Bs Note bleibt also
     # verdeckt, bis A sie bewusst aufdeckt. Genau dieser Schutz ist der Punkt.
     check("Bs Note ist fuer A zunaechst verdeckt (Daten kamen an, sind aber nicht sichtbar)",
-          A.locator(f'.row[data-act="{idxA[0]}"] .team-hidden').count() == 1,
-          f"grade-p={A.locator('#list .grade-p').count()} | Dialoge: "
-          + " | ".join(dlgA.seen[-2:])[:90])
+          A.locator(f'.row[data-act="{idxA[0]}"] .team-hidden').count() >= 1,
+          f"grade-p:not(.team-hidden)={A.locator('#list .grade-p:not(.team-hidden)').count()}"
+          + " | Dialoge: " + " | ".join(dlgA.seen[-2:])[:90])
     A.locator(f'.row[data-act="{idxA[0]}"] .row-time').first.click()
     A.wait_for_selector("#detail [data-reveal]")
     A.locator("#detail [data-reveal]").click(); A.wait_for_timeout(300)
     A.keyboard.press("Escape"); A.wait_for_timeout(300)
     check("A sieht nach dem Abgleich und Aufdecken Bs Note",
-          A.locator(f'.row[data-act="{idxA[0]}"] .grade-p').count() == 1,
-          f"{A.locator('#list .grade-p').count()}")
+          A.locator(f'.row[data-act="{idxA[0]}"] .grade-p:not(.team-hidden)').count() >= 1,
+          f"{A.locator('#list .grade-p:not(.team-hidden)').count()}")
 
     # ---------- Falsche Passphrase ----------
     ctxC = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
@@ -172,7 +190,6 @@ with sync_playwright() as p:
     # Aenderung an einem bestehenden Eintrag nach 1 Sekunde abrufbar - die
     # App hat nur zu selten nachgefragt. Diese Pruefung faellt durch, wenn
     # der Takt wieder hochgesetzt wird.
-    import time as _t
     A.keyboard.press("Escape"); A.wait_for_timeout(200)
     before = B.evaluate("""() => {
       const p = JSON.parse(localStorage.getItem('rbf26.partner') || 'null');

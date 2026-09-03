@@ -470,16 +470,11 @@ main { min-height: 60vh; }
 .grade-p-5 { color: var(--r5); }
 .heart-p { margin-left: .3rem; font-size: .8rem; color: var(--accent); opacity: .75; }
 
-/* Team hat eine Meinung, aber sie ist noch verdeckt: nur ein stummer Punkt,
-   keine Farbe und keine Zahl - genau das, was "noch nicht sichtbar" bedeutet.
-   Erst nach eigener Note oder bewusstem Aufdecken wird daraus .grade-p. */
-.team-hidden {
-  display: inline-block;
-  margin-left: .35rem;
-  font-size: .55rem;
-  color: var(--ink-faint);
-  vertical-align: .2em;
-}
+/* Team hat eine Meinung, aber sie ist noch verdeckt: dieselbe Marke wie eine
+   echte Partner-Note (.grade.grade-p), nur neutral eingefaerbt mit "?" statt
+   Zahl - die Farbe selbst darf nichts verraten. Erst nach eigener Note oder
+   bewusstem Aufdecken wird daraus .grade-p-N mit echter Farbe und Zahl. */
+.team-hidden { color: var(--ink-faint); }
 
 /* Wie oft der Act ueberhaupt spielt. Bewusst zurueckhaltend - es ist eine
    Randnotiz, keine Bewertung, und darf die Note nicht ueberstrahlen. */

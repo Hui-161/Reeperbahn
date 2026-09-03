@@ -207,13 +207,17 @@ const teamHasOpinion = (id) => rateBucket(pRate(id)) > 0 || pFav(id);
    eigene ein, bevor sie entsteht - oder wenn bewusst aufgedeckt wurde. */
 const teamOpinionShown = (id) => rateBucket(rate[id]) > 0 || revealed.has(id);
 
-/* In der Zeile: solange verdeckt, nur ein neutraler Punkt statt Note/Herz. */
+/* In der Zeile: solange verdeckt, dieselbe Marke wie eine echte Note -
+   nur mit "?" statt Zahl und ohne Farbe nach Note, damit die Farbe selbst
+   nichts verraet. Gleiche Form wie .grade-p, bewusst kein eigenes Symbol,
+   sonst faellt es visuell aus der Zeile statt als "eine Note" erkannt zu
+   werden. */
 function teamRowMark(id, rb) {
   if (!teamHasOpinion(id)) return '';
   if (rb <= 0 && !teamOpinionShown(id)) {
-    return `<span class="team-hidden"
+    return `<span class="grade grade-p team-hidden"
       title="${esc(partnerName())} hat schon bewertet — sichtbar, sobald du selbst bewertest"
-      >●</span>`;
+      >?</span>`;
   }
   const pb = rateBucket(pRate(id));
   return `${pb ? `<span class="grade grade-p grade-p-${pb}"
@@ -1115,8 +1119,8 @@ function renderNews() {
       <span class="news-kind">${esc(CHANGE_KIND[e.kind] || e.kind)}</span>
       <span class="news-main"><b>${esc(e.act)}</b><br>
         <span class="news-what">${esc(e.what)}: ${arrow}</span></span>
-      ${e.show ? `<button type="button" class="pill" data-findshow="${esc(e.show)}"
-        title="In der Liste zeigen">→</button>` : ''}
+      ${e.show && e.kind !== 'removed' ? `<button type="button" class="pill"
+        data-findshow="${esc(e.show)}" title="In der Liste zeigen">→</button>` : ''}
     </div>`;
   }
   el.newsBody.innerHTML = html;
@@ -1620,6 +1624,12 @@ document.addEventListener('click', (e) => {
         node.classList.add('flash');
         setTimeout(() => node.classList.remove('flash'), 1600);
       });
+    } else {
+      // Der Knopf fehlt zwar planmaessig bei gestrichenen Auftritten (siehe
+      // renderNews), aber eine aeltere Verschiebung kann auf einen Auftritt
+      // zeigen, der seither aus anderem Grund verschwunden ist - dann lieber
+      // sagen, dass er weg ist, als stumm nichts zu tun.
+      toast('Dieser Auftritt steht nicht mehr im aktuellen Programm.');
     }
     return;
   }

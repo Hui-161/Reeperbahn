@@ -389,8 +389,19 @@ with sync_playwright() as p:
     lineup2 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
     my_fav = pg.locator(".row-fav[aria-pressed='true']").count()
     check("Team-Chip ist ohne Partner:in verborgen", pg.locator("#f-team").is_hidden())
-    # Partner mag genau die Acts der ersten zwei Zeilen
-    idx = pg.locator(".row").evaluate_all("els => els.slice(0,2).map(e => e.dataset.act)")
+    # Partner mag genau die Acts von zwei Zeilen - Acts mit nur einem
+    # Auftritt, sonst zaehlt die Note/der Favorit unten auf zwei Zeilen und
+    # die count()==1-Pruefungen brechen (haengt am Act, nicht an der Show).
+    shows_per_act2 = {}
+    for s in lineup2["shows"]:
+        shows_per_act2[s["a"]] = shows_per_act2.get(s["a"], 0) + 1
+    cand = pg.locator(".row").evaluate_all("els => els.map(e => e.dataset.act)")
+    idx, seen_a = [], set()
+    for i in cand:
+        if shows_per_act2.get(int(i)) == 1 and i not in seen_a:
+            seen_a.add(i); idx.append(i)
+        if len(idx) >= 2:
+            break
     pids = [lineup2["acts"][int(i)]["id"] for i in idx]
     pfile = _tf.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
     _json.dump({"kind": "rbf26-auswahl", "version": 3,
@@ -406,14 +417,18 @@ with sync_playwright() as p:
     check("Team-Chip erscheint mit Partner:in", pg.locator("#f-team").is_visible())
     # Team-Meinung ist verdeckt, bis ich selbst bewertet habe - sonst faerbt
     # die fremde Note die eigene ein, bevor sie entsteht.
+    # .grade-p sitzt jetzt auch auf der verdeckten "?"-Marke (dieselbe Form
+    # wie eine echte Note, siehe teamRowMark) - "verdeckt" heisst also: keine
+    # ECHTE Note ausserhalb von .team-hidden.
     check("Partner-Note ist verdeckt, solange ich selbst nicht bewertet habe",
-          pg.locator("#list .grade-p").count() == 0,
-          f"{pg.locator('#list .grade-p').count()}")
+          pg.locator("#list .grade-p:not(.team-hidden)").count() == 0,
+          f"{pg.locator('#list .grade-p:not(.team-hidden)').count()}")
     check("Partner-Favorit ist verdeckt, solange ich selbst nicht bewertet habe",
           pg.locator("#list .heart-p").count() == 0,
           f"{pg.locator('#list .heart-p').count()}")
-    check("Stattdessen steht ein neutraler Punkt in der Liste",
-          pg.locator(f'.row[data-act="{idx[1]}"] .team-hidden').count() >= 1)
+    check("Stattdessen steht ein neutral eingefaerbtes '?' in der Liste",
+          pg.locator(f'.row[data-act="{idx[1]}"] .team-hidden').count() >= 1
+          and pg.locator(f'.row[data-act="{idx[1]}"] .team-hidden').inner_text() == "?")
 
     # Eigene Note (bewusst 5, nicht 1-2, damit "Beide" gleich unten nicht
     # faelschlich anspringt) schaltet die Team-Note fuer diesen Act frei.
@@ -793,12 +808,29 @@ with sync_playwright() as p:
     # Ohne Isolierung testet man sonst die Vorgeschichte statt den Import.
     import json, tempfile
     lineup = json.load(open("web/data/lineup.json", encoding="utf-8"))
+    # Ein Act mit zwei Auftritten traegt den Hinweis auf BEIDEN Zeilen (er
+    # haengt am Act, nicht an der einzelnen Show) - fuer die exakten
+    # count()==1-Pruefungen unten muessen die Testkandidaten deshalb Acts
+    # mit genau einem Auftritt sein, sonst zaehlt derselbe Hinweis doppelt.
+    shows_per_act = {}
+    for s in lineup["shows"]:
+        shows_per_act[s["a"]] = shows_per_act.get(s["a"], 0) + 1
+
+    def single_show_picks(page, n=2):
+        cand = page.locator(".row").evaluate_all("els => els.map(e => e.dataset.act)")
+        seen, out = set(), []
+        for i in cand:
+            if shows_per_act.get(int(i)) == 1 and i not in seen:
+                seen.add(i); out.append(i)
+            if len(out) >= n:
+                break
+        return out
+
     ctx2 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
     pg2 = ctx2.new_page()
     pg2.goto(BASE + "/", wait_until="load")
     pg2.wait_for_selector(".row", timeout=15000)
-    act_idx = pg2.locator(".row").evaluate_all(
-        "els => els.slice(0,2).map(e => e.dataset.act)")
+    act_idx = single_show_picks(pg2)
     picks = [lineup["acts"][int(i)]["id"] for i in act_idx]
     fixture = {
         "suggested": {str(picks[0]): 0.95, str(picks[1]): 0.2},
@@ -818,7 +850,7 @@ with sync_playwright() as p:
           f"{pg2.locator('.hint-ja').count()}")
 
     before = pg2.locator("#list .hint").count()
-    pg2.locator(".row").first.click()
+    pg2.locator(f'.row[data-act="{act_idx[0]}"]').first.click()
     pg2.wait_for_selector(".suggestion")
     check("Vorschlag im Detail erklaert", pg2.locator(".suggestion").count() == 1)
     pg2.locator(".rate button[data-r='5']").click()
@@ -842,8 +874,7 @@ with sync_playwright() as p:
     pg3 = ctx3.new_page()
     pg3.goto(BASE + "/", wait_until="load")
     pg3.wait_for_selector(".row", timeout=15000)
-    idx3 = pg3.locator(".row").evaluate_all(
-        "els => els.slice(0,2).map(e => e.dataset.act)")
+    idx3 = single_show_picks(pg3)
     p3 = [lineup["acts"][int(i)]["id"] for i in idx3]
     fixture2 = {
         "format": 2,
@@ -869,7 +900,7 @@ with sync_playwright() as p:
           and pg3.locator("#list .hint-nein").count() == 1,
           f"ja={pg3.locator('#list .hint-ja').count()} "
           f"nein={pg3.locator('#list .hint-nein').count()}")
-    pg3.locator(".row").nth(1).click()
+    pg3.locator(f'.row[data-act="{idx3[1]}"]').first.click()
     pg3.wait_for_selector(".suggestion")
     check("Format 2: Playlist-Hinweis steht im Detail",
           "bereits in Playlist entfernt"
@@ -1231,13 +1262,21 @@ with sync_playwright() as p:
     # Uhrzeiten verschieben sich beim Reeperbahn Festival dauernd. Wer sich
     # einen Abend gebaut hat, muss das mitbekommen.
     marks = pg.evaluate("""() => {
-      const m = [...document.querySelectorAll('.chg')];
-      return { n: m.length, titel: m.length ? m[0].getAttribute('title') : null };
+      const all = [...document.querySelectorAll('.chg')];
+      const moved = all.find(e => e.classList.contains('chg-moved'));
+      return { n: all.length, movedTitel: moved ? moved.getAttribute('title') : null };
     }""")
     if marks["n"]:
         check("Geaenderte Termine sind in der Liste markiert", True, marks["n"])
-        check("Die Marke nennt die Verschiebung",
-              "\u2192" in (marks["titel"] or ""), marks["titel"])
+        # Der erste Treffer muss keine Verschiebung sein - bei vielen
+        # Aenderungen kann auch "neu" oder "gestrichen" zuerst kommen.
+        # Geprueft wird gezielt eine .chg-moved-Marke, falls vorhanden.
+        if marks["movedTitel"] is not None:
+            check("Die Marke nennt die Verschiebung",
+                  "\u2192" in marks["movedTitel"], marks["movedTitel"])
+        else:
+            check("Keine Zeitverschiebung markiert, andere Aenderungsart vorhanden",
+                  True, "kein .chg-moved in dieser Ausgabe")
     else:
         check("Keine Aenderungen, also keine Marken", True,
               "changes.json ohne Eintraege")
