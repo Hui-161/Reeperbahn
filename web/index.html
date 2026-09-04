@@ -62,6 +62,15 @@
     <button id="f-reset" class="chip chip-ghost" hidden>Zurücksetzen</button>
   </div>
 
+  <!-- Ersetzt die Filter, solange die Karte offen ist - die wirken sich
+       dort ohnehin nicht aus. Faerbt die Spielorte stattdessen nach der
+       eigenen Bewertung der Acts, die dort zu einer Uhrzeit spielen. -->
+  <div id="maptime" class="maptime" hidden>
+    <button type="button" id="maptime-now" class="chip" aria-pressed="true">Jetzt</button>
+    <input type="time" id="maptime-time" aria-label="Uhrzeit auf der Karte">
+    <span id="maptime-legend" class="maptime-legend"></span>
+  </div>
+
   <div id="genrebox" class="genrebox" hidden></div>
   <div id="ratebox" class="genrebox" hidden></div>
   <div id="venuebox" class="genrebox" hidden></div>

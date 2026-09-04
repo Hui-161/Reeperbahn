@@ -138,6 +138,10 @@ const S = {
   teamOnly: false,
   mapOn: false,
   planOn: false,
+  // Karte: Spielorte nach Bewertung zu einem Zeitpunkt einfaerben. mapLive
+  // folgt der echten Uhrzeit, mapHHMM haelt die von Hand gewaehlte fest.
+  mapLive: true,
+  mapHHMM: '',
 };
 
 const MAP_DETAIL_ZOOM = 17;
@@ -149,6 +153,7 @@ const popupHtml = [];
 const $ = (sel) => document.querySelector(sel);
 const el = {
   status: $('#status'), list: $('#list'), mapBox: $('#map'), days: $('#days'),
+  filters: $('.filters'),
   genrebox: $('#genrebox'), venuebox: $('#venuebox'),
   ratebox: $('#ratebox'), filterbox: $('#filterbox'),
   plan: $('#plan'), planBody: $('#plan-body'),
@@ -745,6 +750,9 @@ function render() {
      falschen Stelle. Nachgeholt wird es beim Loslassen. */
   if (sw && sw.active) { renderPending = true; return; }
   renderPending = false;
+  // Auf der Karte wirken die Filter nicht - dort ersteht statt ihrer die
+  // Zeitwahl. Steht vor der Verzweigung, damit es in jedem Zweig stimmt.
+  renderMapTime();
   const anyFilter = S.favOnly || S.rates.size > 0 || S.seenOnly || S.teamOnly
     || S.genres.size > 0 || S.venues.size > 0 || S.q.trim() !== '';
   $('#f-reset').hidden = !anyFilter;
@@ -1516,6 +1524,109 @@ function venueCodes(venues) {
 
 /* ---------- Karte (Wunsch 3 und 7) ---------- */
 
+/* Wie "HH:MM" jetzt aussieht, in der Zeitzone des Geraets - fuer die
+   Anzeige, nicht fuer den Vergleich mit den Daten. Die Daten selbst werden
+   wie ueberall im Code als naiver String gelesen (hhmm(), todayISO()),
+   nicht ueber Date-Arithmetik, damit keine Zeitzonen-Verschiebung
+   dazwischenfunkt. */
+const localHHMM = (d) => String(d.getHours()).padStart(2, '0')
+  + ':' + String(d.getMinutes()).padStart(2, '0');
+const minutesOfDay = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+/* Es gibt keine echten Enduhrzeiten in den Daten - derselbe Notbehelf wie im
+   Abendplan (Standard dort: 40 Minuten). */
+const MAP_SHOW_LEN_MIN = 40;
+
+/* Welcher Tag fuer die Kartenfarben gilt: der gewaehlte Tag, sonst - wenn
+   "Alle Tage" aktiv ist - heute, sonst der erste Festivaltag. Die Uhrzeit
+   ist davon unabhaengig immer die echte, damit sich auch ausserhalb des
+   Festivals durchspielen laesst "waer jetzt dieser Tag, waere gerade das
+   hier los". */
+function mapEvalDay() {
+  if (S.day) return S.day;
+  const today = todayISO();
+  if (S.data.days.includes(today)) return today;
+  return S.data.days[0] || null;
+}
+const mapEvalHHMM = () => S.mapLive ? localHHMM(new Date()) : S.mapHHMM;
+
+/* Fuer jeden Spielort: laeuft dort gerade etwas, und wenn ja, die beste
+   eigene Note darunter (kleinste Zahl gewinnt - "hier lohnt es sich",
+   nicht "hier laeuft grad das Schlimmste"). Acts ohne eigene Note zaehlen
+   als "laeuft, aber unbewertet". */
+function venueRatingAt(day, atHHMM) {
+  const info = new Map();
+  if (!day) return info;
+  const mins = minutesOfDay(atHHMM);
+  for (const sh of S.data.shows) {
+    if (sh.v == null || sh.tbd || sh.d !== day) continue;
+    const start = minutesOfDay(hhmm(sh.t));
+    if (mins < start || mins >= start + MAP_SHOW_LEN_MIN) continue;
+    const cur = info.get(sh.v) || { bucket: 0 };
+    const b = rateBucket(rate[S.data.acts[sh.a].id]);
+    if (b && (!cur.bucket || b < cur.bucket)) cur.bucket = b;
+    info.set(sh.v, cur);
+  }
+  return info;
+}
+
+/* Marker nach der aktuellen Kartenzeit einfaerben - oder, wenn die Funktion
+   aus ist, auf die neutrale Grundfarbe zurueck. Setzt nur setIcon() auf
+   bestehende Marker, baut die Karte nicht neu auf. */
+function applyMapColors() {
+  if (!map) return;
+  const on = S.mapOn;
+  const day = on ? mapEvalDay() : null;
+  const atHHMM = on ? mapEvalHHMM() : null;
+  const info = on ? venueRatingAt(day, atHHMM) : new Map();
+  const codes = venueCode.length ? venueCode : venueCodes(S.data.venues);
+  let live = 0, off = 0, unrated = 0;
+  S.data.venues.forEach((v, i) => {
+    const m = markers[i];
+    if (!m || v.lat == null) return;
+    let cls = 'venue-code';
+    if (on) {
+      const cur = info.get(i);
+      if (!cur) { cls += ' venue-code-off'; off++; }
+      else if (cur.bucket) { cls += ' venue-code-r' + cur.bucket; live++; }
+      else { cls += ' venue-code-unrated'; unrated++; }
+    }
+    m.setIcon(L.divIcon({
+      className: '', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14],
+      html: `<span class="${cls}" title="${esc(v.n)}">${esc(codes[i])}</span>`,
+    }));
+  });
+  const legend = $('#maptime-legend');
+  if (!legend) return;
+  if (!on || !day) { legend.textContent = ''; return; }
+  legend.textContent = `${dayLabel(day)} ${atHHMM} Uhr · ${live} bewertet dabei · `
+    + `${unrated} unbewertet · ${off} nichts los`;
+}
+
+let mapLiveTimer = null;
+function stopMapLive() { clearInterval(mapLiveTimer); mapLiveTimer = null; }
+function startMapLive() {
+  stopMapLive();
+  // Alle 30 s reicht: die Minute allein wandert nicht schneller, und ein
+  // Auftritt beginnt nie sekundengenau.
+  mapLiveTimer = setInterval(() => { if (S.mapOn) applyMapColors(); }, 30000);
+}
+
+/* Zeigt die Kopfzeile ueber der Karte: entweder die normalen Filter (Liste)
+   oder die Zeitwahl fuer die Kartenfarben - beide gleichzeitig ergaeben
+   keinen Sinn, die Filter wirken sich auf die Karte ohnehin nicht aus. */
+function renderMapTime() {
+  const box = $('#maptime');
+  if (!box) return;
+  box.hidden = !S.mapOn;
+  el.filters.hidden = S.mapOn;
+  if (!S.mapOn) return;
+  $('#maptime-now').setAttribute('aria-pressed', String(S.mapLive));
+  const t = $('#maptime-time');
+  if (document.activeElement !== t) t.value = mapEvalHHMM();
+  applyMapColors();
+}
+
 function ensureMap() {
   if (map) return map;
   map = L.map('map', { scrollWheelZoom: true })
@@ -1580,9 +1691,12 @@ function showVenue(i) {
   clearRoute();               // sonst bleiben die Spielorte blass
   openBox(null);
   S.mapOn = true;
+  S.mapLive = true;
   $('#btn-map').setAttribute('aria-pressed', 'true');
   render();
   const m = ensureMap();
+  applyMapColors();
+  startMapLive();
   setTimeout(() => {
     m.invalidateSize();
     m.setView([v.lat, v.lng], MAP_DETAIL_ZOOM, { animate: false });
@@ -1946,9 +2060,19 @@ function setMap(on) {
   S.mapOn = on;
   if (!on) clearRoute();
   $('#btn-map').setAttribute('aria-pressed', String(on));
-  if (on) openBox(null);
+  // Jedes Oeffnen startet wieder bei "Jetzt" - das ist der Sinn der Funktion
+  // unterwegs, eine von Hand gewaehlte Uhrzeit von letztem Mal waere hier
+  // nur eine Falle.
+  if (on) { openBox(null); S.mapLive = true; }
   render();
-  if (on) { const m = ensureMap(); setTimeout(() => m.invalidateSize(), 60); }
+  if (on) {
+    const m = ensureMap();
+    applyMapColors();      // die eben erst gebauten Marker sofort einfaerben
+    startMapLive();
+    setTimeout(() => m.invalidateSize(), 60);
+  } else {
+    stopMapLive();
+  }
 }
 
 /* Karte aus, ohne selbst neu zu zeichnen - fuer Stellen, die gleich danach
@@ -1958,6 +2082,7 @@ function setMap(on) {
 function mapOffQuiet() {
   if (!S.mapOn) return;
   S.mapOn = false;
+  stopMapLive();
   clearRoute();
   $('#btn-map').setAttribute('aria-pressed', 'false');
 }
@@ -1970,6 +2095,21 @@ function setSearch(on) {
 }
 
 $('#btn-map').addEventListener('click', () => setMap(!S.mapOn));
+
+$('#maptime-now').addEventListener('click', () => {
+  S.mapLive = !S.mapLive;
+  if (S.mapLive) startMapLive(); else stopMapLive();
+  renderMapTime();
+});
+$('#maptime-time').addEventListener('input', (e) => {
+  // Eigene Uhrzeit setzen heisst "Jetzt" verlassen - sonst ueberschreibt der
+  // naechste Tick die gerade erst gewaehlte Zeit wieder.
+  S.mapLive = false;
+  stopMapLive();
+  S.mapHHMM = e.target.value;
+  applyMapColors();
+  $('#maptime-now').setAttribute('aria-pressed', 'false');
+});
 
 /* Die Kopfhoehe schwankt (Suchleiste, Genre-Kaesten). Statt sie in CSS zu
    raten, wird sie gemessen. */

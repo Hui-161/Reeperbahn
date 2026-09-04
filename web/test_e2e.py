@@ -837,6 +837,44 @@ with sync_playwright() as p:
     check("Nicht mehr alle 34 Marker einzeln", single < 34, f"{single} einzeln")
     pg.click("#btn-map"); pg.wait_for_timeout(400)
 
+    # --- Karte nach Uhrzeit einfaerben ---
+    # Filter haben auf der Karte keine Wirkung - stattdessen tritt eine
+    # Zeitwahl an ihre Stelle, die Spielorte nach der eigenen Note der dort
+    # gerade spielenden Acts einfaerbt.
+    import json as _json3
+    lineup3 = _json3.load(open("web/data/lineup.json", encoding="utf-8"))
+    target = next(s for s in lineup3["shows"]
+                  if not s.get("tbd") and s.get("t") and s.get("v") is not None
+                  and lineup3["venues"][s["v"]].get("lat") is not None)
+    pg.click(f'.day[data-day="{target["d"]}"]'); pg.wait_for_timeout(300)
+    pg.locator(f'.row[data-act="{target["a"]}"]').first.click()
+    pg.wait_for_selector("#detail[open]")
+    r1btn = pg.locator('#detail .rate button[data-r="1"]')
+    r1btn.click(); pg.wait_for_timeout(150)
+    # Robust gegen eine schon vorhandene Note 1 aus einem frueheren Testschritt -
+    # ein zweiter Klick auf dieselbe Note schaltet sie sonst wieder aus.
+    if r1btn.get_attribute("aria-pressed") != "true":
+        r1btn.click(); pg.wait_for_timeout(150)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+
+    pg.click("#btn-map"); pg.wait_for_timeout(1000)
+    check("Filter sind auf der Karte ausgeblendet", pg.locator(".filters").is_hidden())
+    check("Zeitwahl steht stattdessen da", pg.locator("#maptime").is_visible())
+    pg.fill("#maptime-time", target["t"][11:16])
+    pg.locator("#maptime-time").dispatch_event("input")
+    pg.wait_for_timeout(400)
+    check("Eigene Bestnote faerbt den Spielort gruen",
+          pg.locator(".venue-code-r1").count() == 1,
+          pg.locator("#maptime-legend").inner_text())
+    check("Legende nennt den Treffer",
+          "1 bewertet dabei" in pg.locator("#maptime-legend").inner_text(),
+          pg.locator("#maptime-legend").inner_text())
+    check("'Jetzt' schaltet sich beim Eintippen einer Uhrzeit ab",
+          pg.locator("#maptime-now").get_attribute("aria-pressed") == "false")
+    pg.click("#btn-map"); pg.wait_for_timeout(400)
+    check("Zurueck in der Liste stehen die Filter wieder da",
+          pg.locator(".filters").is_visible() and pg.locator("#maptime").is_hidden())
+
     # --- Vorschlaege importieren ---
     # Bewusst in einem FRISCHEN Kontext: im bisherigen sind schon Acts
     # bewertet, und eine eigene Bewertung unterdrueckt den Vorschlagspunkt.

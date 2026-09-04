@@ -251,6 +251,33 @@ h1 span { color: var(--accent); }
 }
 .filters::-webkit-scrollbar { display: none; }
 
+/* Ersetzt .filters, solange die Karte offen ist - gleiche Zeile, gleicher
+   Platz, damit der Kopf nicht springt. */
+.maptime {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+.maptime-legend {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .8rem;
+  color: var(--ink-soft);
+}
+#maptime-time {
+  min-height: 36px;
+  padding: 0 .5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+}
+
 .chip {
   flex: 0 0 auto;
   display: inline-flex;
@@ -835,6 +862,20 @@ main { min-height: 60vh; }
 /* Waehrend eine Route liegt, treten die Haeuser zurueck. */
 .map.route-on .venue-code { opacity: .38; }
 .map.route-on .marker-cluster div { opacity: .38; }
+
+/* Kartenfarben nach Uhrzeit: dieselbe Fuenferskala wie die eigene Note in
+   der Liste (.grade-N), damit "gruen = lohnt sich" ueberall dasselbe
+   bedeutet. Unbewertet und "nichts los" sind bewusst UNTERSCHIEDLICH blass,
+   nicht beide grau - sonst liesse sich auf den ersten Blick nicht
+   unterscheiden, ob dort gerade niemand spielt oder nur niemand bewertet
+   wurde. */
+.venue-code-r1 { background: var(--r1); border-color: var(--r1); color: var(--on-scale); }
+.venue-code-r2 { background: var(--r2); border-color: var(--r2); color: var(--on-scale); }
+.venue-code-r3 { background: var(--r3); border-color: var(--r3); color: var(--on-scale); }
+.venue-code-r4 { background: var(--r4); border-color: var(--r4); color: var(--on-scale); }
+.venue-code-r5 { background: var(--r5); border-color: var(--r5); color: var(--on-scale); }
+.venue-code-unrated { background: var(--ink-faint); border-color: var(--ink-faint); color: var(--on-scale); }
+.venue-code-off { opacity: .38; }
 
 .pop-code, .vcode {
   display: inline-block;
