@@ -139,16 +139,16 @@ const S = {
   mapOn: false,
   planOn: false,
   // Karte: Spielorte nach Bewertung zu einem Zeitpunkt einfaerben. mapLive
-  // folgt der echten Uhrzeit, mapHHMM haelt die von Hand gewaehlte fest.
+  // folgt der echten Uhrzeit, mapMin haelt die von Hand gewaehlte fest -
+  // in Festivalminuten, siehe festMin().
   mapLive: true,
-  mapHHMM: '',
+  mapMin: null,
 };
 
 const MAP_DETAIL_ZOOM = 17;
 let map = null, cluster = null;
 let venueCode = [];             // Index des Spielorts -> zwei Buchstaben
 const markers = [];
-const popupHtml = [];
 
 const $ = (sel) => document.querySelector(sel);
 const el = {
@@ -718,6 +718,9 @@ function actShowOrdinal(sh) {
 
 function refreshAct(ai) {
   if (!Number.isFinite(ai) || !S.data) { render(); return; }
+  // Auf der Karte gibt es keine Zeilen zu flicken - dort aendert eine neue
+  // Note die Farbe des Spielorts, und zwar sofort.
+  if (S.mapOn) { scheduleMapColors(); return; }
   // Ein aktiver Filter auf Note, Favorit, Gesehen oder Team entscheidet ueber
   // die Sichtbarkeit - dann hilft Flicken nicht, es muss neu gefiltert
   // werden. War der Act davor sichtbar und faellt er durch genau diese
@@ -1537,70 +1540,155 @@ const minutesOfDay = (t) => { const [h, m] = t.split(':').map(Number); return h 
    Abendplan (Standard dort: 40 Minuten). */
 const MAP_SHOW_LEN_MIN = 40;
 
-/* Welcher Tag fuer die Kartenfarben gilt: der gewaehlte Tag, sonst - wenn
-   "Alle Tage" aktiv ist - heute, sonst der erste Festivaltag. Die Uhrzeit
-   ist davon unabhaengig immer die echte, damit sich auch ausserhalb des
-   Festivals durchspielen laesst "waer jetzt dieser Tag, waere gerade das
-   hier los". */
+/* Ein FESTIVALTAG endet nicht um Mitternacht. In den Daten steht das schon
+   richtig: sh.d ist der Festivaltag, sh.t das echte Datum - der Auftritt um
+   00:15 "am 16." traegt in t den 17. Damit die Nacht chronologisch HINTER
+   den Abend rutscht (und nicht an den Anfang des Tages), wird in
+   Festivalminuten gerechnet: alles vor 6 Uhr morgens zaehlt als
+   Vortagsabend plus 24 Stunden. 6 Uhr, weil zwischen 1 und 12 Uhr im
+   Programm ohnehin nichts liegt. */
+const MAP_NIGHT_END_MIN = 6 * 60;
+const festMin = (t) => {
+  const m = minutesOfDay(t);
+  return m < MAP_NIGHT_END_MIN ? m + 24 * 60 : m;
+};
+const hhmmOfFest = (min) => {
+  const m = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':'
+    + String(m % 60).padStart(2, '0');
+};
+
+/* Welcher Festivaltag fuer die Kartenfarben gilt: der gewaehlte Tag, sonst -
+   bei "Alle Tage" - der gerade laufende. Um 00:30 laeuft noch der Abend von
+   gestern, deshalb der Rueckgriff auf den Vortag. Ausserhalb des Festivals
+   der erste Tag, damit sich die Funktion auch vorher durchspielen laesst. */
 function mapEvalDay() {
   if (S.day) return S.day;
-  const today = todayISO();
-  if (S.data.days.includes(today)) return today;
+  const now = new Date();
+  const ref = new Date(now.getTime()
+    - (now.getHours() * 60 + now.getMinutes() < MAP_NIGHT_END_MIN ? 24 * 3600 * 1000 : 0));
+  const running = ref.toISOString().slice(0, 10);
+  if (S.data.days.includes(running)) return running;
   return S.data.days[0] || null;
 }
-const mapEvalHHMM = () => S.mapLive ? localHHMM(new Date()) : S.mapHHMM;
+const mapEvalMin = () => (S.mapLive || !Number.isFinite(S.mapMin))
+  ? festMin(localHHMM(new Date())) : S.mapMin;
 
-/* Fuer jeden Spielort: laeuft dort gerade etwas, und wenn ja, die beste
-   eigene Note darunter (kleinste Zahl gewinnt - "hier lohnt es sich",
-   nicht "hier laeuft grad das Schlimmste"). Acts ohne eigene Note zaehlen
-   als "laeuft, aber unbewertet". */
-function venueRatingAt(day, atHHMM) {
+/* Von wann bis wann an einem Festivaltag ueberhaupt gespielt wird - die
+   Spanne des Faders. */
+function mapDayRange(day) {
+  let lo = null, hi = null;
+  for (const sh of S.data.shows) {
+    if (sh.tbd || !sh.t || sh.d !== day) continue;
+    const m = festMin(hhmm(sh.t));
+    if (lo === null || m < lo) lo = m;
+    if (hi === null || m > hi) hi = m;
+  }
+  if (lo === null) return null;
+  return { lo, hi: hi + MAP_SHOW_LEN_MIN };
+}
+
+/* Fuer jeden Spielort zu einem Zeitpunkt: was dort laeuft, die beste eigene
+   Note darunter (kleinste Zahl gewinnt - die Karte soll zeigen, wo es sich
+   lohnt, nicht wo gerade das Schlimmste laeuft) und ob ein Favorit dabei
+   ist. Acts ohne eigene Note zaehlen als "laeuft, aber unbewertet". */
+function venueRatingAt(day, min) {
   const info = new Map();
-  if (!day) return info;
-  const mins = minutesOfDay(atHHMM);
+  if (!day || !Number.isFinite(min)) return info;
   for (const sh of S.data.shows) {
     if (sh.v == null || sh.tbd || sh.d !== day) continue;
-    const start = minutesOfDay(hhmm(sh.t));
-    if (mins < start || mins >= start + MAP_SHOW_LEN_MIN) continue;
-    const cur = info.get(sh.v) || { bucket: 0 };
-    const b = rateBucket(rate[S.data.acts[sh.a].id]);
+    const start = festMin(hhmm(sh.t));
+    if (min < start || min >= start + MAP_SHOW_LEN_MIN) continue;
+    const act = S.data.acts[sh.a];
+    const cur = info.get(sh.v) || { bucket: 0, fav: false, acts: [] };
+    const b = rateBucket(rate[act.id]);
     if (b && (!cur.bucket || b < cur.bucket)) cur.bucket = b;
+    if (fav.has(act.id)) cur.fav = true;
+    cur.acts.push({ ai: sh.a, name: act.n, r: rate[act.id], fav: fav.has(act.id), start });
     info.set(sh.v, cur);
   }
+  for (const cur of info.values()) cur.acts.sort((a, b) => a.start - b.start);
   return info;
 }
+
+/* Was der letzte applyMapColors() ausgerechnet hat. Die Cluster-Symbole
+   entstehen in einem Rueckruf von Leaflet, der keine Argumente von uns
+   bekommt - deshalb liegt das Ergebnis hier. */
+let mapInfo = new Map();
+
+const MAP_STATE_CLASS = (cur) => !cur ? 'off' : cur.bucket ? 'r' + cur.bucket : 'unrated';
 
 /* Marker nach der aktuellen Kartenzeit einfaerben - oder, wenn die Funktion
    aus ist, auf die neutrale Grundfarbe zurueck. Setzt nur setIcon() auf
    bestehende Marker, baut die Karte nicht neu auf. */
 function applyMapColors() {
-  if (!map) return;
   const on = S.mapOn;
   const day = on ? mapEvalDay() : null;
-  const atHHMM = on ? mapEvalHHMM() : null;
-  const info = on ? venueRatingAt(day, atHHMM) : new Map();
+  const min = on ? mapEvalMin() : null;
+  mapInfo = on ? venueRatingAt(day, min) : new Map();
+
+  // Kopfzeile und Fader zuerst, unabhaengig von den Markern: beim ersten
+  // Oeffnen gibt es die Karte noch nicht, aber sizeMap() muss die Hoehe der
+  // Faderleiste schon kennen.
+  let live = 0, unrated = 0, favs = 0;
+  for (const cur of mapInfo.values()) {
+    if (cur.bucket) live++; else unrated++;
+    if (cur.fav) favs++;
+  }
+  const placed = S.data.venues.filter((v) => v && v.lat != null).length;
+  // Tag und Uhrzeit stehen unten an der Faderleiste - hier nur die Zahlen,
+  // sonst schiebt die Wiederholung das Wesentliche aus der Zeile heraus.
+  const legend = $('#maptime-legend');
+  if (legend) {
+    legend.textContent = (!on || !day) ? ''
+      : `${live} bewertet${favs ? `, ${favs}× Favorit` : ''} · `
+        + `${unrated} unbewertet · ${Math.max(0, placed - mapInfo.size)} nichts los`;
+  }
+  renderMapFader(day, min);
+
+  if (!map) return;
   const codes = venueCode.length ? venueCode : venueCodes(S.data.venues);
-  let live = 0, off = 0, unrated = 0;
   S.data.venues.forEach((v, i) => {
     const m = markers[i];
     if (!m || v.lat == null) return;
-    let cls = 'venue-code';
-    if (on) {
-      const cur = info.get(i);
-      if (!cur) { cls += ' venue-code-off'; off++; }
-      else if (cur.bucket) { cls += ' venue-code-r' + cur.bucket; live++; }
-      else { cls += ' venue-code-unrated'; unrated++; }
-    }
+    const cur = on ? mapInfo.get(i) : null;
+    const cls = 'venue-code' + (on ? ' venue-code-' + MAP_STATE_CLASS(cur) : '');
+    const heart = cur && cur.fav ? '<i class="venue-fav" aria-hidden="true">♥</i>' : '';
     m.setIcon(L.divIcon({
       className: '', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14],
-      html: `<span class="${cls}" title="${esc(v.n)}">${esc(codes[i])}</span>`,
+      html: `<span class="${cls}" title="${esc(v.n)}">${esc(codes[i])}${heart}</span>`,
     }));
   });
-  const legend = $('#maptime-legend');
-  if (!legend) return;
-  if (!on || !day) { legend.textContent = ''; return; }
-  legend.textContent = `${dayLabel(day)} ${atHHMM} Uhr · ${live} bewertet dabei · `
-    + `${unrated} unbewertet · ${off} nichts los`;
+  // Die Buendel tragen die Farbe ihres besten Kindes - sonst sieht man bei
+  // dicht liegenden Haeusern nur einen neutralen Kreis und muesste erst
+  // hineinzoomen, um zu erkennen, ob sich das lohnt.
+  if (cluster && cluster.refreshClusters) cluster.refreshClusters();
+  // Ein offenes Popup zeigt sonst die Besetzung von vorhin, waehrend die
+  // Farben ringsum schon der neuen Uhrzeit folgen.
+  if (on && popupVenue != null && popupRef && popupRef.isOpen()) {
+    popupRef.setContent(venuePopup(popupVenue));
+  }
+}
+
+/* Symbol fuer ein Buendel: Anzahl wie gehabt, Farbe nach dem besten Kind. */
+function clusterIcon(c) {
+  const kids = c.getAllChildMarkers();
+  let best = null, fav = false, playing = false;
+  for (const k of kids) {
+    const cur = mapInfo.get(k.venueIndex);
+    if (!cur) continue;
+    playing = true;
+    if (cur.fav) fav = true;
+    if (cur.bucket && (best === null || cur.bucket < best)) best = cur.bucket;
+  }
+  const size = kids.length < 10 ? 'small' : kids.length < 100 ? 'medium' : 'large';
+  const state = !S.mapOn ? '' : ' mc-' + (best ? 'r' + best : playing ? 'unrated' : 'off');
+  return L.divIcon({
+    html: `<div><span>${kids.length}</span>${
+      S.mapOn && fav ? '<i class="venue-fav" aria-hidden="true">♥</i>' : ''}</div>`,
+    className: 'marker-cluster marker-cluster-' + size + state,
+    iconSize: L.point(40, 40),
+  });
 }
 
 let mapLiveTimer = null;
@@ -1612,6 +1700,42 @@ function startMapLive() {
   mapLiveTimer = setInterval(() => { if (S.mapOn) applyMapColors(); }, 30000);
 }
 
+/* Beim Ziehen am Fader feuert input() im Dutzend. Einfaerben ist billig
+   (35 Marker), refreshClusters() nicht - also hoechstens einmal pro Bild. */
+let colorPending = false;
+function scheduleMapColors() {
+  if (colorPending) return;
+  colorPending = true;
+  requestAnimationFrame(() => { colorPending = false; applyMapColors(); });
+}
+
+/* Der Fader unten: eine Fahrt durch den ganzen Festivalabend. Grenzen kommen
+   aus dem Programm des Tages, nicht aus der Uhr - ein Tag, an dem erst um
+   19 Uhr etwas losgeht, verschenkt sonst die halbe Strecke. */
+function renderMapFader(day, min) {
+  const bar = $('#mapbar');
+  if (!bar) return;
+  bar.hidden = !S.mapOn;
+  if (!S.mapOn) return;
+  const fader = $('#mapfader');
+  const range = day ? mapDayRange(day) : null;
+  if (!range) {
+    fader.disabled = true;
+    $('#mapbar-time').textContent = '—';
+    $('#mapbar-day').textContent = day ? dayLabel(day) : 'kein Programm';
+    return;
+  }
+  fader.disabled = false;
+  fader.min = String(range.lo);
+  fader.max = String(range.hi);
+  fader.step = '5';
+  const shown = Math.min(range.hi, Math.max(range.lo, Number.isFinite(min) ? min : range.lo));
+  if (document.activeElement !== fader) fader.value = String(shown);
+  fader.setAttribute('aria-valuetext', hhmmOfFest(shown) + ' Uhr');
+  $('#mapbar-time').textContent = hhmmOfFest(shown);
+  $('#mapbar-day').textContent = dayLabel(day);
+}
+
 /* Zeigt die Kopfzeile ueber der Karte: entweder die normalen Filter (Liste)
    oder die Zeitwahl fuer die Kartenfarben - beide gleichzeitig ergaeben
    keinen Sinn, die Filter wirken sich auf die Karte ohnehin nicht aus. */
@@ -1620,12 +1744,95 @@ function renderMapTime() {
   if (!box) return;
   box.hidden = !S.mapOn;
   el.filters.hidden = S.mapOn;
-  if (!S.mapOn) return;
+  if (!S.mapOn) { const bar = $('#mapbar'); if (bar) bar.hidden = true; return; }
   $('#maptime-now').setAttribute('aria-pressed', String(S.mapLive));
   const t = $('#maptime-time');
-  if (document.activeElement !== t) t.value = mapEvalHHMM();
+  const min = mapEvalMin();
+  if (document.activeElement !== t && Number.isFinite(min)) t.value = hhmmOfFest(min);
   applyMapColors();
 }
+
+/* Die Uhrzeit von Hand setzen - aus dem Zeitfeld oben oder vom Fader. */
+function setMapMin(min) {
+  S.mapLive = false;
+  stopMapLive();
+  S.mapMin = min;
+  $('#maptime-now').setAttribute('aria-pressed', 'false');
+  const t = $('#maptime-time');
+  if (document.activeElement !== t) t.value = hhmmOfFest(min);
+  scheduleMapColors();
+}
+
+/* Was an einem Spielort an diesem Festivaltag laeuft: gerade, und was als
+   Naechstes kommt. Eigener Durchlauf statt Rueckgriff auf mapInfo - der
+   laeuft nur bei einem Klick und darf nicht von einem Zwischenspeicher
+   abhaengen, der vielleicht aelter ist als die Uhrzeit im Fader. */
+function venueAgenda(i, day, min) {
+  const now = [], later = [];
+  if (!day || !Number.isFinite(min)) return { now, next: null };
+  for (const sh of S.data.shows) {
+    if (sh.v !== i || sh.tbd || sh.d !== day) continue;
+    const act = S.data.acts[sh.a];
+    const entry = { ai: sh.a, id: act.id, name: act.n, start: festMin(hhmm(sh.t)) };
+    if (min >= entry.start && min < entry.start + MAP_SHOW_LEN_MIN) now.push(entry);
+    else if (entry.start > min) later.push(entry);
+  }
+  now.sort((a, b) => a.start - b.start);
+  later.sort((a, b) => a.start - b.start);
+  return { now, next: later[0] || null };
+}
+
+function popActRow(a) {
+  const rb = rateBucket(rate[a.id]);
+  return `<button class="pop-act" data-popact="${a.ai}">
+    <span class="pop-act-time">${hhmmOfFest(a.start)}</span>
+    <span class="pop-act-name">${esc(a.name)}</span>
+    ${rb ? `<span class="grade grade-${rb}${Number.isInteger(+rate[a.id]) ? '' : ' grade-half'}"
+        >${rateText(rate[a.id])}</span>` : ''}
+    ${fav.has(a.id) ? '<span class="pop-act-fav" aria-hidden="true">♥</span>' : ''}
+  </button>`;
+}
+
+/* Das Popup entsteht bei jedem Oeffnen neu, weil "wer spielt hier" von der
+   gewaehlten Uhrzeit abhaengt. */
+function venuePopup(i) {
+  const v = S.data.venues[i];
+  if (!v) return '';
+  const codes = venueCode.length ? venueCode : venueCodes(S.data.venues);
+  const bits = [
+    v.addr && esc(v.addr),
+    v.cap && `Kapazität ${v.cap}`,
+    v.acc && v.acc.length && esc(v.acc.join(', ')),
+    v.inherited && v.parent && `Koordinaten von ${esc(v.parent)}`,
+  ].filter(Boolean);
+
+  let nowBlock = '';
+  if (S.mapOn) {
+    const day = mapEvalDay();
+    const min = mapEvalMin();
+    const { now, next } = venueAgenda(i, day, min);
+    const head = `${dayLabel(day)} ${hhmmOfFest(min)} Uhr`;
+    nowBlock = `<div class="pop-now">
+      <div class="pop-now-head">${esc(head)}</div>
+      ${now.length ? now.map(popActRow).join('')
+        : `<div class="pop-none">Hier läuft gerade nichts.${next
+            ? ` Als Nächstes:` : ''}</div>${next ? popActRow(next) : ''}`}
+    </div>`;
+  }
+
+  return `<div class="pop-title"><span class="pop-code">${esc(codes[i])}</span>
+      ${esc(v.n)}</div>
+    ${nowBlock}
+    <div class="pop-meta">${venueShowCount.get(i) || 0} Auftritte${
+      bits.length ? '<br>' + bits.join('<br>') : ''}</div>
+    <div class="pop-actions">
+      <button data-onlyvenue="${i}">Nur dieses Haus zeigen</button>
+    </div>`;
+}
+
+let venueShowCount = new Map();
+let popupVenue = null;         // welcher Spielort gerade offen ist
+let popupRef = null;           // und die zugehoerige Popup-Instanz
 
 function ensureMap() {
   if (map) return map;
@@ -1636,14 +1843,17 @@ function ensureMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
 
-  const counts = new Map();
-  for (const s of S.data.shows) if (s.v != null) counts.set(s.v, (counts.get(s.v) || 0) + 1);
+  venueShowCount = new Map();
+  for (const s of S.data.shows) {
+    if (s.v != null) venueShowCount.set(s.v, (venueShowCount.get(s.v) || 0) + 1);
+  }
 
   // Clustering: 34 Haeuser auf engem Raum verdecken sich sonst gegenseitig.
   cluster = L.markerClusterGroup({
     maxClusterRadius: 38,
     showCoverageOnHover: false,
     spiderfyOnMaxZoom: true,
+    iconCreateFunction: clusterIcon,
     // Ab dieser Zoomstufe keine Cluster mehr. Damit ist "Spielort anzeigen"
     // deterministisch: hinzoomen, Marker ist einzeln, Popup auf. Ohne das
     // muesste man sich auf zoomToShowLayer und dessen Animation verlassen -
@@ -1655,29 +1865,24 @@ function ensureMap() {
   const codes = venueCode.length ? venueCode : venueCodes(S.data.venues);
   S.data.venues.forEach((v, i) => {
     if (v.lat == null) return;
-    const bits = [
-      v.addr && esc(v.addr),
-      v.cap && `Kapazität ${v.cap}`,
-      v.acc && v.acc.length && esc(v.acc.join(', ')),
-      v.inherited && v.parent && `Koordinaten von ${esc(v.parent)}`,
-    ].filter(Boolean);
-    popupHtml[i] =
-      `<div class="pop-title"><span class="pop-code">${esc(codes[i])}</span>
-         ${esc(v.n)}</div>
-       <div class="pop-meta">${counts.get(i) || 0} Auftritte${bits.length ? '<br>' + bits.join('<br>') : ''}</div>
-       <div class="pop-actions">
-         <button data-onlyvenue="${i}">Nur dieses Haus zeigen</button>
-       </div>`;
     const m = L.marker([v.lat, v.lng], {
       icon: L.divIcon({
         className: '', iconSize: [30, 30], iconAnchor: [15, 15],
         popupAnchor: [0, -14],
         html: `<span class="venue-code" title="${esc(v.n)}">${esc(codes[i])}</span>`,
       }),
-    }).bindPopup(popupHtml[i]);
+    }).bindPopup(() => venuePopup(i));
+    m.venueIndex = i;           // fuer clusterIcon(): welches Haus haengt dran
+    m.on('popupopen', () => { popupVenue = i; });
     cluster.addLayer(m);
     markers[i] = m;
     pts.push([v.lat, v.lng]);
+  });
+  // Auf Kartenebene, damit es auch das Popup erfasst, das showVenue() direkt
+  // an eine Koordinate haengt (der Marker steckt dann evtl. noch im Buendel).
+  map.on('popupopen', (e) => { popupRef = e.popup; });
+  map.on('popupclose', (e) => {
+    if (popupRef === e.popup) { popupRef = null; popupVenue = null; }
   });
   map.addLayer(cluster);
   if (pts.length) map.fitBounds(pts, { padding: [30, 30] });
@@ -1691,12 +1896,11 @@ function showVenue(i) {
   clearRoute();               // sonst bleiben die Spielorte blass
   openBox(null);
   S.mapOn = true;
-  S.mapLive = true;
   $('#btn-map').setAttribute('aria-pressed', 'true');
   render();
   const m = ensureMap();
   applyMapColors();
-  startMapLive();
+  if (S.mapLive) startMapLive();
   setTimeout(() => {
     m.invalidateSize();
     m.setView([v.lat, v.lng], MAP_DETAIL_ZOOM, { animate: false });
@@ -1704,7 +1908,8 @@ function showVenue(i) {
     // diesem Moment noch im Cluster stecken (die Gruppe baut erst bei
     // zoomend um), und dann haengt ein Marker-Popup an einem Element, das
     // gar nicht auf der Karte liegt.
-    if (popupHtml[i]) m.openPopup(popupHtml[i], [v.lat, v.lng], { offset: [0, -12] });
+    popupVenue = i;
+    m.openPopup(venuePopup(i), [v.lat, v.lng], { offset: [0, -12] });
   }, 80);
 }
 
@@ -1726,6 +1931,15 @@ document.addEventListener('click', (e) => {
     renderVenues();
     render();
     scrollTo({ top: 0, behavior: 'instant' });
+    return;
+  }
+
+  // Act aus dem Kartenpopup heraus oeffnen - von dort aus laesst er sich
+  // gleich bewerten, und die Farbe unter dem Finger zieht mit.
+  const popAct = t.closest('[data-popact]');
+  if (popAct) {
+    e.preventDefault(); e.stopPropagation();
+    openDetail(+popAct.dataset.popact);
     return;
   }
 
@@ -1829,6 +2043,8 @@ document.addEventListener('click', (e) => {
       if (!matchesUserFilters(id)) filterKeep.add(id);
       render();
     }
+    // Auf der Karte haengt am Favoriten das Herz an der Spielort-Blase.
+    if (S.mapOn) scheduleMapColors();
     return;
   }
 
@@ -1920,7 +2136,11 @@ document.addEventListener('click', (e) => {
   if (day) {
     S.day = day.dataset.day || null;
     for (const b of el.days.children) b.setAttribute('aria-selected', String(b === day));
-    mapOffQuiet();
+    // Auf der Karte heisst ein anderer Tag: andere Farben, NICHT zurueck zur
+    // Liste. Vorher stand hier mapOffQuiet() - damals hing an der Karte
+    // nichts vom Tag ab, jetzt schon. Eine liegende Route gehoert aber zum
+    // alten Tag und muss weg.
+    if (S.mapOn) clearRoute(); else mapOffQuiet();
     render();
     return;
   }
@@ -2060,15 +2280,17 @@ function setMap(on) {
   S.mapOn = on;
   if (!on) clearRoute();
   $('#btn-map').setAttribute('aria-pressed', String(on));
-  // Jedes Oeffnen startet wieder bei "Jetzt" - das ist der Sinn der Funktion
-  // unterwegs, eine von Hand gewaehlte Uhrzeit von letztem Mal waere hier
-  // nur eine Falle.
-  if (on) { openBox(null); S.mapLive = true; }
+  // Eine von Hand gewaehlte Uhrzeit UEBERLEBT das Schliessen. Erst hiess es
+  // "jedes Oeffnen faengt bei Jetzt an" - das macht die Funktion aber
+  // unbrauchbar, sobald man vorausplant: ausserhalb des Festivals zeigt
+  // "Jetzt" nichts, und jeder Abstecher in die Liste haette die eingestellte
+  // Zeit weggeworfen. Zurueck zur echten Uhr fuehrt der Knopf "Jetzt".
+  if (on) openBox(null);
   render();
   if (on) {
     const m = ensureMap();
     applyMapColors();      // die eben erst gebauten Marker sofort einfaerben
-    startMapLive();
+    if (S.mapLive) startMapLive();
     setTimeout(() => m.invalidateSize(), 60);
   } else {
     stopMapLive();
@@ -2098,26 +2320,31 @@ $('#btn-map').addEventListener('click', () => setMap(!S.mapOn));
 
 $('#maptime-now').addEventListener('click', () => {
   S.mapLive = !S.mapLive;
-  if (S.mapLive) startMapLive(); else stopMapLive();
+  if (S.mapLive) startMapLive(); else {
+    stopMapLive();
+    // Ohne "Jetzt" braucht es einen festen Wert - der zuletzt gezeigte.
+    if (!Number.isFinite(S.mapMin)) S.mapMin = festMin(localHHMM(new Date()));
+  }
   renderMapTime();
 });
+// Eigene Uhrzeit setzen heisst "Jetzt" verlassen - sonst ueberschreibt der
+// naechste Tick die gerade erst gewaehlte Zeit wieder.
 $('#maptime-time').addEventListener('input', (e) => {
-  // Eigene Uhrzeit setzen heisst "Jetzt" verlassen - sonst ueberschreibt der
-  // naechste Tick die gerade erst gewaehlte Zeit wieder.
-  S.mapLive = false;
-  stopMapLive();
-  S.mapHHMM = e.target.value;
-  applyMapColors();
-  $('#maptime-now').setAttribute('aria-pressed', 'false');
+  if (!e.target.value) return;
+  setMapMin(festMin(e.target.value));
 });
+$('#mapfader').addEventListener('input', (e) => setMapMin(+e.target.value));
 
-/* Die Kopfhoehe schwankt (Suchleiste, Genre-Kaesten). Statt sie in CSS zu
-   raten, wird sie gemessen. */
+/* Die Kopfhoehe schwankt (Suchleiste, Genre-Kaesten), und unter der Karte
+   liegt in der Kartenansicht der Fader. Statt das in CSS zu raten, wird
+   gemessen. */
 function sizeMap() {
   if (!S.mapOn) return;
   const top = document.querySelector('.top').getBoundingClientRect().height;
   const foot = document.querySelector('.foot').getBoundingClientRect().height;
-  el.mapBox.style.height = Math.max(260, innerHeight - top - foot) + 'px';
+  const bar = $('#mapbar');
+  const barH = bar && !bar.hidden ? bar.getBoundingClientRect().height : 0;
+  el.mapBox.style.height = Math.max(220, innerHeight - top - foot - barH) + 'px';
   if (map) map.invalidateSize();
 }
 addEventListener('resize', sizeMap);

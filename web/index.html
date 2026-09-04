@@ -92,6 +92,17 @@
   <div id="list" class="list"></div>
   <div id="map" class="map" hidden></div>
 
+  <!-- Fader unter der Karte: eine Fahrt durch den Festivalabend. Liegt
+       bewusst UNTER der Karte und nicht darüber, damit er den Hinweis auf
+       OpenStreetMap in der Ecke nicht verdeckt. -->
+  <div id="mapbar" class="mapbar" hidden>
+    <span class="mapbar-clock">
+      <b id="mapbar-day"></b> <b id="mapbar-time">—</b>
+    </span>
+    <input type="range" id="mapfader" min="0" max="1439" step="5" value="0"
+           aria-label="Uhrzeit auf der Karte">
+  </div>
+
   <section id="news" class="plan" hidden aria-label="Änderungen am Programm">
     <div class="plan-head">
       <p class="menu-note" id="news-meta"></p>

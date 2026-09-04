@@ -867,13 +867,126 @@ with sync_playwright() as p:
           pg.locator(".venue-code-r1").count() == 1,
           pg.locator("#maptime-legend").inner_text())
     check("Legende nennt den Treffer",
-          "1 bewertet dabei" in pg.locator("#maptime-legend").inner_text(),
+          pg.locator("#maptime-legend").inner_text().startswith("1 bewertet"),
           pg.locator("#maptime-legend").inner_text())
     check("'Jetzt' schaltet sich beim Eintippen einer Uhrzeit ab",
           pg.locator("#maptime-now").get_attribute("aria-pressed") == "false")
+
+    # Der Fader unten spannt den FESTIVALABEND, nicht den Kalendertag: die
+    # Nacht (00:xx) gehoert an das Ende des Abends, nicht an seinen Anfang.
+    # Deshalb wird in Festivalminuten gerechnet, alles vor 6 Uhr plus 24 h.
+    def festmin(hhmm):
+        v = int(hhmm[:2]) * 60 + int(hhmm[3:5])
+        return v + 1440 if v < 360 else v
+
+    day_times = sorted(festmin(s["t"][11:16]) for s in lineup3["shows"]
+                       if s["d"] == target["d"] and not s.get("tbd") and s.get("t"))
+    check("Faderleiste liegt unter der Karte", pg.locator("#mapbar").is_visible())
+    check("Fader spannt den ganzen Abend, Nacht am Ende",
+          int(pg.locator("#mapfader").get_attribute("min")) == day_times[0]
+          and int(pg.locator("#mapfader").get_attribute("max")) == day_times[-1] + 40,
+          f'{pg.locator("#mapfader").get_attribute("min")}..'
+          f'{pg.locator("#mapfader").get_attribute("max")} gegen '
+          f'{day_times[0]}..{day_times[-1] + 40}')
+
+    # Ein Nacht-Auftritt desselben Festivaltags liegt hinter 24:00 - wenn der
+    # Fader ihn trifft, stimmt die Rechnung.
+    late = [s for s in lineup3["shows"]
+            if s["d"] == target["d"] and not s.get("tbd") and s.get("t")
+            and s["t"][11:13] < "06" and s.get("v") is not None]
+    if late:
+        pg.locator("#mapfader").fill(str(festmin(late[0]["t"][11:16])))
+        pg.locator("#mapfader").dispatch_event("input"); pg.wait_for_timeout(400)
+        check("Fader erreicht die Auftritte nach Mitternacht",
+              pg.locator("#mapbar-time").inner_text() == late[0]["t"][11:16],
+              f'{pg.locator("#mapbar-time").inner_text()} gegen {late[0]["t"][11:16]}')
+        check("Und das Zeitfeld oben zieht mit",
+              pg.locator("#maptime-time").input_value() == late[0]["t"][11:16],
+              f'{pg.locator("#maptime-time").input_value()} gegen {late[0]["t"][11:16]}')
+
+    # Der gemeldete Fehler: Tagwechsel auf der Karte sprang zurueck zur Liste.
+    other_day = next(d for d in lineup3["days"] if d != target["d"])
+    pg.click(f'.day[data-day="{other_day}"]'); pg.wait_for_timeout(600)
+    check("Tagwechsel bleibt auf der Karte",
+          pg.locator("#map").is_visible() and pg.locator("#list").is_hidden())
+    check("Und die Faderleiste nennt den neuen Tag",
+          pg.locator("#mapbar-day").inner_text() != "",
+          pg.locator("#mapbar-day").inner_text())
+
+    # Zurueck auf den Tag des Testauftritts und auf dessen Uhrzeit.
+    pg.click(f'.day[data-day="{target["d"]}"]'); pg.wait_for_timeout(400)
+    pg.locator("#mapfader").fill(str(festmin(target["t"][11:16])))
+    pg.locator("#mapfader").dispatch_event("input"); pg.wait_for_timeout(400)
+
+    # Buendel tragen die Farbe ihres besten Kindes - sonst muesste man erst
+    # hineinzoomen, um zu sehen, ob sich der Kreis lohnt. Dafuer erst weit
+    # genug HERAUSzoomen: steht der bewertete Marker gerade einzeln, sagt die
+    # Pruefung nichts ueber die Buendel aus.
+    for _ in range(4):
+        pg.locator(".leaflet-control-zoom-out").click(); pg.wait_for_timeout(250)
+    pg.wait_for_timeout(500)
+    check("Ein Buendel ist nach der besten Note gefaerbt",
+          pg.locator(".marker-cluster.mc-r1").count() >= 1,
+          f'r1={pg.locator(".marker-cluster.mc-r1").count()} '
+          f'unrated={pg.locator(".marker-cluster.mc-unrated").count()} '
+          f'off={pg.locator(".marker-cluster.mc-off").count()} '
+          f'einzeln-r1={pg.locator(".venue-code-r1").count()}')
+
+    # Die gewaehlte Uhrzeit muss den Ausflug in die Liste ueberleben - sonst
+    # ist Vorausplanen nicht moeglich, weil "Jetzt" ausserhalb des Festivals
+    # nichts zeigt.
     pg.click("#btn-map"); pg.wait_for_timeout(400)
     check("Zurueck in der Liste stehen die Filter wieder da",
           pg.locator(".filters").is_visible() and pg.locator("#maptime").is_hidden())
+    pg.click("#btn-map"); pg.wait_for_timeout(800)
+    check("Gewaehlte Uhrzeit ueberlebt Schliessen und Oeffnen",
+          pg.locator("#mapbar-time").inner_text() == target["t"][11:16],
+          f'{pg.locator("#mapbar-time").inner_text()} gegen {target["t"][11:16]}')
+
+    # Spielort antippen: wer spielt hier zu DIESER Uhrzeit?
+    pg.click("#btn-map"); pg.wait_for_timeout(300)
+    pg.locator(f'.row[data-act="{target["a"]}"] .venue').first.click()
+    pg.wait_for_timeout(1600)
+    check("Popup nennt Tag und Uhrzeit",
+          target["t"][11:16] in pg.locator(".pop-now-head").inner_text(),
+          pg.locator(".pop-now-head").inner_text())
+    check("Popup zeigt, wer dann dort spielt",
+          pg.locator(".pop-act").count() >= 1
+          and target["t"][11:16] in pg.locator(".pop-act").first.inner_text(),
+          pg.locator(".pop-act").first.inner_text().replace("\n", " ") if
+          pg.locator(".pop-act").count() else "keine Zeile")
+    check("Mit der eigenen Note daran", pg.locator(".pop-act .grade").count() >= 1)
+    pg.locator(".pop-act").first.click(); pg.wait_for_timeout(600)
+    check("Und der Act laesst sich von dort oeffnen",
+          pg.locator("#detail[open]").count() == 1)
+
+    # Favorit: kleines lila Herz an der Blase des Spielorts. Gesetzt wird er
+    # aus dem eben geoeffneten Detaildialog - die Liste liegt hinter der
+    # Karte und ist gerade nicht anklickbar.
+    hearts_before = pg.locator(".venue-fav").count()
+    pg.locator('#detail [data-fav]').first.click(); pg.wait_for_timeout(400)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
+    hearts_after = pg.locator(".venue-fav").count()
+    check("Favorit haengt als Herz an der Spielort-Blase",
+          hearts_after == hearts_before + 1, f"{hearts_before} -> {hearts_after}")
+    heart_color = pg.evaluate("""() => {
+      const h = document.querySelector('.venue-fav');
+      return h ? getComputedStyle(h).color : '';
+    }""")
+    check("Und zwar in der Akzentfarbe", bool(heart_color)
+          and heart_color not in ("rgb(0, 0, 0)", ""), heart_color)
+
+    # Wieder abwaehlen, damit der Zustand fuer spaetere Pruefungen steht -
+    # und weil das Herz dann auch verschwinden muss.
+    pg.click("#btn-map"); pg.wait_for_timeout(400)
+    pg.locator(f'.row[data-act="{target["a"]}"] .row-fav').first.click()
+    pg.wait_for_timeout(300)
+    pg.click("#btn-map"); pg.wait_for_timeout(700)
+    check("Herz verschwindet mit dem Favoriten",
+          pg.locator(".venue-fav").count() == hearts_before,
+          f"{pg.locator('.venue-fav').count()} gegen {hearts_before}")
+
+    pg.click("#btn-map"); pg.wait_for_timeout(400)
 
     # --- Vorschlaege importieren ---
     # Bewusst in einem FRISCHEN Kontext: im bisherigen sind schon Acts

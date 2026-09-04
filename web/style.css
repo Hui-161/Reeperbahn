@@ -278,6 +278,33 @@ h1 span { color: var(--accent); }
   font: inherit;
 }
 
+/* Faderleiste unter der Karte. Der Daumen liegt unten am Geraet - dort
+   gehoert der Regler hin, nicht in den Kopf. */
+.mapbar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .5rem .75rem calc(.5rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.mapbar-clock {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: .95rem;
+  color: var(--ink);
+}
+.mapbar-clock b { font-weight: 700; }
+#mapbar-day { color: var(--ink-soft); font-weight: 600; margin-right: .15rem; }
+#mapfader {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Grosse Trefferflaeche: der Regler wird im Gehen bedient. */
+  height: 44px;
+  accent-color: var(--accent);
+}
+#mapfader:disabled { opacity: .4; }
+
 .chip {
   flex: 0 0 auto;
   display: inline-flex;
@@ -618,6 +645,38 @@ main { min-height: 60vh; }
 .pop-meta { color: #555; font-size: .8rem; }
 .leaflet-popup-content { margin: .6rem .8rem; }
 
+/* Wer hier zur gewaehlten Uhrzeit spielt. Feste dunkle Farben statt der
+   Theme-Variablen: Leaflets Popup bleibt in beiden Ansichten weiss (siehe
+   das #555 oben), --ink waere im Dunkelmodus weiss auf weiss. */
+.pop-now { margin: .4rem 0 .5rem; }
+.pop-now-head {
+  font-size: .75rem;
+  font-weight: 600;
+  color: #777;
+  margin-bottom: .2rem;
+}
+.pop-act {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  width: 100%;
+  min-height: 34px;
+  padding: .2rem .3rem;
+  border: 0;
+  border-radius: 6px;
+  background: #f3f0fb;
+  color: #12111a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pop-act + .pop-act { margin-top: .2rem; }
+.pop-act:hover { background: #e9e3f8; }
+.pop-act-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: .8rem; }
+.pop-act-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop-act-fav { color: #5730ce; }
+.pop-none { font-size: .8rem; color: #555; margin-bottom: .2rem; }
+
 /* ---------- Abendplan ---------- */
 
 .plan { padding: .75rem .75rem 3rem; }
@@ -876,6 +935,37 @@ main { min-height: 60vh; }
 .venue-code-r5 { background: var(--r5); border-color: var(--r5); color: var(--on-scale); }
 .venue-code-unrated { background: var(--ink-faint); border-color: var(--ink-faint); color: var(--on-scale); }
 .venue-code-off { opacity: .38; }
+
+/* Dasselbe fuer die Buendel: ohne Farbe muesste man erst hineinzoomen, um
+   zu sehen, ob sich der Kreis lohnt. Der Rand bleibt geringt, damit ein
+   Buendel weiter von einem einzelnen Haus zu unterscheiden ist. */
+.marker-cluster.mc-r1 div { background: var(--r1); color: var(--on-scale); }
+.marker-cluster.mc-r2 div { background: var(--r2); color: var(--on-scale); }
+.marker-cluster.mc-r3 div { background: var(--r3); color: var(--on-scale); }
+.marker-cluster.mc-r4 div { background: var(--r4); color: var(--on-scale); }
+.marker-cluster.mc-r5 div { background: var(--r5); color: var(--on-scale); }
+.marker-cluster.mc-unrated div { background: var(--ink-faint); color: var(--on-scale); }
+.marker-cluster.mc-off div { opacity: .45; }
+
+/* Das Herz haengt aussen an der Blase, nicht darin - innen waere neben zwei
+   Buchstaben kein Platz, und es soll auch am Buendel gleich aussehen. */
+.venue-code, .marker-cluster div { position: relative; }
+.venue-fav {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--accent);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .4);
+}
 
 .pop-code, .vcode {
   display: inline-block;
