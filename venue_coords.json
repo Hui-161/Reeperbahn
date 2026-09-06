@@ -1,0 +1,11 @@
+{
+  "_hinweis": "Koordinaten, die das Festival schuldig bleibt. Manche Haeuser stehen im Ortsverzeichnis nur mit Adresse, ohne Geokoordinaten - auf der Karte fehlen sie dann ganz. Hier nachtragen: Schluessel ist der Name des Hauses genau so, wie ihn das Festival schreibt (Gross-/Kleinschreibung egal). lat/lng als Dezimalzahlen, WGS84, wie sie jede Karte anzeigt (Hamburg liegt bei 53.5x / 9.9x). Eintraege mit null werden uebergangen. Eigene Koordinaten des Festivals haben immer Vorrang - das hier greift nur, wo nichts steht.",
+  "_pruefen": "Nach dem Eintragen: python3 fetch_venues.py --check (der Ort darf dann nicht mehr unter 'NICHT verortbar' stehen).",
+
+  "o2 music Studio Hamburg": {
+    "lat": null,
+    "lng": null,
+    "adresse": "Karolinenstrasse 45, 20357 Hamburg (laut Festival-Ortsverzeichnis)",
+    "quelle": ""
+  }
+}

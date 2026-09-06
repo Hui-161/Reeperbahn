@@ -721,22 +721,27 @@ function refreshAct(ai) {
   // Auf der Karte gibt es keine Zeilen zu flicken - dort aendert eine neue
   // Note die Farbe des Spielorts, und zwar sofort.
   if (S.mapOn) { scheduleMapColors(); return; }
-  // Ein aktiver Filter auf Note, Favorit, Gesehen oder Team entscheidet ueber
-  // die Sichtbarkeit - dann hilft Flicken nicht, es muss neu gefiltert
-  // werden. War der Act davor sichtbar und faellt er durch genau diese
-  // Aenderung jetzt raus, bleibt er trotzdem stehen (filterKeep) - sonst
-  // verschwindet er beim Durcharbeiten der Liste unter der Hand, noch bevor
-  // man den naechsten Klick gemacht hat.
-  if (S.rates.size || S.favOnly || S.seenOnly || S.teamOnly) {
-    const act = S.data.acts[ai];
-    const wasVisible = act && el.list.querySelector(`.row[data-act="${ai}"]`);
-    if (wasVisible && !matchesUserFilters(act.id)) filterKeep.add(act.id);
-    render();
-    return;
-  }
-  const rows = el.list.querySelectorAll(`.row[data-act="${ai}"]`);
-  if (!rows.length) return;
   const act = S.data.acts[ai];
+  const rows = el.list.querySelectorAll(`.row[data-act="${ai}"]`);
+
+  /* Bei aktivem Noten-, Favoriten-, Gesehen- oder Team-Filter entscheidet die
+     Aenderung mit ueber die Sichtbarkeit. Frueher wurde deshalb die ganze
+     Liste neu gebaut - und weil der Neuaufbau restoreAnchor() ruft, das
+     direkt danach mit den GESCHAETZTEN Zeilenhoehen von content-visibility
+     rechnet, sprang die Liste bei jeder Note ein Stueck weiter nach unten
+     (gemessen 582, dann je rund 315 px).
+
+     Noetig ist der Neuaufbau nicht mehr: faellt der Act durch die eigene
+     Aenderung aus dem Filter, bleibt er dank filterKeep ohnehin bis zum
+     naechsten Filterwechsel stehen. Die Zeilenmenge aendert sich also gar
+     nicht, und Flicken genuegt. Nur wenn der Act GAR NICHT in der Liste
+     steht, kann er durch die Aenderung neu hineinpassen - dann muss neu
+     gebaut werden. */
+  if (act && (S.rates.size || S.favOnly || S.seenOnly || S.teamOnly)) {
+    if (!rows.length) { render(); return; }
+    if (!matchesUserFilters(act.id)) filterKeep.add(act.id);
+  }
+  if (!rows.length) return;
   const map = showMap();
   for (const node of rows) {
     const sh = map.get(node.dataset.show);

@@ -19,7 +19,9 @@ jobs:
           python-version: "3.12"
 
       - name: Datenschicht testen
-        run: python3 rbf_core.py selftest
+        run: |
+          python3 rbf_core.py selftest
+          python3 fetch_venues.py --selftest
 
       - name: Planungsalgorithmus testen
         run: node web/test_plan.mjs

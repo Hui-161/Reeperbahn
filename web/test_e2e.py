@@ -1377,20 +1377,41 @@ with sync_playwright() as p:
                        ".dataset.probe === 'x'"))
     pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
 
-    # Mit aktivem Notenfilter MUSS neu gebaut werden - die Zeile kann ja
-    # herausfallen. Sonst bliebe eine Zeile stehen, die nicht mehr passt.
+    # Auch MIT Notenfilter wird nicht mehr alles neu gebaut. Frueher war das
+    # noetig, weil die bewertete Zeile aus dem Filter fallen kann - seit
+    # filterKeep bleibt sie aber bis zum naechsten Filterwechsel ohnehin
+    # stehen. Der Neuaufbau brachte also nichts und liess die Liste
+    # springen. Geprueft wird beides: fremde Zeile bleibt dasselbe Element,
+    # die bewertete wird ersetzt (traegt die neue Note), und nichts rutscht.
     pg5.click("#f-rate"); pg5.wait_for_timeout(300)
     pg5.locator('#ratebox .chip[data-rate="3"]').click(); pg5.wait_for_timeout(400)
-    pg5.evaluate("() => { const r = document.querySelectorAll('.row')[0];"
-                 " if (r) r.dataset.probe2 = 'y'; }")
+    pg5.click("#f-rate"); pg5.wait_for_timeout(200)
+    rows_before = pg5.locator(".row").count()
+    # Jede Zeile bekommt ihre eigene Marke: danach laesst sich sagen, WELCHE
+    # ersetzt wurde. (Bei diesem Filter ist oft nur eine Zeile sichtbar -
+    # eine feste "Nachbarzeile" gibt es also nicht.)
+    pg5.evaluate("""() => [...document.querySelectorAll('.row')]
+      .forEach((r, i) => { r.dataset.probe2 = 'p' + i; })""")
+    y_before = pg5.evaluate("() => scrollY")
     pg5.locator(".row").first.locator(".row-time").click()
     pg5.wait_for_selector("#detail .rate")
     pg5.locator("#detail .rate button[data-r='5']").click()
     pg5.wait_for_timeout(400)
     pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
-    check("Mit Notenfilter wird die Liste neu gebaut",
-          pg5.evaluate("() => { const r = document.querySelectorAll('.row')[0];"
-                       " return !r || r.dataset.probe2 !== 'y'; }"))
+    kept = pg5.evaluate("""() => [...document.querySelectorAll('.row')]
+      .map((r, i) => r.dataset.probe2 === 'p' + i)""")
+    check("Mit Notenfilter wird nur die bewertete Zeile ersetzt",
+          bool(kept) and kept[0] is False and all(kept[1:]),
+          f"ersetzt: {[i for i, k in enumerate(kept) if not k]} von {len(kept)}")
+    check("Die Zeile bleibt trotz Filter stehen und traegt die neue Note",
+          pg5.locator(".row").count() == rows_before
+          and pg5.locator(".row").first.locator(".grade").inner_text() == "5",
+          f'{pg5.locator(".row").count()} von {rows_before} Zeilen, '
+          + pg5.locator(".row").first.locator(".grade").inner_text())
+    check("Und die Liste rutscht dabei nicht",
+          abs(pg5.evaluate("() => scrollY") - y_before) <= 2,
+          f'{y_before} -> {pg5.evaluate("() => scrollY")}')
+    pg5.click("#f-rate"); pg5.wait_for_timeout(200)
     pg5.locator('#ratebox .chip[data-rate="3"]').click()
     pg5.click("#f-rate"); pg5.wait_for_timeout(300)
 
@@ -1488,6 +1509,43 @@ with sync_playwright() as p:
         check("Und das Beenden auch nicht", abs(y3 - y2) <= 2, f"{y2} -> {y3}")
         check("Danach zeigt keine Zeile mehr das Pausenzeichen",
               pg5.locator(".row-play.is-playing").count() == 0)
+
+        # Und das Bewerten AUS der Leiste heraus - der zweite gemeldete
+        # Sprung. Ohne den Fix gemessen: 582 px, dann je rund 315 px, also
+        # bei jedem Durchhoeren ein Stueck weiter nach unten.
+        #
+        # Gemessen wird die BILDSCHIRMPOSITION einer sichtbaren Zeile, nicht
+        # scrollY: hat der Act zwei Auftritte, wird auch seine zweite Zeile
+        # ersetzt, und liegt die oberhalb des Fensters, verschiebt der
+        # Browser scrollY von sich aus, um das Sichtbare stillzuhalten
+        # (Scroll-Anchoring). Genau das ist erwuenscht - fuer das Auge
+        # bewegt sich dabei nichts, und danach fragt die Meldung.
+        pg5.locator(".row").nth(playable[0]).locator(".row-play").click()
+        pg5.wait_for_timeout(700)
+        probe_js = """() => {
+          const r = [...document.querySelectorAll('.row')]
+            .find(x => { const t = x.getBoundingClientRect().top;
+                         return t > 150 && t < 700; });
+          return r ? Math.round(r.getBoundingClientRect().top) : null;
+        }"""
+        seen_at = pg5.evaluate(probe_js)
+        moved, scrolled = [], []
+        ry = pg5.evaluate("() => scrollY")
+        for note in ("3", "2", "1"):
+            pg5.locator(f'#player-rate button[data-r="{note}"]').click()
+            pg5.wait_for_timeout(500)
+            now_at = pg5.evaluate(probe_js)
+            ry2 = pg5.evaluate("() => scrollY")
+            moved.append(abs((now_at if now_at is not None else 0)
+                             - (seen_at if seen_at is not None else 0)))
+            scrolled.append(abs(ry2 - ry))
+            seen_at, ry = now_at, ry2
+        check("Bewerten in der Anspielleiste verrueckt die Liste nicht",
+              max(moved) <= 2, f"Sichtbares: {moved} px, scrollY: {scrolled} px")
+        check("Die Note steht danach in der Zeile",
+              pg5.locator(".row").nth(playable[0]).locator(".grade").inner_text() == "1",
+              pg5.locator(".row").nth(playable[0]).locator(".grade").inner_text())
+        pg5.click("#player-close"); pg5.wait_for_timeout(300)
     else:
         check("Zwei anspielbare Zeilen im Blick gefunden", False, str(playable))
     pg5.click("#f-rate"); pg5.wait_for_timeout(200)

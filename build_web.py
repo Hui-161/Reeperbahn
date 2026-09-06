@@ -21,7 +21,7 @@ import sys
 from datetime import date as _date, timedelta
 from pathlib import Path
 
-from fetch_venues import build as build_venues, norm, VENUES_Q
+from fetch_venues import apply_manual, build as build_venues, norm, VENUES_Q
 from gql import query
 
 OUT = Path("web/data/lineup.json")
@@ -75,7 +75,11 @@ def main() -> int:
     shows_in = snap["shows"]
 
     if args.offline and Path("venues.json").exists():
-        venues_all = json.loads(Path("venues.json").read_text(encoding="utf-8"))
+        # apply_manual() auch hier: eine gespeicherte venues.json kann aelter
+        # sein als ein frisch nachgetragener Eintrag in venue_coords.json.
+        # build_venues() macht das von sich aus.
+        venues_all = apply_manual(
+            json.loads(Path("venues.json").read_text(encoding="utf-8")))
     else:
         venues_all = build_venues(query(VENUES_Q)["entityQuery"]["items"])
     venue_by_key = {v["key"]: v for v in venues_all}

@@ -71,6 +71,59 @@ def coords(node) -> tuple[float, float] | None:
     return None
 
 
+MANUAL_FILE = Path("venue_coords.json")
+
+
+def manual_coords(path: Path | None = None) -> dict[str, tuple[float, float]]:
+    """Von Hand nachgetragene Koordinaten, nach normalisiertem Namen.
+
+    Das Festival traegt bei manchen Haeusern nur die Adresse ein und laesst
+    die Koordinaten leer - im September 2026 etwa beim 'o2 music Studio
+    Hamburg'. Auf der Karte fehlt so ein Haus dann ganz. Hier lassen sie
+    sich nachreichen, ohne Code anzufassen; eigene Koordinaten der Quelle
+    haben immer Vorrang, nachgetragen wird nur, wo nichts steht.
+
+    Der Pfad wird erst beim Aufruf aufgeloest, nicht als Vorgabewert
+    gebunden - sonst zeigt er auf die Datei von damals, und ein Test (oder
+    ein anderes Arbeitsverzeichnis) laeuft ins Leere.
+    """
+    path = path or MANUAL_FILE
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"{path} ist kein gueltiges JSON: {e}", file=sys.stderr)
+        return {}
+    out: dict[str, tuple[float, float]] = {}
+    for key, v in raw.items():
+        if key.startswith("_") or not isinstance(v, dict):
+            continue          # "_hinweis" und Kommentarzeilen ueberspringen
+        lat, lng = v.get("lat"), v.get("lng")
+        if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
+            out[norm(key)] = (float(lat), float(lng))
+    return out
+
+
+def apply_manual(venues: list[dict], path: Path | None = None) -> list[dict]:
+    """Nachgetragene Koordinaten einsetzen, wo die Quelle keine hat.
+
+    Bewusst als eigener Schritt AUF der fertigen Liste, nicht mitten im
+    Aufbau: build_web.py kann die Spielorte auch aus einer schon
+    geschriebenen venues.json lesen (--offline). Liefe das Nachtragen nur
+    im Aufbau, waere ein frisch eingetragener Ort auf diesem Weg wieder
+    ohne Koordinaten - und das faellt niemandem auf.
+    """
+    extra = manual_coords(path)
+    if not extra:
+        return venues
+    for v in venues:
+        if v.get("lat") is None and v.get("key") in extra:
+            v["lat"], v["lng"] = extra[v["key"]]
+            v["coords_from"] = "manual"
+    return venues
+
+
 def build(items: list[dict]) -> list[dict]:
     out = []
     for it in items:
@@ -106,7 +159,7 @@ def build(items: list[dict]) -> list[dict]:
             "description": it.get("description") or None,
             "url": (first(it.get("url")) or {}).get("path"),
         })
-    return out
+    return apply_manual(out)
 
 
 def check_against(venues: list[dict], snapshot_glob: str) -> int:
@@ -134,6 +187,12 @@ def check_against(venues: list[dict], snapshot_glob: str) -> int:
     inherited = [l for l, v in located if v["coords_from"] == "parent"]
     if inherited:
         print(f"  davon ueber Elternort: {len(inherited)}  {inherited}")
+    # Nachgetragenes ausweisen: es stammt nicht aus der Quelle und sollte
+    # nicht stillschweigend als deren Angabe durchgehen.
+    manual = [l for l, v in located if v["coords_from"] == "manual"]
+    if manual:
+        print(f"  davon von Hand nachgetragen: {len(manual)}  {manual}"
+              f"  (aus {MANUAL_FILE})")
     if unlocated:
         print(f"  NICHT verortbar ({len(unlocated)}):")
         for label, v in unlocated:
@@ -143,13 +202,68 @@ def check_against(venues: list[dict], snapshot_glob: str) -> int:
     return 0
 
 
+def selftest() -> int:
+    """Prueft das Nachtragen von Koordinaten - ohne Netz."""
+    import tempfile
+    fails = []
+
+    def check(name, cond, extra=""):
+        print(("  ok    " if cond else "  FEHL ") + name + (f"  {extra}" if extra else ""))
+        if not cond:
+            fails.append(name)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        f = Path(tmp) / "venue_coords.json"
+        f.write_text(json.dumps({
+            "_hinweis": "Kommentarzeile, keine Koordinate",
+            "Leeres Haus": {"lat": None, "lng": None},        # noch nicht gefuellt
+            "Neues Haus": {"lat": 53.55, "lng": 9.96},
+            "Haus  MIT   Leerzeichen": {"lat": 53.5, "lng": 9.9},
+        }, ensure_ascii=False), encoding="utf-8")
+        got = manual_coords(f)
+        check("Platzhalter ohne Werte wird uebergangen", "leeres haus" not in got, str(got.keys()))
+        check("Kommentarzeile wird uebergangen", not any(k.startswith("_") for k in got))
+        check("Name wird normalisiert",
+              "haus mit leerzeichen" in got, str(sorted(got)))
+
+        venues = [
+            {"key": "neues haus", "lat": None, "lng": None, "coords_from": None},
+            {"key": "hat schon", "lat": 1.0, "lng": 2.0, "coords_from": "self"},
+            {"key": "leeres haus", "lat": None, "lng": None, "coords_from": None},
+        ]
+        apply_manual(venues, f)
+        check("Fehlende Koordinaten werden nachgetragen",
+              venues[0]["lat"] == 53.55 and venues[0]["coords_from"] == "manual",
+              str(venues[0]))
+        check("Vorhandene Koordinaten bleiben unangetastet",
+              venues[1]["lat"] == 1.0 and venues[1]["coords_from"] == "self",
+              str(venues[1]))
+        check("Ohne Wert bleibt der Ort unverortet",
+              venues[2]["lat"] is None and venues[2]["coords_from"] is None,
+              str(venues[2]))
+
+        bad = Path(tmp) / "kaputt.json"
+        bad.write_text("{ das ist kein json", encoding="utf-8")
+        check("Kaputte Datei wirft nicht, sondern liefert nichts",
+              manual_coords(bad) == {})
+
+    print("selftest: " + ("alle Pruefungen bestanden" if not fails
+                          else f"FEHLGESCHLAGEN: {fails}"))
+    return 1 if fails else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="venues.json")
     ap.add_argument("--check", nargs="?", const="data/snapshots/snapshot-*.json",
                     help="gegen den neuesten Snapshot pruefen")
+    ap.add_argument("--selftest", action="store_true",
+                    help="nur die Koordinaten-Nachtraege pruefen, ohne Netz")
     args = ap.parse_args()
+
+    if args.selftest:
+        return selftest()
 
     data = query(VENUES_Q)["entityQuery"]
     venues = build(data["items"])
