@@ -863,9 +863,15 @@ with sync_playwright() as p:
     pg.fill("#maptime-time", target["t"][11:16])
     pg.locator("#maptime-time").dispatch_event("input")
     pg.wait_for_timeout(400)
+    # Ob der Marker gerade einzeln steht oder im Buendel haengt, entscheiden
+    # Zoom und Dichte der Haeuser - beides wandert mit jedem Line-up.
+    # Gefaerbt sein muss er so oder so.
     check("Eigene Bestnote faerbt den Spielort gruen",
-          pg.locator(".venue-code-r1").count() == 1,
-          pg.locator("#maptime-legend").inner_text())
+          pg.locator(".venue-code-r1").count()
+          + pg.locator(".marker-cluster.mc-r1").count() >= 1,
+          f'einzeln={pg.locator(".venue-code-r1").count()} '
+          f'Buendel={pg.locator(".marker-cluster.mc-r1").count()} | '
+          + pg.locator("#maptime-legend").inner_text())
     check("Legende nennt den Treffer",
           pg.locator("#maptime-legend").inner_text().startswith("1 bewertet"),
           pg.locator("#maptime-legend").inner_text())
@@ -1433,6 +1439,60 @@ with sync_playwright() as p:
     pg5.click("#player-close"); pg5.wait_for_timeout(300)
     check("Skala verschwindet mit der Leiste",
           pg5.locator("#player-rate button").count() == 0)
+
+    # --- Anspielen darf die Liste nicht verruecken, auch nicht mit Filter ---
+    # Gemeldet beim Weiterspringen zum naechsten Act. Ursache war nicht der
+    # Player, sondern refreshAct(): bei aktivem Noten-, Favoriten-, Gesehen-
+    # oder Team-Filter baut es die ganze Liste neu, weil eine NOTE die
+    # Sichtbarkeit aendern kann. Fuers Anspielen gilt das nie. Ohne den Fix
+    # gemessen: 687 px beim ersten Play, 420 beim Wechsel, 316 beim Stopp.
+    pg5.click('.day[data-day=""]'); pg5.wait_for_timeout(400)
+    pg5.click("#f-rate"); pg5.wait_for_selector("#ratebox .chip")
+    pg5.locator('#ratebox .chip[data-rate="0"]').click(); pg5.wait_for_timeout(400)
+    pg5.click("#f-rate"); pg5.wait_for_timeout(200)
+    pg5.evaluate("() => scrollTo(0, 4000)"); pg5.wait_for_timeout(400)
+    playable = pg5.evaluate("""() => {
+      const out = [];
+      [...document.querySelectorAll('.row')].forEach((r, i) => {
+        const top = r.getBoundingClientRect().top;
+        if (top > 120 && top < 700 && r.querySelector('.row-play').dataset.quickplay)
+          out.push(i);
+      });
+      return out.slice(0, 2);
+    }""")
+    if len(playable) == 2:
+        y0 = pg5.evaluate("() => scrollY")
+        pg5.locator(".row").nth(playable[0]).locator(".row-play").click()
+        pg5.wait_for_timeout(700)
+        y1 = pg5.evaluate("() => scrollY")
+        check("Anspielen mit aktivem Filter verrueckt die Liste nicht",
+              abs(y1 - y0) <= 2, f"{y0} -> {y1}")
+        pg5.locator(".row").nth(playable[1]).locator(".row-play").click()
+        pg5.wait_for_timeout(700)
+        y2 = pg5.evaluate("() => scrollY")
+        check("Und der Wechsel zum naechsten Act auch nicht",
+              abs(y2 - y1) <= 2, f"{y1} -> {y2}")
+        # Nicht "genau eine Zeile": ein Act mit zwei Auftritten hat zwei
+        # Zeilen, und beide gehoeren zum laufenden Anspielen. Was NICHT
+        # passieren darf, ist ein Pausenzeichen an einem ZWEITEN Act - so
+        # sah es vorher aus, weil die vorher spielende Zeile ihr Zeichen
+        # behielt.
+        playing_acts = pg5.evaluate("""() => [...new Set(
+          [...document.querySelectorAll('.row-play.is-playing')]
+            .map(e => e.closest('.row').dataset.act))]""")
+        check("Das Pausenzeichen steht nur beim laufenden Act",
+              len(playing_acts) == 1, str(playing_acts))
+        pg5.locator(".row").nth(playable[1]).locator(".row-play").click()
+        pg5.wait_for_timeout(600)
+        y3 = pg5.evaluate("() => scrollY")
+        check("Und das Beenden auch nicht", abs(y3 - y2) <= 2, f"{y2} -> {y3}")
+        check("Danach zeigt keine Zeile mehr das Pausenzeichen",
+              pg5.locator(".row-play.is-playing").count() == 0)
+    else:
+        check("Zwei anspielbare Zeilen im Blick gefunden", False, str(playable))
+    pg5.click("#f-rate"); pg5.wait_for_timeout(200)
+    pg5.locator('#ratebox .chip[data-rate="0"]').click(); pg5.wait_for_timeout(300)
+    pg5.click("#f-rate"); pg5.wait_for_timeout(200)
 
     # Offscreen-Zeilen werden vom Browser uebersprungen - ohne das dauert ein
     # Neuaufbau fast eine Sekunde.

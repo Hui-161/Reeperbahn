@@ -882,6 +882,27 @@ function renderPlayerRate(ai) {
       aria-label="Note ${rateText(k)} — ${esc(label)}">${rateText(k)}</button>`).join('');
 }
 
+/* Nur die Play-Symbole nachziehen, sonst nichts.
+
+   Anspielen aendert an keiner Zeile etwas, was ein Filter bewerten wuerde -
+   refreshAct() weiss das nicht und baut bei aktivem Noten-, Favoriten-,
+   Gesehen- oder Team-Filter die ganze Liste neu. Der Neuaufbau ruft
+   restoreAnchor(), und genau daran sprang die Liste beim Weiterspringen
+   zum naechsten Act. Nebenbei behebt das eine zweite Kleinigkeit: vorher
+   bekam nur die NEUE Zeile ihr Symbol, die vorher spielende behielt das
+   Pausenzeichen. */
+function refreshPlayIcons() {
+  if (!S.data) return;
+  for (const node of el.list.querySelectorAll('.row-play')) {
+    const row = node.closest('.row');
+    const act = row && S.data.acts[+row.dataset.act];
+    if (!act) continue;
+    const on = playingAct === act.id;
+    node.classList.toggle('is-playing', on);
+    node.textContent = on ? '❙❙' : '▶';
+  }
+}
+
 function openPlayer(src, name, actId, ai) {
   playingAct = actId;
   $('#player-name').textContent = name;
@@ -897,15 +918,14 @@ function openPlayer(src, name, actId, ai) {
   }
   el.player.hidden = false;
   document.body.classList.add('has-player');
-  /* NUR die betroffene Zeile auffrischen, kein render(). Ein voller Neuaufbau
-     ruft restoreAnchor(), und das rechnet direkt nach dem Aufbau mit den
+  /* NUR die Symbole, kein render(). Ein voller Neuaufbau ruft
+     restoreAnchor(), und das rechnet direkt nach dem Aufbau mit den
      geschaetzten Zeilenhoehen von content-visibility - gemessen sprang die
      Liste dadurch um 719 Pixel. */
-  refreshAct(ai);
+  refreshPlayIcons();
 }
 
 function closePlayer() {
-  const wasAi = +el.player.dataset.ai;
   playingAct = null;
   $('#player-rate').innerHTML = '';
   delete el.player.dataset.ai;
@@ -914,8 +934,8 @@ function closePlayer() {
   delete slot.dataset.src;
   el.player.hidden = true;
   document.body.classList.remove('has-player');
-  // Auch hier nur die Zeile: sonst springt die Liste beim Schliessen.
-  refreshAct(wasAi);
+  // Auch hier nur die Symbole: sonst springt die Liste beim Schliessen.
+  refreshPlayIcons();
 }
 
 /* ---------- Scrollposition halten (Wunsch 2) ---------- */
