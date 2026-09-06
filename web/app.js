@@ -1891,7 +1891,13 @@ function ensureMap() {
 
 function showVenue(i) {
   const v = S.data.venues[i];
-  if (!v || v.lat == null) return;
+  if (!v) return;
+  // Ein Haus ohne Koordinaten laesst sich nicht zeigen - das aber stumm zu
+  // verschlucken sieht aus, als haette man danebengetippt.
+  if (v.lat == null) {
+    toast(`Für „${v.n}“ liefert das Festival keine Koordinaten — das Haus fehlt auf der Karte.`, 4000);
+    return;
+  }
   if (el.detail.open) el.detail.close();
   clearRoute();               // sonst bleiben die Spielorte blass
   openBox(null);

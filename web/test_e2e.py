@@ -1535,6 +1535,32 @@ with sync_playwright() as p:
     pg6.wait_for_selector(".row", timeout=15000)
     check("Danach wieder frischer Stand, ohne Hinweis",
           pg6.locator("#stale").is_hidden())
+
+    # Spielort ohne Koordinaten: kommt vor, sobald das Festival ein neues
+    # Haus ins Programm nimmt und die Koordinaten nachtraegt (im September
+    # 2026 war das 'o2 music Studio Hamburg'). Auf der Karte fehlt es dann -
+    # der Antipper in der Liste darf aber nicht einfach ins Leere laufen.
+    # Die eingecheckten Daten haben so einen Ort nicht, also untergeschoben.
+    import json as _json6
+    _lin6 = _json6.load(open("web/data/lineup.json", encoding="utf-8"))
+    _vi = next(i for i, v in enumerate(_lin6["venues"]) if v.get("lat") is not None)
+    _lin6["venues"][_vi]["lat"] = None
+    _lin6["venues"][_vi]["lng"] = None
+    pg6.route("**/data/lineup.json", lambda r: r.fulfill(
+        status=200, content_type="application/json",
+        body=_json6.dumps(_lin6)))
+    pg6.reload(wait_until="load")
+    pg6.wait_for_selector(".row", timeout=15000)
+    _row = pg6.locator(f'.row .venue[data-venue="{_vi}"]').first
+    _row.scroll_into_view_if_needed(); _row.click()
+    pg6.wait_for_timeout(600)
+    check("Spielort ohne Koordinaten sagt das, statt nichts zu tun",
+          not pg6.locator("#toast").is_hidden()
+          and "Koordinaten" in pg6.locator("#toast").inner_text(),
+          pg6.locator("#toast").inner_text()[:70])
+    check("Und die Karte bleibt dabei zu", pg6.locator("#map").is_hidden())
+    pg6.unroute("**/data/lineup.json")
+
     check("Keine JS-Fehler im Notstands-Kontext", not err6, str(err6[:2]))
     ctx6.close()
 

@@ -43,8 +43,30 @@ jobs:
           fi
           exit 0
 
+      # Ein Spielort ohne Koordinaten fehlt auf der Karte - aergerlich, aber
+      # kein Grund, das Programm NICHT zu aktualisieren. Genau das ist hier
+      # aber passiert: seit dem ersten neuen Haus ohne Koordinaten brach
+      # dieser Schritt den Lauf ab, und weil er VOR build_web, build_changes
+      # und dem Commit steht, kamen tagelang keine Zeitaenderungen, Absagen
+      # und Nachtraege mehr in der App an. Der Befund wird jetzt gemeldet,
+      # nicht mehr zum Abbruch benutzt.
       - name: Spielorte pruefen
-        run: python3 fetch_venues.py --check
+        run: |
+          set +e
+          python3 fetch_venues.py --check > venues.txt 2>&1
+          code=$?
+          cat venues.txt
+          if [ "$code" != "0" ]; then
+            echo "::warning::Spielorte ohne Koordinaten - sie fehlen auf der Karte"
+            {
+              echo "## Spielorte ohne Koordinaten"
+              echo
+              echo '```'
+              cat venues.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
 
       - name: Web-Daten neu bauen
         run: python3 build_web.py
