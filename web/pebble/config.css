@@ -1,0 +1,96 @@
+/* Gestaltung der Konfigseite.
+ *
+ * Als eigene Datei und nicht als <style> im Dokument, weil die CSP der
+ * Web-App `style-src 'self'` setzt - ein Inline-Block wird dort ohne
+ * sichtbaren Fehler verworfen, und die Seite steht danach unformatiert da.
+ *
+ * Dunkel gehalten: die Einstellungen oeffnet man abends auf dem Festival,
+ * nicht am Schreibtisch.
+ */
+
+:root {
+  --bg: #16121c;
+  --card: #221b2b;
+  --line: #3a2f49;
+  --fg: #f2eef7;
+  --dim: #b3a8c4;
+  --accent: #b98cff;
+  --ok: #56c271;
+  --bad: #ff7b72;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px 14px 40px;
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+h1 { font-size: 20px; margin: 0 0 4px; }
+
+h2 {
+  font-size: 15px; margin: 0 0 10px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+
+p.lead { color: var(--dim); margin: 0 0 20px; font-size: 14px; }
+
+section {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px; margin-bottom: 14px;
+}
+
+label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 4px; }
+label.first { margin-top: 0; }
+
+input[type=text], input[type=password], input[type=url] {
+  width: 100%; padding: 11px 12px; font-size: 16px;
+  background: #1a1522; color: var(--fg);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+
+/* 16px Schriftgroesse ist Absicht: darunter zoomt iOS beim Antippen ins
+   Feld hinein, und danach passt die Seite nicht mehr auf den Schirm. */
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.hint { font-size: 12.5px; color: var(--dim); margin: 6px 0 0; }
+.hint code {
+  background: #1a1522; padding: 1px 5px; border-radius: 4px;
+  font-size: 12px; word-break: break-all;
+}
+
+button {
+  font: inherit; font-weight: 600; padding: 12px 16px;
+  border-radius: 9px; border: 1px solid var(--line);
+  background: #2c2338; color: var(--fg); cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent); color: #1a1022; border-color: var(--accent);
+  width: 100%; font-size: 17px; padding: 15px;
+}
+
+button.link {
+  background: none; border: none; color: var(--accent);
+  padding: 6px 0; text-decoration: underline;
+}
+
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Abstaende als Klassen und nicht als style="…" am Element: `style-src
+   'self'` verwirft auch Inline-Attribute, und Hashes greifen fuer sie nicht
+   ('unsafe-hashes' waere noetig). Der Test in tools/test_config_page.js hat
+   genau das gefunden. */
+.spaced { margin-bottom: 12px; }
+.spaced-top { margin-top: 12px; }
+
+.state {
+  font-size: 13px; padding: 8px 10px; border-radius: 7px;
+  background: #1a1522; margin: 0 0 12px;
+}
+.state.on { color: var(--ok); }
+.state.off { color: var(--dim); }
+.state.err { color: var(--bad); }

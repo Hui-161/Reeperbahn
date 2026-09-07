@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reeperbahn auf der Pebble – Einstellungen</title>
+<!--
+  Einstellungen der Pebble-App.
+
+  Diese Seite gehoert auf dieselbe Adresse, von der die App das Line-up
+  holt - also nach `web/pebble/` im Repo Hui-161/Reeperbahn. Zwei Gruende,
+  warum sie nicht in der Uhren-App steckt:
+
+  1. Die Team-ID ist 22 Zeichen Base64. Die mit vier Tasten einzugeben ist
+     eine Zumutung; hier wird der Beitrittslink eingefuegt.
+  2. Spotify verlangt fuer die Anmeldung eine feste, vorher angemeldete
+     Rueckadresse. Eine App-interne Seite hat keine.
+
+  CSS und JavaScript liegen ABSICHTLICH in eigenen Dateien und nicht hier
+  im Dokument: die Web-App setzt `script-src 'self'` und `style-src 'self'`.
+  Ein Inline-Block wird davon ohne sichtbaren Fehler verworfen - die Seite
+  waere unformatiert und ohne Funktion, und man saehe nicht, warum.
+
+  Es gibt hier bewusst kein <form>: die CSP setzt `form-action 'none'`.
+  Abgeschickt wird ohnehin nichts, alles laeuft ueber den Knopf.
+
+  Die Passphrase verlaesst diese Seite nur in Richtung Uhren-App und wird
+  nirgends gespeichert - auch nicht in der Adresszeile.
+-->
+<link rel="stylesheet" href="config.css">
+</head>
+<body>
+
+<h1>Reeperbahn auf der Pebble</h1>
+<p class="lead">Team, Adresse und Spotify. Alles hier ist freiwillig – ohne
+Team zeigt die Uhr nur die eigenen Noten.</p>
+
+<section>
+  <h2>Daten</h2>
+  <label class="first" for="base">Adresse der Web-App</label>
+  <input type="url" id="base" inputmode="url"
+         placeholder="https://reeperbahn.example.de" autocomplete="off">
+  <p class="hint">Von hier holt die Uhr das Line-up
+    (<code>/data/lineup.json</code>) und gleicht das Team ab
+    (<code>/api/team/…</code>).</p>
+</section>
+
+<section>
+  <h2>Team</h2>
+  <p class="state" id="teamState"></p>
+
+  <label class="first" for="name">Dein Name in der Liste</label>
+  <input type="text" id="name" maxlength="20" placeholder="Uhr"
+         autocomplete="off">
+
+  <label for="team">Beitrittslink oder Team-ID</label>
+  <input type="text" id="team" autocomplete="off" spellcheck="false"
+         placeholder="https://…/#team=xxxxxxxxxxxxxxxx">
+  <p class="hint">In der Web-App: Menü → <em>Team teilen</em>. Link hier
+    einfügen – die ID wird daraus gelesen.</p>
+
+  <label for="pass">Passphrase</label>
+  <input type="password" id="pass" autocomplete="off" spellcheck="false"
+         placeholder="unverändert lassen">
+  <p class="hint">Dieselbe wie in der Web-App. Sie wird nur zur Uhren-App
+    übertragen, nicht auf dieser Seite gespeichert und nicht an den Server
+    geschickt – der sieht ausschließlich Chiffrat.</p>
+
+  <p><button type="button" class="link" id="leave">Team verlassen</button></p>
+</section>
+
+<!-- SPOTIFY-ANFANG -->
+<section>
+  <h2>Spotify</h2>
+  <p class="state" id="spotifyState"></p>
+  <p class="hint spaced">Die Uhr hat keinen Lautsprecher. „Hören“ heißt: den
+    Act auf dem Gerät starten, auf dem Spotify gerade läuft – Handy, Box,
+    Rechner. Dafür braucht es <strong>Premium</strong>.</p>
+
+  <label class="first" for="clientId">Spotify Client-ID</label>
+  <input type="text" id="clientId" autocomplete="off" spellcheck="false"
+         placeholder="32 Zeichen aus dem Spotify-Dashboard">
+  <p class="hint">Einmalig anzulegen unter
+    <code>developer.spotify.com/dashboard</code> → <em>Create app</em>.
+    Als <em>Redirect URI</em> genau das eintragen:<br>
+    <code id="redirectUri"></code><br>
+    Als API <em>Web API</em> wählen. Ein Client-<em>Secret</em> wird nicht
+    gebraucht und darf hier nicht eingetragen werden.</p>
+
+  <div class="row spaced-top">
+    <button type="button" id="connect">Mit Spotify verbinden</button>
+    <button type="button" class="link" id="disconnect">trennen</button>
+  </div>
+</section>
+<!-- SPOTIFY-ENDE -->
+
+<button type="button" class="primary" id="save">Speichern</button>
+
+<script src="config.js"></script>
+</body>
+</html>

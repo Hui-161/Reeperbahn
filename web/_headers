@@ -28,3 +28,33 @@
 # auf einer alten Version fest.
 /sw.js
   Cache-Control: no-cache
+
+# --- Einstellungen der Pebble-App (Repo Hui-161/Pebble) ---
+#
+# Cloudflare fuehrt gleichnamige Kopfzeilen ZUSAMMEN (mit Komma), es gilt
+# nicht "die genauere Regel gewinnt". Eine zweite CSP hier wuerde sich also
+# an die aus /* haengen, und ein Browser wertet zwei CSP-Regeln als
+# Schnittmenge - die Seite waere genauso blockiert wie ohne diesen Block.
+# Deshalb erst entfernen ("! "), dann neu setzen. Das setzt voraus, dass
+# dieser Block NACH der Regel fuer /* steht.
+#
+# Einziger Unterschied zur Regel unter /*: connect-src erlaubt zusaetzlich
+# accounts.spotify.com. Ohne das schlaegt der Tausch des Anmeldecodes gegen
+# den Token fehl - und zwar lautlos, wie CSP-Blockaden es tun.
+#
+# Der Rest der Seite braucht die Ausnahme NICHT: Team-ID, Name und
+# Passphrase funktionieren auch unter der Regel fuer /*. Belegt in
+# tools/test_config_page.js im Repo Hui-161/Pebble, das die Seite unter
+# beiden Kopfzeilen im Browser durchlaeuft.
+/pebble/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://accounts.spotify.com; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+
+# Traegt keine Version im Namen - also immer revalidieren, wie die
+# uebrige App-Huelle.
+/pebble/index.html
+  Cache-Control: no-cache
+/pebble/config.js
+  Cache-Control: no-cache
+/pebble/config.css
+  Cache-Control: no-cache
