@@ -1,8 +1,413 @@
 {
-  "generated_from": "2026-09-07T10:32:29",
-  "compared": 9,
-  "total": 111,
+  "generated_from": "2026-09-08T09:52:58",
+  "compared": 10,
+  "total": 156,
   "entries": [
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "removed",
+      "act": "OKASHII",
+      "show": "12185",
+      "what": "aus dem Programm genommen",
+      "from": "21:15",
+      "to": ""
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Tiny Wolves",
+      "show": "13531",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:45"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Sūn Byrd",
+      "show": "13533",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "sprinder",
+      "show": "13539",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Robine",
+      "show": "13552",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:30"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "PRIDO",
+      "show": "13523",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Pedro Santos",
+      "show": "13597",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:40"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Paul Keen",
+      "show": "13560",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "OKASHII",
+      "show": "13584",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "22:15"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Oskar Haag",
+      "show": "13588",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:35"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "nand",
+      "show": "13558",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "22:15"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Muryel",
+      "show": "13587",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:05"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Nectar Woode",
+      "show": "13589",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:40"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Maiva",
+      "show": "13550",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:15"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Maiva",
+      "show": "13549",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Maline Aura",
+      "show": "13547",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "23:45"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Malou Lovis",
+      "show": "13545",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:15"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "LUCE",
+      "show": "13556",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "low key orchestra",
+      "show": "13535",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Josh Savage",
+      "show": "13537",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "JANKA",
+      "show": "13510",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "JANKA",
+      "show": "13509",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "JOSY",
+      "show": "13595",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:25"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "HEADJET",
+      "show": "13554",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Jack Dean",
+      "show": "13598",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:40"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Jack Gray",
+      "show": "13596",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:05"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Isabel van Gelder",
+      "show": "13594",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:35"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Friedberg",
+      "show": "13541",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "23:30"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Fruchtiger Beigeschmack",
+      "show": "13521",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Fruchtiger Beigeschmack",
+      "show": "13520",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Dominik Hartz",
+      "show": "13543",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Dylan John Thomas",
+      "show": "13593",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Cucuun",
+      "show": "13527",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "17:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Blood Red Shoes",
+      "show": "13518",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:50"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "CARLI",
+      "show": "13592",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:40"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Antje Schomaker",
+      "show": "13591",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:10"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Amor Vincit Omnia",
+      "show": "13529",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "Alina Orlova",
+      "show": "13525",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "added",
+      "act": "almost monday",
+      "show": "13590",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "17:40"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "moved",
+      "act": "Sadi",
+      "show": "11891",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:55"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "moved",
+      "act": "Charlize",
+      "show": "11893",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "22:30"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "moved",
+      "act": "Fella",
+      "show": "11905",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "23:00"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "moved",
+      "act": "yola",
+      "show": "11886",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "23:35"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "moved",
+      "act": "KIIRAS",
+      "show": "12189",
+      "what": "Uhrzeit",
+      "from": "22:15",
+      "to": "21:15"
+    },
+    {
+      "at": "2026-09-08T09:52:58",
+      "kind": "moved",
+      "act": "cherice",
+      "show": "11889",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "21:05"
+    },
     {
       "at": "2026-09-07T10:32:29",
       "kind": "added",
@@ -137,411 +542,6 @@
       "what": "aus dem Programm genommen",
       "from": "06:00",
       "to": ""
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "removed",
-      "act": "DITTER",
-      "show": "12582",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "removed",
-      "act": "Della",
-      "show": "12583",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "WISBORG",
-      "show": "13347",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "23:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "VENUS GRRRLS",
-      "show": "13322",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "23:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "WRKHOUSE",
-      "show": "13315",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "17:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Udo West",
-      "show": "13252",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "tosha",
-      "show": "13181",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "TAM",
-      "show": "13344",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:45"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "PAULA PAULA",
-      "show": "13313",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "17:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Pedro Santos",
-      "show": "13178",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "13:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Pier",
-      "show": "13250",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Philine Sonny",
-      "show": "13376",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "NNELLA",
-      "show": "13311",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Paul Sies",
-      "show": "13248",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:45"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "modernlove.",
-      "show": "13318",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Mira Taylor",
-      "show": "13343",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "17:15"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Maia and the Squires",
-      "show": "13386",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Mia Gjakonovski",
-      "show": "13384",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:10"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Martyna Basta",
-      "show": "13306",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Melani",
-      "show": "13339",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "17:15"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "LIOBA",
-      "show": "13283",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "LIYO",
-      "show": "13249",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Les Shirley",
-      "show": "13341",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "KARGO",
-      "show": "13456",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:45"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Kazhanna",
-      "show": "13175",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Kokonelle",
-      "show": "13354",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Kaat Van Stralen",
-      "show": "13342",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "15:45"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Ipek Ipekcioglu",
-      "show": "13308",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Josi Miller",
-      "show": "13366",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:20"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "JEWLS",
-      "show": "13337",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Harry Lyon",
-      "show": "13320",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Haller",
-      "show": "13247",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Hana Lili",
-      "show": "13203",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:15"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Glazyhaze",
-      "show": "13194",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "FLOSS",
-      "show": "13304",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "FIRST MOTE",
-      "show": "13345",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:30"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Ebow",
-      "show": "13369",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:25"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "ELFI",
-      "show": "13251",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "EFEU",
-      "show": "13260",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "DITTER",
-      "show": "13195",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "15:45"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "DITTER",
-      "show": "13189",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "DAYTIME TV",
-      "show": "13367",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:10"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "DAYTIME TV",
-      "show": "13204",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:00"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Della",
-      "show": "13193",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "15:10"
-    },
-    {
-      "at": "2026-09-06T23:12:04",
-      "kind": "added",
-      "act": "Boutique Feelings",
-      "show": "13396",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:40"
     }
   ]
 }
