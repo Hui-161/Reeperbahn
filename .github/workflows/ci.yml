@@ -22,6 +22,7 @@ jobs:
         run: |
           python3 rbf_core.py selftest
           python3 fetch_venues.py --selftest
+          python3 gql.py --selftest
 
       - name: Planungsalgorithmus testen
         run: node web/test_plan.mjs

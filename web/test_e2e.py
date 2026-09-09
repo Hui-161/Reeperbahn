@@ -380,7 +380,13 @@ with sync_playwright() as p:
           pg.locator("#f-venue").inner_text())
     check("Und ueber alle Tage",
           pg.locator('.day[data-day=""]').get_attribute("aria-selected") == "true")
-    venues_in_list = set(pg.locator(".row-sub .venue").all_inner_texts())
+    # textContent, nicht inner_text: die Zeilen tragen content-visibility:auto,
+    # und was ausserhalb des Fensters liegt, wird nicht gerendert - innerText
+    # liefert dafuer einen LEEREN String. Bei 24 Auftritten in einem Haus
+    # (Stand September 2026) fielen 16 Zeilen darunter, und die Pruefung sah
+    # einen Spielort ohne Namen, den es nie gab.
+    venues_in_list = set(pg.locator(".row-sub .venue").evaluate_all(
+        "els => els.map(e => e.textContent.trim())"))
     check("Liste zeigt nur diesen Spielort", len(venues_in_list) == 1, str(venues_in_list))
     pg.click("#f-reset"); pg.wait_for_timeout(300)
 
@@ -585,8 +591,12 @@ with sync_playwright() as p:
     pg.locator('.day[data-day="2026-09-17"]').click(); pg.wait_for_timeout(300)
     # Zwei Acts MIT Uhrzeit bewerten - ohne Uhrzeit ist nichts planbar, und
     # die weiter oben bewerteten Acts stehen zufaellig auf "Zeit offen".
-    times = pg.locator(".row .row-time").all_inner_texts()
-    dated = [i for i, t in enumerate(times) if "Zeit" not in t][:2]
+    # Auch hier textContent: bei inner_text kommt fuer jede Zeile ausserhalb
+    # des Fensters ein leerer String, und "Zeit" steckt dann auch nicht drin -
+    # die Auswahl haette eine Zeile "Zeit offen" fuer planbar gehalten.
+    times = pg.locator(".row .row-time").evaluate_all(
+        "els => els.map(e => e.textContent.trim())")
+    dated = [i for i, t in enumerate(times) if t and "Zeit" not in t][:2]
     check("Es gibt Auftritte mit Uhrzeit am Donnerstag", len(dated) == 2, str(dated))
     for k, i in enumerate(dated):
         pg.locator(".row").nth(i).locator(".row-time").click()
@@ -1392,17 +1402,23 @@ with sync_playwright() as p:
     # eine feste "Nachbarzeile" gibt es also nicht.)
     pg5.evaluate("""() => [...document.querySelectorAll('.row')]
       .forEach((r, i) => { r.dataset.probe2 = 'p' + i; })""")
+    rated_act = pg5.locator(".row").first.get_attribute("data-act")
     y_before = pg5.evaluate("() => scrollY")
     pg5.locator(".row").first.locator(".row-time").click()
     pg5.wait_for_selector("#detail .rate")
     pg5.locator("#detail .rate button[data-r='5']").click()
     pg5.wait_for_timeout(400)
     pg5.keyboard.press("Escape"); pg5.wait_for_timeout(300)
-    kept = pg5.evaluate("""() => [...document.querySelectorAll('.row')]
-      .map((r, i) => r.dataset.probe2 === 'p' + i)""")
-    check("Mit Notenfilter wird nur die bewertete Zeile ersetzt",
-          bool(kept) and kept[0] is False and all(kept[1:]),
-          f"ersetzt: {[i for i, k in enumerate(kept) if not k]} von {len(kept)}")
+    # Ersetzt werden alle Zeilen DES BEWERTETEN ACTS - hat er zwei Auftritte,
+    # sind das zu Recht zwei. Zeilen anderer Acts muessen ihre Marke behalten.
+    state = pg5.evaluate("""() => [...document.querySelectorAll('.row')]
+      .map((r, i) => ({ act: r.dataset.act, kept: r.dataset.probe2 === 'p' + i }))""")
+    check("Mit Notenfilter wird nur der bewertete Act ersetzt",
+          bool(state)
+          and all(not s["kept"] for s in state if s["act"] == rated_act)
+          and all(s["kept"] for s in state if s["act"] != rated_act),
+          f'Act {rated_act}: '
+          + str([(s["act"], s["kept"]) for s in state]))
     check("Die Zeile bleibt trotz Filter stehen und traegt die neue Note",
           pg5.locator(".row").count() == rows_before
           and pg5.locator(".row").first.locator(".grade").inner_text() == "5",

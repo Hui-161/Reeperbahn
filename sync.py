@@ -25,6 +25,11 @@ import gql
 from fetch_lineup import fetch_act_ids, fetch_details, to_shows
 from rbf_core import Show, SnapshotStore, diff, format_diff
 
+# Ab welchem Anteil des letzten Stands ein Abruf noch plausibel ist. Das
+# Programm waechst waehrend der Vorbereitung, es schrumpft nicht um ein
+# Drittel - siehe die Pruefung in main().
+MIN_SHARE = 0.7
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
@@ -36,6 +41,8 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="Diff als JSON")
     ap.add_argument("--quiet", action="store_true",
                     help="bei Gleichstand nichts ausgeben (fuer cron)")
+    ap.add_argument("--force", action="store_true",
+                    help="auch einen stark geschrumpften Abruf uebernehmen")
     args = ap.parse_args()
 
     gql.DELAY = args.delay
@@ -65,6 +72,20 @@ def main() -> int:
         print(f"Erster Snapshot: {len(shows)} Auftritte, "
               f"{len({s.artist_slug for s in shows})} Acts -> {path}")
         return 0
+
+    # Gegensicherung zur Teilantwort-Toleranz in gql.unwrap(): einzelne
+    # fehlende Felder sind hinnehmbar, ein halb leeres Programm nicht. Faellt
+    # die Zahl der Auftritte drastisch, ist das kein redaktioneller Schritt,
+    # sondern ein kaputter Abruf - dann lieber den alten Stand behalten und
+    # Bescheid geben, als die App leerlaufen zu lassen.
+    if len(previous) and len(shows) < len(previous) * MIN_SHARE:
+        print(f"ABBRUCH: nur {len(shows)} Auftritte gegen {len(previous)} im "
+              f"letzten Stand ({len(shows) / len(previous):.0%}). Das sieht nach "
+              f"einem unvollstaendigen Abruf aus, nicht nach einer Absage - "
+              f"kein neuer Snapshot. Mit --force trotzdem uebernehmen.",
+              file=sys.stderr)
+        if not args.force:
+            return 1
 
     result = diff(previous, shows)
     changed = any(result.values())
