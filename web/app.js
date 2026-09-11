@@ -2406,12 +2406,57 @@ function download(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
+/* Alles, was beim Wechsel auf ein neues Geraet mitmuss.
+
+   Version 4 nimmt drei Dinge dazu, die vorher fehlten und die man auf dem
+   neuen Geraet von Hand nie wieder hinbekommt: die gespeicherten Filter, die
+   Handauswahl im Abendplan und - der eigentliche Grund - die
+   MITGLIEDSKENNUNG des Teams. Ohne sie zieht das neue Geraet beim Beitreten
+   eine neue, und das alte Dokument spukt monatelang weiter durch die Sicht
+   der anderen (siehe team.restore).
+
+   Die Passphrase ist ABSICHTLICH nicht dabei. Sie entschluesselt alles, was
+   das Team austauscht; in einer Datei, die per Mail oder Cloud wandert, hat
+   sie nichts zu suchen. Beim Einlesen wird sie einmal abgefragt. */
 function exportChoice() {
+  const c = team && team.config;
   download('reeperbahn-auswahl.json', JSON.stringify({
-    kind: 'rbf26-auswahl', version: 3,
+    kind: 'rbf26-auswahl', version: 4,
     fav: [...fav], seen: [...seen], note, rate, hint,
     revealed: [...revealed],
+    filters: savedFilters,
+    planPin: [...planPin], planSkip: [...planSkip],
+    team: c ? { teamId: c.teamId, memberId: c.memberId, name: c.name } : null,
   }, null, 2), 'application/json');
+}
+
+/* Die Team-Identitaet aus einer Sicherung uebernehmen - der Umzugsschritt.
+
+   Bewusst mit Rueckfragen statt stillschweigend: die Datei kann alt sein oder
+   von jemand anderem stammen, und ein falsch uebernommenes Team schreibt in
+   ein fremdes Dokument. Die Passphrase steht nicht in der Datei (siehe
+   exportChoice), sie wird hier einmal eingegeben. */
+function restoreTeam(t) {
+  if (!t || !t.teamId || !t.memberId || !team) return;
+  const now = team.config;
+  if (now && now.teamId === t.teamId && now.memberId === t.memberId) return;
+  if (now && !confirm(`Dieses Gerät gehört schon zu einem Team (${now.name}). `
+      + 'Durch die Sicherung ersetzen?')) return;
+  const pass = (prompt('Passphrase des Teams — sie steht aus gutem Grund '
+    + 'nicht in der Sicherungsdatei:') || '').trim();
+  if (pass.length < 12) {
+    alert('Ohne Passphrase kein Team. Die Auswahl ist trotzdem übernommen — '
+      + 'das Team lässt sich später über „Einem Team beitreten“ nachholen.');
+    return;
+  }
+  team.restore(t, pass);
+  teamInfo();
+  runSync(false);
+  startPulling();
+  alert(`Team übernommen: ${t.name || 'unbenannt'}. Dieses Gerät führt dieselbe `
+    + 'Kennung weiter wie das alte — auf der anderen Seite taucht also kein '
+    + 'zweiter Eintrag auf. Das alte Gerät sollte jetzt nichts mehr abgleichen: '
+    + 'dort „Team verlassen“ drücken.');
 }
 
 /* Gesehen-Liste als CSV: das ist die Mitschrift des Festivals, also mit Tag,
@@ -2461,7 +2506,22 @@ el.file.addEventListener('change', async () => {
     Object.assign(hint, data.hint || {});
     saveFav(); saveSeen(); saveRevealed();
     store.set('note', note); store.set('rate', rate); store.set('hint', hint);
+
+    // Ab Version 4 (siehe exportChoice): Filter und Handauswahl im Abendplan.
+    if (Array.isArray(data.filters) && data.filters.length) {
+      const known = new Set(savedFilters.map((f) => f.name));
+      for (const f of data.filters) {
+        if (f && f.name && !known.has(f.name)) savedFilters.push(f);
+      }
+      store.set('filters', savedFilters);
+      renderSavedFilters();
+    }
+    (data.planPin || []).forEach((id) => planPin.add(String(id)));
+    (data.planSkip || []).forEach((id) => planSkip.add(String(id)));
+    if (data.planPin || data.planSkip) savePlanChoice();
+
     alert('Auswahl übernommen.');
+    restoreTeam(data.team);
   } else if (data.suggested) {
     hint = buildHints(data);
     store.set('hint', hint);

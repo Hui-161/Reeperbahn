@@ -267,7 +267,59 @@ with sync_playwright() as p:
         check("Die Suche nach Mitgliedern kostet genau eine Abfrage",
               o2["list"] == 1, o2)
 
-    real = [e for e in errsA + errsB
+    # ---------- Umzug auf ein neues Telefon ----------
+    # Die Sicherung muss die MITGLIEDSKENNUNG mitnehmen. Zieht das neue Geraet
+    # eine neue, bleibt das Dokument des alten bis zu 180 Tage liegen und
+    # mischt sich weiter in die Sicht der anderen ein (ueber alle Mitglieder
+    # gewinnt die beste Note) - eine zurueckgenommene Bewertung kaeme drueben
+    # also nie an. Die Passphrase darf dagegen NICHT in der Datei stehen.
+    confA = json.loads(A.evaluate("localStorage.getItem('rbf26.team')"))
+    A.click("#btn-menu"); A.wait_for_selector("#menu[open]")
+    with A.expect_download() as dl:
+        A.click("#m-export")
+    backup = dl.value.path()
+    saved = json.load(open(backup, encoding="utf-8"))
+    A.keyboard.press("Escape"); A.wait_for_timeout(200)
+
+    check("Sicherung enthaelt die Team-Kennung",
+          (saved.get("team") or {}).get("memberId") == confA["memberId"]
+          and saved["team"]["teamId"] == confA["teamId"],
+          str(saved.get("team")))
+    check("Aber NICHT die Passphrase",
+          PASS not in json.dumps(saved) and "pass" not in (saved.get("team") or {}),
+          str(sorted(saved.get("team") or {})))
+    check("Und die uebrige Auswahl liegt mit drin",
+          all(k in saved for k in ("fav", "seen", "rate", "filters",
+                                   "planPin", "planSkip")),
+          str(sorted(saved)))
+
+    ctxD = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    D = ctxD.new_page()
+    D.goto(BASE + "/", wait_until="load")
+    D.wait_for_selector(".row", timeout=20000)
+    dlgD = Dialogs(D)
+    dlgD.expect(PASS)
+    D.click("#btn-menu"); D.wait_for_selector("#menu[open]")
+    D.set_input_files("#file", backup)
+    D.wait_for_timeout(4000)
+    confD = json.loads(D.evaluate("localStorage.getItem('rbf26.team') || 'null'") or "null")
+    check("Neues Geraet fuehrt dieselbe Kennung weiter",
+          bool(confD) and confD["memberId"] == confA["memberId"]
+          and confD["teamId"] == confA["teamId"],
+          f'{(confD or {}).get("memberId")} gegen {confA["memberId"]}')
+    check("Und es fragt die Passphrase ab, statt sie aus der Datei zu nehmen",
+          dlgD.said("passphrase"), " | ".join(dlgD.seen)[:110])
+
+    # Der Punkt der Uebung: drueben darf KEIN zweites Mitglied auftauchen.
+    B.evaluate("() => { lastDiscover = 0; }")
+    B.evaluate("() => runSync(false)")
+    B.wait_for_timeout(3000)
+    known = json.loads(B.evaluate("localStorage.getItem('rbf26.teammembers') || '[]'"))
+    check("Die Gegenseite sieht weiterhin genau ein Mitglied",
+          known == [confA["memberId"]], f'{known} gegen [{confA["memberId"]}]')
+
+    errsD = []
+    real = [e for e in errsA + errsB + errsD
             if "openstreetmap" not in e.lower() and "ERR_" not in e]
     check("Keine JS-Fehler", not real, str(real[:2]))
     b.close()

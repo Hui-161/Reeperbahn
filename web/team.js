@@ -105,6 +105,25 @@ function createTeamClient(storage) {
       return c;
     },
 
+    /** Umzug auf ein neues Geraet: dieselbe Mitgliedskennung weiterfuehren.
+
+        Mit join() zoege das neue Geraet eine NEUE Kennung und waere damit ein
+        zweites Mitglied. Das Dokument des alten Geraets bliebe bis zu 180
+        Tage liegen, die Gegenseite mischte es weiter mit ein (ueber alle
+        Mitglieder gewinnt die beste Note, Favoriten werden vereinigt) - eine
+        zurueckgenommene Bewertung kaeme also nie drueben an - und es belegte
+        einen der acht Plaetze.
+
+        Die Passphrase steht bewusst NICHT in der Sicherungsdatei: sie ist der
+        Schluessel zu allem, was das Team austauscht. Sie wird beim Einlesen
+        einmal eingegeben. */
+    restore({ teamId, memberId, name }, pass) {
+      const c = { teamId, memberId, name, pass };
+      storage.set('team', c);
+      keys = null;
+      return c;
+    },
+
     leave() { storage.set('team', null); keys = null; keyFor = null; },
 
     /* Schreiben und Lesen sind absichtlich getrennt.
