@@ -142,8 +142,14 @@ with sync_playwright() as p:
     B.wait_for_selector("#detail .suggestion")
     B.locator("#detail [data-reveal]").click(); B.wait_for_timeout(300)
     B.keyboard.press("Escape"); B.wait_for_timeout(300)
+    # Wie idxA[0] kann auch idxA[1] zweimal spielen - die Marke haengt am Act
+    # und gehoert dann auf JEDE seiner Zeilen. Erwartet wird deshalb die
+    # Zeilenzahl dieses Acts, nicht die feste 1.
+    rows_a1 = B.locator(f'.row[data-act="{idxA[1]}"]').count()
+    marks_a1 = B.locator(f'.row[data-act="{idxA[1]}"] .grade-p').count()
     check("As Note steht nach 'Trotzdem anzeigen' in der Liste",
-          B.locator(f'.row[data-act="{idxA[1]}"] .grade-p').count() == 1)
+          rows_a1 >= 1 and marks_a1 == rows_a1,
+          f"{marks_a1} Marke(n) auf {rows_a1} Zeile(n)")
     # Der automatische Abgleich laeuft verzoegert - abwarten statt Knopf druecken.
     B.wait_for_timeout(6000)
 

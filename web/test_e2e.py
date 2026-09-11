@@ -9,7 +9,7 @@ wird - siehe DEPLOY.md. Die Kartenkacheln brauchen Netz; ohne Netz
 schlaegt nur die Kachel-Darstellung fehl, nicht der Test.
 """
 from playwright.sync_api import sync_playwright
-import os, sys
+import os, sys, re
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8898")
 
@@ -17,6 +17,22 @@ FAILS=[]
 def check(name, cond, extra=""):
     print(("  OK   " if cond else "  FAIL ") + name + (f"  {extra}" if extra else ""))
     if not cond: FAILS.append(name)
+
+def tap_row(row):
+    """Eine Zeile antippen, um die Detailkarte zu oeffnen.
+
+    Playwright klickt die MITTE des Elements, und eine Programmzeile ist
+    keine leere Flaeche: der Spielortname darin oeffnet die KARTE. Bricht
+    er um, waechst die Zeile auf zwei Textzeilen und die Marke rutscht
+    genau in die Mitte. Genau das ist am 11.9. passiert, als
+    "Festival Village / YOUCOOK Sounds Stage" ins Programm kam: der Klick
+    auf die Zeile von "Lovis" hat die Karte aufgezogen, der Test wartete
+    danach 30 Sekunden vergeblich auf den Detaildialog.
+
+    Die Uhrzeit ist der einzige Teil der Zeile, an dem garantiert kein
+    Bedienelement haengt - weder Spielort noch Herz noch Play-Knopf.
+    """
+    row.locator(".row-time").click()
 
 with sync_playwright() as p:
     # In CI liegt Chromium am Standardpfad; lokal kann er per Umgebungs-
@@ -95,7 +111,7 @@ with sync_playwright() as p:
     check("Favoriten-Filter zeigt genau 1", pg.locator(".row").count() == 1)
     pg.click("#f-fav"); pg.wait_for_timeout(200)
 
-    pg.locator(".row").first.click()
+    tap_row(pg.locator(".row").first)
     pg.wait_for_selector("#d-note")
     name = pg.locator("#detail .d-title").inner_text()
     pg.fill("#d-note", "Konflikt mit Lowertown pruefen")
@@ -144,7 +160,7 @@ with sync_playwright() as p:
     check("Notiz-Marke in der Liste", pg.locator(".row-name.has-note").count() >= 1)
 
     # --- Zwischennoten: 1,5 zaehlt im Filter zu 1, 2,5 zu 2 ---
-    pg.locator(".row").first.click(); pg.wait_for_selector(".rate")
+    tap_row(pg.locator(".row").first); pg.wait_for_selector(".rate")
     pg.locator('.rate button[data-r="1.5"]').click()
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     badge = pg.locator("#list .grade").first
@@ -155,7 +171,7 @@ with sync_playwright() as p:
     check("Zeilenrand folgt dem Eimer",
           "rated-1" in pg.locator(".row").first.get_attribute("class"),
           pg.locator(".row").first.get_attribute("class"))
-    pg.locator(".row").nth(1).click(); pg.wait_for_selector(".rate")
+    tap_row(pg.locator(".row").nth(1)); pg.wait_for_selector(".rate")
     pg.locator('.rate button[data-r="2.5"]').click()
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     check("Zweite Zeile zeigt 2,5",
@@ -390,6 +406,35 @@ with sync_playwright() as p:
     check("Liste zeigt nur diesen Spielort", len(venues_in_list) == 1, str(venues_in_list))
     pg.click("#f-reset"); pg.wait_for_timeout(300)
 
+    # Eine Zeile hat zwei Ziele: der Spielortname fuehrt auf die Karte, der
+    # Rest in die Detailkarte. Bei einem langen Hausnamen bricht die Zeile um
+    # und die Spielort-Marke liegt in der MITTE der Zeile - also genau dort,
+    # wo ein Klick ohne Zielangabe landet. Beide Wege werden hier an so einer
+    # Zeile gemessen, damit der Unterschied nicht unbemerkt verrutscht.
+    mid_venue = pg.evaluate("""() => {
+      for (const r of document.querySelectorAll('.row')) {
+        const b = r.getBoundingClientRect();
+        if (!b.height || b.bottom < 0 || b.top > innerHeight) continue;
+        const hit = document.elementFromPoint(b.left + b.width / 2,
+                                              b.top + b.height / 2);
+        if (hit && hit.classList.contains('venue')) return r.dataset.act;
+      }
+      return null;
+    }""")
+    if mid_venue is None:
+        check("Zeile mit Spielort in der Mitte geprueft", True,
+              "gerade keine solche Zeile im Bild")
+    else:
+        pg.locator(f'.row[data-act="{mid_venue}"] .venue').first.click()
+        pg.wait_for_timeout(900)
+        check("Spielort in der Zeilenmitte fuehrt auf die Karte",
+              pg.locator("#map").is_visible() and not pg.locator("#detail[open]").count())
+        pg.click("#btn-map"); pg.wait_for_timeout(500)
+        tap_row(pg.locator(f'.row[data-act="{mid_venue}"]').first)
+        pg.wait_for_selector("#detail[open]", timeout=5000)
+        check("Die Uhrzeit derselben Zeile fuehrt in die Detailkarte", True)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+
     # Team: Partner-Datei laden und "Beide" pruefen
     import json as _json, tempfile as _tf
     lineup2 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
@@ -438,7 +483,7 @@ with sync_playwright() as p:
 
     # Eigene Note (bewusst 5, nicht 1-2, damit "Beide" gleich unten nicht
     # faelschlich anspringt) schaltet die Team-Note fuer diesen Act frei.
-    pg.locator(f'.row[data-act="{idx[1]}"]').first.click()
+    tap_row(pg.locator(f'.row[data-act="{idx[1]}"]').first)
     pg.wait_for_selector("#detail[open]")
     check("Detail zeigt den Aufdecken-Knopf, solange ich nicht bewertet habe",
           pg.locator("#detail [data-reveal]").count() == 1)
@@ -451,7 +496,7 @@ with sync_playwright() as p:
           pg.locator(f'.row[data-act="{idx[1]}"] .grade-p:not(.team-hidden)').count() == 1)
     # Einmal gesehen ist gesehen: die eigene Note wieder loeschen darf die
     # Team-Note nicht erneut hinter dem "?" verstecken.
-    pg.locator(f'.row[data-act="{idx[1]}"]').first.click()
+    tap_row(pg.locator(f'.row[data-act="{idx[1]}"]').first)
     pg.wait_for_selector("#detail[open]")
     pg.locator('#detail .rate button[data-r="5"]').click(); pg.wait_for_timeout(300)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
@@ -462,7 +507,7 @@ with sync_playwright() as p:
           and pg.locator(f'.row[data-act="{idx[1]}"] .team-hidden').count() == 0)
 
     # "Trotzdem anzeigen" deckt es auch ohne eigene Note auf.
-    pg.locator(f'.row[data-act="{idx[0]}"]').first.click()
+    tap_row(pg.locator(f'.row[data-act="{idx[0]}"]').first)
     pg.wait_for_selector("#detail[open]")
     pg.locator("#detail [data-reveal]").click(); pg.wait_for_timeout(300)
     check("Aufdecken-Knopf verschwindet nach dem Klick",
@@ -515,7 +560,7 @@ with sync_playwright() as p:
     # Acts mit zwei Auftritten stellen zwei Zeilen - der Filter greift pro
     # Act, also muessen nach dem Wechsel beide verschwinden, nicht nur eine.
     target_rows = pg.locator(f'.row[data-act="{target_ai}"]').count()
-    pg.locator(".row").first.click()
+    tap_row(pg.locator(".row").first)
     pg.wait_for_selector("#detail[open]")
     pg.locator('#detail .rate button[data-r="3"]').click(); pg.wait_for_timeout(300)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
@@ -625,9 +670,14 @@ with sync_playwright() as p:
     stop_times = pg.locator("#plan .stop .row-time").all_inner_texts()
     if stop_times and "bis etwa" in summary:
         import re as _re
-        last_start = stop_times[-1].strip()
+        # Aus dem Text herausSUCHEN, nicht an ":" zerlegen: in .row-time
+        # steht neben der Uhrzeit auch die Aenderungsmarke (⟳), sobald der
+        # Termin verschoben oder neu ist. Seit dem 11.9. trifft das die
+        # letzte Station, und split(":") lieferte "00\n⟳".
+        last_start = _re.search(r"(\d\d):(\d\d)", stop_times[-1])
         shown_end = _re.search(r"bis etwa (\d\d):(\d\d)", summary)
-        lh, lm = (int(x) for x in last_start.split(":"))
+        lh, lm = int(last_start.group(1)), int(last_start.group(2))
+        last_start = last_start.group(0)
         eh, em = int(shown_end.group(1)), int(shown_end.group(2))
         diff = ((eh * 60 + em) - (lh * 60 + lm)) % (24 * 60)
         # Spielzeit auslesen statt annehmen - sonst prueft der Test seine
@@ -820,10 +870,15 @@ with sync_playwright() as p:
     check("Gesehen-Marke in der Liste", pg.locator("#list .seen-mark").count() >= 1)
 
     # Jetzt ist etwas markiert, also kann der Filter geprueft werden.
+    # "Gesehen" haengt am ACT, nicht am Auftritt: wer zweimal spielt, traegt
+    # die Marke auf beiden Zeilen, und beide gehoeren durch den Filter. Statt
+    # einer festen 1 wird deshalb gezaehlt, was vorher markiert war.
+    marked = pg.locator("#list .seen-mark").count()
     pg.click("#f-seen"); pg.wait_for_timeout(350)
     check("Gesehen-Filter zeigt nur Markierte",
-          pg.locator(".row").count() == 1 and pg.locator("#list .seen-mark").count() == 1,
-          f"{pg.locator('.row').count()} Zeile(n)")
+          pg.locator(".row").count() == marked
+          and pg.locator("#list .seen-mark").count() == marked,
+          f"{pg.locator('.row').count()} Zeile(n), markiert waren {marked}")
     pg.click("#f-seen"); pg.wait_for_timeout(350)
     check("Gesehen-Filter wieder aus", pg.locator(".row").count() > 1)
 
@@ -857,7 +912,7 @@ with sync_playwright() as p:
                   if not s.get("tbd") and s.get("t") and s.get("v") is not None
                   and lineup3["venues"][s["v"]].get("lat") is not None)
     pg.click(f'.day[data-day="{target["d"]}"]'); pg.wait_for_timeout(300)
-    pg.locator(f'.row[data-act="{target["a"]}"]').first.click()
+    tap_row(pg.locator(f'.row[data-act="{target["a"]}"]').first)
     pg.wait_for_selector("#detail[open]")
     r1btn = pg.locator('#detail .rate button[data-r="1"]')
     r1btn.click(); pg.wait_for_timeout(150)
@@ -882,9 +937,13 @@ with sync_playwright() as p:
           f'einzeln={pg.locator(".venue-code-r1").count()} '
           f'Buendel={pg.locator(".marker-cluster.mc-r1").count()} | '
           + pg.locator("#maptime-legend").inner_text())
+    # Wie viele Haeuser um diese Uhrzeit eine eigene Note tragen, haengt am
+    # Line-up und aendert sich mit jedem Abruf - festgenagelt wird deshalb
+    # nur, dass die Legende ueberhaupt zaehlt und den Treffer mitzaehlt.
+    legend = pg.locator("#maptime-legend").inner_text()
+    legend_rated = re.match(r"(\d+) bewertet", legend)
     check("Legende nennt den Treffer",
-          pg.locator("#maptime-legend").inner_text().startswith("1 bewertet"),
-          pg.locator("#maptime-legend").inner_text())
+          bool(legend_rated) and int(legend_rated.group(1)) >= 1, legend)
     check("'Jetzt' schaltet sich beim Eintippen einer Uhrzeit ab",
           pg.locator("#maptime-now").get_attribute("aria-pressed") == "false")
 
@@ -1052,7 +1111,7 @@ with sync_playwright() as p:
           f"{pg2.locator('.hint-ja').count()}")
 
     before = pg2.locator("#list .hint").count()
-    pg2.locator(f'.row[data-act="{act_idx[0]}"]').first.click()
+    tap_row(pg2.locator(f'.row[data-act="{act_idx[0]}"]').first)
     pg2.wait_for_selector(".suggestion")
     check("Vorschlag im Detail erklaert", pg2.locator(".suggestion").count() == 1)
     pg2.locator(".rate button[data-r='5']").click()
@@ -1102,7 +1161,7 @@ with sync_playwright() as p:
           and pg3.locator("#list .hint-nein").count() == 1,
           f"ja={pg3.locator('#list .hint-ja').count()} "
           f"nein={pg3.locator('#list .hint-nein').count()}")
-    pg3.locator(f'.row[data-act="{idx3[1]}"]').first.click()
+    tap_row(pg3.locator(f'.row[data-act="{idx3[1]}"]').first)
     pg3.wait_for_selector(".suggestion")
     check("Format 2: Playlist-Hinweis steht im Detail",
           "bereits in Playlist entfernt"
@@ -1214,10 +1273,15 @@ with sync_playwright() as p:
           pg5.locator("#list .grade").first.inner_text())
 
     seen0 = pg5.locator("#list .seen-mark").count()
+    # Wieder: die Marke haengt am Act. Spielt der zweimal, kommen ZWEI Marken
+    # dazu - richtig so, also wird die Zeilenzahl dieses Acts erwartet.
+    swipe_act = pg5.locator(".row").nth(1).get_attribute("data-act")
+    swipe_rows = pg5.locator(f'.row[data-act="{swipe_act}"]').count()
     pg5.evaluate(SWIPE, [1, -120, 8]); pg5.wait_for_timeout(500)
     check("Wisch nach links markiert als gesehen",
-          pg5.locator("#list .seen-mark").count() == seen0 + 1,
-          f"{seen0} -> {pg5.locator('#list .seen-mark').count()}")
+          pg5.locator("#list .seen-mark").count() == seen0 + swipe_rows,
+          f"{seen0} -> {pg5.locator('#list .seen-mark').count()}, "
+          f"der Act steht {swipe_rows}x in der Liste")
     check("Mit Ruecknahme-Knopf", pg5.locator("#toast .toast-undo").count() == 1,
           pg5.inner_text("#toast"))
     pg5.locator("#toast .toast-undo").click(); pg5.wait_for_timeout(400)
