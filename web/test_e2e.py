@@ -9,7 +9,7 @@ wird - siehe DEPLOY.md. Die Kartenkacheln brauchen Netz; ohne Netz
 schlaegt nur die Kachel-Darstellung fehl, nicht der Test.
 """
 from playwright.sync_api import sync_playwright
-import os, sys, re
+import os, sys, re, urllib.parse
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8898")
 
@@ -225,6 +225,74 @@ with sync_playwright() as p:
     check("Nochmal tippen beendet",
           pg.locator("#player").is_hidden()
           and pg.locator("#player-slot iframe").count() == 0)
+
+    # --- Acts, fuer die das Festival keinen Spotify-Link nennt ---
+    # Rund jeder zehnte. Frueher stand dort ein ausgegrauter, toter Knopf;
+    # bei Spotify zu finden waren die Acts trotzdem. Wichtigste Zusage: KEINE
+    # Zeile hat einen Knopf, der nichts tut - entweder spielt er an oder er
+    # fuehrt in die Suche.
+    tot = pg.locator(
+        ".row-play:not([data-quickplay]):not([data-spsearch])").count()
+    check("Keine Zeile hat einen toten Anspiel-Knopf", tot == 0, f"{tot} tote")
+    such = pg.locator(".row-play.is-search[data-spsearch]").count()
+    check("Acts ohne Link bekommen stattdessen die Suche", such >= 1,
+          f"{such} von {pg.locator('.row').count()} Zeilen")
+    if such:
+        s = pg.locator(".row-play.is-search").first
+        # Die Trefferflaeche darf dabei nicht schrumpfen - der Ring sitzt auf
+        # einem ::before, damit der Knopf seine 44 px behaelt.
+        box = s.bounding_box()
+        check("Der Such-Knopf bleibt fingergross",
+              box["width"] >= 44 and box["height"] >= 44,
+              f'{round(box["width"])}x{round(box["height"])}')
+        name = s.evaluate("e => e.closest('.row').querySelector('.row-name')"
+                          ".childNodes[0].textContent")
+        check("Die Suche fragt nach dem Namen des Acts",
+              s.get_attribute("data-spsearch")
+              == "https://open.spotify.com/search/"
+                 + urllib.parse.quote(name, safe=""),
+              s.get_attribute("data-spsearch"))
+        # window.open abfangen statt wirklich zu Spotify zu navigieren: der
+        # Test soll ohne Netz zu Dritten auskommen und nichts dorthin senden.
+        pg.evaluate("() => { window.__auf = []; "
+                    "window.open = (u) => { window.__auf.push(u); return null; }; }")
+        s.click(); pg.wait_for_timeout(300)
+        check("Ein Tipper oeffnet die Spotify-Suche",
+              pg.evaluate("() => window.__auf")
+              == [s.get_attribute("data-spsearch")],
+              str(pg.evaluate("() => window.__auf")))
+        check("Und zieht nicht nebenbei den Detaildialog auf",
+              pg.locator("#detail[open]").count() == 0)
+        # In der Detailkarte dasselbe Angebot, nur ausgeschrieben.
+        act_no_sp = s.evaluate("e => e.closest('.row').dataset.act")
+        tap_row(pg.locator(f'.row[data-act="{act_no_sp}"]').first)
+        pg.wait_for_selector("#detail[open]")
+        check("Die Detailkarte bietet die Suche an",
+              pg.locator("#detail .embed-wrap .chip").inner_text().strip()
+              == "Bei Spotify suchen",
+              pg.locator("#detail .embed-wrap .chip").inner_text().strip())
+        check("Und sagt, warum kein Player da ist",
+              "keinen Spotify-Link" in pg.locator("#detail .embed-note").inner_text())
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+
+    # Abgeschnittene Links der Quelle ("…/artist/" ohne Kennung) sind
+    # schlechter als gar keine - sie sehen aus wie ein Angebot und fuehren
+    # ins Leere. Geprueft wird die Regel selbst, nicht der Tagesbestand.
+    stumpf = pg.evaluate("""() => ({
+      artist_ohne_id: usableLink('https://open.spotify.com/intl-de/artist/'),
+      channel_ohne_id: usableLink('https://www.youtube.com/channel/'),
+      echter_artist: usableLink('https://open.spotify.com/artist/4KfTSPmiPutKQ'),
+      playlist_mit_query: usableLink('https://www.youtube.com/playlist?list=PLabc'),
+      startseite: usableLink('https://agassi.co.uk/'),
+      muell: usableLink('nicht mal eine Adresse'),
+    })""")
+    check("Abgeschnittene Links werden verworfen",
+          stumpf["artist_ohne_id"] is None and stumpf["channel_ohne_id"] is None,
+          str(stumpf))
+    check("Gueltige Links bleiben - auch mit Kennung in der Query",
+          stumpf["echter_artist"] and stumpf["playlist_mit_query"]
+          and stumpf["startseite"] and stumpf["muell"] is None,
+          str(stumpf))
 
     # --- Ortskuerzel ---
     # Sie stehen im Spielort-Kasten, nicht in jeder Programmzeile: dort stand

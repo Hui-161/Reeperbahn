@@ -834,6 +834,10 @@ function row(sh, act) {
   const changeMark = chg
     ? `<span class="chg chg-${chg.kind}" title="${esc(chg.text)}">⟳</span>`
     : '';
+  // Nicht act.sp fragen, sondern ob daraus ein Player wird: vier Acts tragen
+  // ein "…/artist/" ohne Kennung, einer eine YouTube-Adresse im
+  // Spotify-Feld. Die sahen bisher spielbar aus und taten nichts.
+  const emb = spotifyEmbed(act.sp);
   const total = actShowCount(sh.a);
   const nth = total > 1 ? actShowOrdinal(sh) : 1;
   const multi = total > 1
@@ -855,12 +859,15 @@ function row(sh, act) {
         ${act.c ? ' · ' + esc(act.c) : ''}</span>
       ${tags ? `<span class="row-tags">${tags}</span>` : ''}
     </span>
-    <span class="row-play${playingAct === act.id ? ' is-playing' : ''}"
-      role="button" data-quickplay="${esc(spotifyEmbed(act.sp) || '')}"
+    <span class="row-play${playingAct === act.id ? ' is-playing' : ''}${
+      emb ? '' : ' is-search'}"
+      role="button" ${emb
+        ? `data-quickplay="${esc(emb)}"`
+        : `data-spsearch="${esc(spotifySearch(act.n))}"`}
       data-playname="${esc(act.n)}"
-      aria-disabled="${!act.sp}"
-      aria-label="${act.sp ? 'Anspielen' : 'Kein Spotify-Link'}"
-      title="${act.sp ? '30 Sekunden anspielen' : 'Für diesen Act gibt es keinen Spotify-Link'}"
+      aria-label="${emb ? 'Anspielen' : 'Bei Spotify suchen'}"
+      title="${emb ? '30 Sekunden anspielen'
+        : 'Das Festival nennt keinen Spotify-Link — öffnet die Suche bei Spotify'}"
       >${playingAct === act.id ? '❙❙' : '▶'}</span>
     <span class="row-fav" role="button" aria-pressed="${fav.has(act.id)}"
       data-fav="${act.id}" aria-label="Favorit">${fav.has(act.id) ? '♥' : '♡'}</span>
@@ -1343,10 +1350,11 @@ function clearRoute() {
 function openDetail(ai) {
   const act = S.data.acts[ai];
   const slots = S.data.shows.filter((s) => s.a === ai);
+  const emb = spotifyEmbed(act.sp);
   const links = [
-    act.sp && ['Spotify', act.sp],
-    act.yt && ['YouTube', act.yt],
-    act.web && ['Website', act.web],
+    usableLink(act.sp) && ['Spotify', act.sp],
+    usableLink(act.yt) && ['YouTube', act.yt],
+    usableLink(act.web) && ['Website', act.web],
     act.url && ['Festivalseite', 'https://www.reeperbahnfestival.com' + act.url],
   ].filter(Boolean);
 
@@ -1405,16 +1413,22 @@ function openDetail(ai) {
       }).join('')}</ul>
     </div>
 
-    ${links.length ? `<div class="d-section"><h3>Anhören</h3>
-      ${act.sp ? `<div class="embed-wrap" id="embed-slot">
-        <button class="chip" data-play="${esc(spotifyEmbed(act.sp) || '')}">
+    <div class="d-section"><h3>Anhören</h3>
+      ${emb ? `<div class="embed-wrap" id="embed-slot">
+        <button class="chip" data-play="${esc(emb)}">
           ▶ 30 Sekunden anspielen</button>
         <p class="embed-note">Lädt den Spotify-Player erst auf Tippen — vorher
         wird nichts zu Spotify übertragen.</p>
-      </div>` : ''}
-      <div class="links">${links.map(([n, u]) =>
+      </div>` : `<div class="embed-wrap">
+        <a class="chip" href="${esc(spotifySearch(act.n))}"
+           target="_blank" rel="noopener noreferrer">Bei Spotify suchen</a>
+        <p class="embed-note">Das Festival nennt für diesen Act keinen
+        Spotify-Link — die Suche öffnet sich in Spotify. Vorher geht nichts
+        dorthin.</p>
+      </div>`}
+      ${links.length ? `<div class="links">${links.map(([n, u]) =>
         `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${n}</a>`).join('')}
-      </div></div>` : ''}
+      </div>` : ''}</div>
 
     ${act.img ? `<div class="d-section">
       <img class="d-img" src="${esc(act.img)}" alt="${esc(act.n)}"
@@ -1479,6 +1493,30 @@ function markNote(actId, has) {
 function spotifyEmbed(url) {
   const m = String(url || '').match(/spotify\.com\/(?:intl-[a-z]+\/)?(artist|track|album)\/([A-Za-z0-9]+)/);
   return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : null;
+}
+
+/* Bei knapp jedem zehnten Act nennt das Festival keinen Spotify-Link - auch
+   wenn es den Act dort laengst gibt. Dann bleibt die Suche: sie oeffnet auf
+   dem Handy die Spotify-App beim Namen. Kein Schluessel, kein Abruf im
+   Voraus; es geht erst etwas dorthin, wenn man tippt. */
+const spotifySearch = (name) =>
+  'https://open.spotify.com/search/' + encodeURIComponent(name);
+
+/* Die Quelle liefert gelegentlich einen Link, der nur bis zum Behaelter
+   reicht: "…/artist/" ohne Kennung, "…/channel/" ohne Kanal. Der fuehrt ins
+   Leere, und ein kaputter Link ist schlechter als keiner - er sieht aus wie
+   ein Angebot. Ein Link, der seine Kennung in der Query traegt
+   (…/playlist?list=…), bleibt natuerlich. */
+const LINK_BEHAELTER = new Set(
+  ['artist', 'album', 'track', 'playlist', 'channel', 'user', 'c', 'profile']);
+function usableLink(url) {
+  if (!url) return null;
+  let u;
+  try { u = new URL(url); } catch (e) { return null; }
+  const seg = u.pathname.split('/').filter(Boolean);
+  if (seg.length && !u.search
+      && LINK_BEHAELTER.has(seg[seg.length - 1].toLowerCase())) return null;
+  return url;
 }
 
 /* ---------- Ortskuerzel ----------
@@ -2038,6 +2076,16 @@ document.addEventListener('click', (e) => {
 
   const venue = t.closest('[data-venue]');
   if (venue) { e.preventDefault(); e.stopPropagation(); showVenue(+venue.dataset.venue); return; }
+
+  // Kein eigener Link im Programm: statt eines toten Knopfes die Suche bei
+  // Spotify. Muss wie das Anspielen VOR der Zeile stehen, sonst oeffnet der
+  // Klick zusaetzlich den Detaildialog.
+  const sps = t.closest('[data-spsearch]');
+  if (sps) {
+    e.preventDefault(); e.stopPropagation();
+    window.open(sps.dataset.spsearch, '_blank', 'noopener');
+    return;
+  }
 
   // Muss VOR der Zeile stehen, sonst oeffnet der Klick den Detaildialog.
   const qp = t.closest('[data-quickplay]');

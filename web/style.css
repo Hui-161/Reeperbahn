@@ -616,9 +616,22 @@ main { min-height: 60vh; }
 /* Anspielen direkt aus der Liste, links vom Herz. */
 .row-play { font-size: 1rem; }
 .row-play.is-playing { color: var(--accent); }
-/* Acts ohne Spotify-Link: der Platz bleibt, damit die Herzen in einer Spalte
-   stehen - aber der Knopf sieht nicht anfassbar aus. */
-.row-play[aria-disabled="true"] { opacity: .25; cursor: default; }
+/* Acts ohne eigenen Spotify-Link. Frueher stand hier ein ausgegrauter, toter
+   Knopf - bei Spotify zu finden waren die Acts trotzdem. Jetzt fuehrt er in
+   die Suche, und der gepunktete Ring sagt vorher, dass es nicht sofort
+   spielt, sondern zu Spotify hinausfuehrt.
+
+   Der Ring sitzt auf einem ::before, nicht auf dem Knopf selbst: die
+   Trefferflaeche muss die vollen 44 px behalten, sichtbar sein soll nur ein
+   kleiner Kreis. */
+.row-play.is-search { position: relative; opacity: .55; font-size: .75rem; }
+.row-play.is-search::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--tap) - 1.5rem) / 2);
+  border: 1px dotted currentColor;
+  border-radius: 999px;
+}
 .seen-mark::after {
   content: "✓";
   margin-left: .3rem;
