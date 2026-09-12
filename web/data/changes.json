@@ -1,8 +1,179 @@
 {
-  "generated_from": "2026-09-11T09:52:44",
-  "compared": 13,
-  "total": 289,
+  "generated_from": "2026-09-12T09:28:30",
+  "compared": 14,
+  "total": 308,
   "entries": [
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "removed",
+      "act": "Nothing But Thieves",
+      "show": "12900",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "removed",
+      "act": "Karen Dió",
+      "show": "12924",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "removed",
+      "act": "Avralize",
+      "show": "12801",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "tosha",
+      "show": "13856",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:20"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "SOUZA SIX",
+      "show": "13855",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:05"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Skrt Cobain",
+      "show": "13853",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:00"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Ramzey & Gianni Suave",
+      "show": "13874",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Ramzey & Gianni Suave",
+      "show": "13870",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Queen Mahoro",
+      "show": "13845",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:15"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Rosc",
+      "show": "13852",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:40"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Paul Holland",
+      "show": "13821",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:15"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Nothing But Thieves",
+      "show": "13841",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:00"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Luna Simao",
+      "show": "13825",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:00"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Karen Dió",
+      "show": "13840",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:50"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "goldie 333",
+      "show": "13854",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:45"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "error",
+      "show": "13823",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "17:45"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "BELLA REED",
+      "show": "13832",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "06:00"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "BELLA REED",
+      "show": "13831",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "16:45"
+    },
+    {
+      "at": "2026-09-12T09:28:30",
+      "kind": "added",
+      "act": "Avralize",
+      "show": "13839",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "20:00"
+    },
     {
       "at": "2026-09-11T09:52:44",
       "kind": "removed",
@@ -222,6 +393,51 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
+      "act": "My First Time",
+      "show": "11592",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "green star",
+      "show": "12458",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "La Amenaza Constante",
+      "show": "11872",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "HEADSEND",
+      "show": "11717",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "Bruchbude",
+      "show": "13717",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "15:45"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
       "act": "Jack Gray",
       "show": "12105",
       "what": "Spielort",
@@ -240,132 +456,6 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Concrete Vehicles",
-      "show": "11672",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "She Her Her Hers",
-      "show": "11636",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Melani",
-      "show": "11868",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Little Grandad",
-      "show": "11670",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "miaw",
-      "show": "11638",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Señora Biónica",
-      "show": "11874",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "23:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "low key orchestra",
-      "show": "13535",
-      "what": "Uhrzeit",
-      "from": "21:10",
-      "to": "20:10"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "The Homesick",
-      "show": "12524",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Kylie Spence",
-      "show": "13719",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "14:15"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Cosmo's Midnight",
-      "show": "12453",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Amistat",
-      "show": "13723",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "12:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Sex Mask",
-      "show": "12108",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "My First Time",
-      "show": "11592",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "HEADSEND",
-      "show": "11717",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
       "act": "Elsdeer",
       "show": "13721",
       "what": "Uhrzeit",
@@ -375,44 +465,8 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Le Parody",
-      "show": "11870",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "20:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Jamaica Moana",
-      "show": "12107",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Pamela.",
-      "show": "12214",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "The Homesick",
-      "show": "11589",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Glazyhaze",
-      "show": "11637",
+      "act": "She Her Her Hers",
+      "show": "11636",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -429,20 +483,29 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Bruchbude",
-      "show": "13717",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "15:45"
+      "act": "Cosmo's Midnight",
+      "show": "12453",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
     },
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "green star",
-      "show": "12458",
+      "act": "Glazyhaze",
+      "show": "11637",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "Kylie Spence",
+      "show": "13719",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "14:15"
     },
     {
       "at": "2026-09-11T09:52:44",
@@ -456,92 +519,29 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "LIONSTORM",
-      "show": "12525",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
+      "act": "Le Parody",
+      "show": "11870",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "20:00"
     },
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "La Amenaza Constante",
-      "show": "11872",
+      "act": "Señora Biónica",
+      "show": "11874",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "22:00"
+      "to": "23:00"
     },
     {
-      "at": "2026-09-10T09:53:44",
-      "kind": "removed",
-      "act": "Overgrown",
-      "show": "11932",
-      "what": "aus dem Programm genommen",
-      "from": "20:55",
-      "to": ""
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "Nia Smith",
-      "show": "13727",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:10"
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "NINON",
-      "show": "13735",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:15"
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "Meller",
-      "show": "13692",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:45"
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "Malummí",
-      "show": "13732",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:10"
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "Lady Lazarus",
-      "show": "13715",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "22:15"
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "Losin",
-      "show": "13696",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "16:30"
-    },
-    {
-      "at": "2026-09-10T09:53:44",
-      "kind": "added",
-      "act": "Lovis",
-      "show": "13694",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:15"
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "The Homesick",
+      "show": "11589",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
     }
   ]
 }
