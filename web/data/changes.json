@@ -1,6 +1,6 @@
 {
-  "generated_from": "2026-09-12T09:28:30",
-  "compared": 14,
+  "generated_from": "2026-09-13T10:24:45",
+  "compared": 15,
   "total": 308,
   "entries": [
     {
@@ -384,74 +384,20 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "néomí",
-      "show": "12559",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "My First Time",
-      "show": "11592",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "green star",
-      "show": "12458",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "La Amenaza Constante",
-      "show": "11872",
+      "act": "Melani",
+      "show": "11868",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "22:00"
+      "to": "21:00"
     },
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "HEADSEND",
-      "show": "11717",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Bruchbude",
-      "show": "13717",
+      "act": "Señora Biónica",
+      "show": "11874",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
-      "to": "15:45"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Jack Gray",
-      "show": "12105",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Pamela.",
-      "show": "12215",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
+      "to": "23:00"
     },
     {
       "at": "2026-09-11T09:52:44",
@@ -465,8 +411,17 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "She Her Her Hers",
-      "show": "11636",
+      "act": "La Amenaza Constante",
+      "show": "11872",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "1000 Rabbits",
+      "show": "11591",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -474,8 +429,8 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "1000 Rabbits",
-      "show": "11591",
+      "act": "Little Grandad",
+      "show": "11670",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -492,8 +447,62 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Glazyhaze",
-      "show": "11637",
+      "act": "Maria Iskariot",
+      "show": "11674",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "My First Time",
+      "show": "11592",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "Bruchbude",
+      "show": "13717",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "15:45"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "green star",
+      "show": "12458",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "She Her Her Hers",
+      "show": "11636",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "néomí",
+      "show": "12559",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "The Homesick",
+      "show": "12524",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -510,8 +519,8 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Maria Iskariot",
-      "show": "11674",
+      "act": "miaw",
+      "show": "11638",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -519,26 +528,17 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Le Parody",
-      "show": "11870",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "20:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Señora Biónica",
-      "show": "11874",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "23:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
       "act": "The Homesick",
       "show": "11589",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
+    },
+    {
+      "at": "2026-09-11T09:52:44",
+      "kind": "moved",
+      "act": "Pamela.",
+      "show": "12214",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
