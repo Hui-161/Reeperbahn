@@ -1,8 +1,116 @@
 {
-  "generated_from": "2026-09-13T10:24:45",
-  "compared": 15,
-  "total": 308,
+  "generated_from": "2026-09-14T10:49:31",
+  "compared": 16,
+  "total": 320,
   "entries": [
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "removed",
+      "act": "Ramzey & Gianni Suave",
+      "show": "13874",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "removed",
+      "act": "Ramzey & Gianni Suave",
+      "show": "13870",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "removed",
+      "act": "Noé jr",
+      "show": "13806",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "added",
+      "act": "Shingai (The Noisettes)",
+      "show": "13924",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:15"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "added",
+      "act": "Ramzey & Gianni Suave",
+      "show": "13913",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "15:40"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "added",
+      "act": "PATINA RECORDS",
+      "show": "13915",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:40"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "added",
+      "act": "Noé jr",
+      "show": "13912",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "14:15"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "added",
+      "act": "Jan Delay & Delaydies",
+      "show": "13923",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "19:30"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "moved",
+      "act": "The Homesick",
+      "show": "12524",
+      "what": "Uhrzeit",
+      "from": "13:30",
+      "to": "14:30"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "moved",
+      "act": "LudoWic",
+      "show": "12558",
+      "what": "Uhrzeit",
+      "from": "14:00",
+      "to": "13:30"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "moved",
+      "act": "LIONSTORM",
+      "show": "12525",
+      "what": "Uhrzeit",
+      "from": "15:30",
+      "to": "16:30"
+    },
+    {
+      "at": "2026-09-14T10:49:31",
+      "kind": "moved",
+      "act": "néomí",
+      "show": "12559",
+      "what": "Uhrzeit",
+      "from": "14:30",
+      "to": "15:30"
+    },
     {
       "at": "2026-09-12T09:28:30",
       "kind": "removed",
@@ -384,116 +492,8 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Melani",
-      "show": "11868",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Señora Biónica",
-      "show": "11874",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "23:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Elsdeer",
-      "show": "13721",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "13:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "La Amenaza Constante",
-      "show": "11872",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "22:00"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "1000 Rabbits",
-      "show": "11591",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Little Grandad",
-      "show": "11670",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Cosmo's Midnight",
-      "show": "12453",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Maria Iskariot",
-      "show": "11674",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "My First Time",
-      "show": "11592",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "Bruchbude",
-      "show": "13717",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "15:45"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "green star",
-      "show": "12458",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "She Her Her Hers",
-      "show": "11636",
-      "what": "Spielort",
-      "from": "Molotow  / Top10",
-      "to": "Molotow Top Ten Bar"
-    },
-    {
-      "at": "2026-09-11T09:52:44",
-      "kind": "moved",
-      "act": "néomí",
-      "show": "12559",
+      "act": "The Homesick",
+      "show": "11589",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -510,11 +510,11 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Kylie Spence",
-      "show": "13719",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "14:15"
+      "act": "green star",
+      "show": "12458",
+      "what": "Spielort",
+      "from": "Molotow  / Top10",
+      "to": "Molotow Top Ten Bar"
     },
     {
       "at": "2026-09-11T09:52:44",
@@ -528,8 +528,8 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "The Homesick",
-      "show": "11589",
+      "act": "Pamela.",
+      "show": "12215",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
@@ -537,8 +537,8 @@
     {
       "at": "2026-09-11T09:52:44",
       "kind": "moved",
-      "act": "Pamela.",
-      "show": "12214",
+      "act": "Jack Gray",
+      "show": "12105",
       "what": "Spielort",
       "from": "Molotow  / Top10",
       "to": "Molotow Top Ten Bar"
