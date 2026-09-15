@@ -35,6 +35,27 @@ function readParams() {
 
 var P = readParams();
 var STASH = 'rbf-pebble-config';
+
+/* Der Rueckweg in die Handy-App.
+ *
+ * Der Parameter heisst `return_to` - so haengt ihn die Handy-App an, und so
+ * steht er in der Doku. Genau der wurde hier nicht gelesen; die Seite fiel
+ * deshalb immer auf das eingebaute Schema zurueck. Das ging so lange gut,
+ * wie der Browser der Handy-App `pebble://` kennt - die Core-Devices-App
+ * oeffnet die Seite aber im normalen Browser, und dort endet das Speichern
+ * mit ERR_UNKNOWN_URL_SCHEME und einer Fehlerseite. Eingetippt war dann
+ * alles umsonst.
+ *
+ * `ret` und `return` bleiben als Schreibweisen stehen: sie kosten nichts
+ * und ein von Hand gebauter Aufruf funktioniert damit weiter.
+ *
+ * Der Wert bringt sein `#` selbst mit (der Standard ist `pebblejs://close#`).
+ * Fehlt es, wird es ergaenzt - sonst haengt die Nutzlast am Pfad statt am
+ * Fragment, und die Handy-App findet sie nicht. */
+function returnUrl() {
+  var ret = P.return_to || P.ret || P['return'] || 'pebblejs://close#';
+  return ret.charAt(ret.length - 1) === '#' ? ret : ret + '#';
+}
 var state = { refreshToken: '', leave: false, disconnect: false };
 
 function el(id) { return document.getElementById(id); }
@@ -50,7 +71,7 @@ function stash(extra) {
     team: val('team'),
     pass: val('pass'),
     clientId: val('clientId'),
-    ret: P.ret || P['return'] || 'pebble://close',
+    ret: returnUrl(),
     hasPass: P.haspass === '1',
     spotifyOn: P.spotify === '1',
     refreshToken: state.refreshToken,
@@ -223,8 +244,7 @@ function save() {
     out.spotifyClientId = val('clientId').trim();
   }
 
-  var ret = P.ret || P['return'] || 'pebble://close';
-  location.href = ret + '#' + encodeURIComponent(JSON.stringify(out));
+  location.href = returnUrl() + encodeURIComponent(JSON.stringify(out));
 }
 
 /* ------------------------------------------------------------------ *
