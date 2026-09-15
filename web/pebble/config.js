@@ -70,6 +70,7 @@ function stash(extra) {
     name: val('name'),
     team: val('team'),
     pass: val('pass'),
+    member: val('member'),
     clientId: val('clientId'),
     ret: returnUrl(),
     hasPass: P.haspass === '1',
@@ -236,6 +237,7 @@ function save() {
   } else {
     if (val('team').trim()) out.teamId = val('team').trim();
     if (val('pass')) out.pass = val('pass');
+    if (val('member').trim()) out.memberId = val('member').trim();
   }
   if (state.disconnect) {
     out.disconnectSpotify = true;
@@ -271,6 +273,7 @@ function save() {
   el('name').value = (saved && saved.name) || P.name || '';
   el('team').value = (saved && saved.team) || '';
   el('pass').value = (saved && saved.pass) || '';
+  if (el('member')) el('member').value = (saved && saved.member) || P.member || '';
   if (el('clientId')) el('clientId').value = (saved && saved.clientId) || '';
 
   paint();
