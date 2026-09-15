@@ -2246,6 +2246,7 @@ document.addEventListener('click', (e) => {
     const i = +delFilter.dataset.delfilter;
     savedFilters.splice(i, 1);
     store.set('filters', savedFilters);
+    scheduleSync();
     renderSavedFilters();
     return;
   }
@@ -2329,6 +2330,9 @@ $('#filtersave-go').addEventListener('click', () => {
   store.set('filters', savedFilters);
   input.value = '';
   renderSavedFilters();
+  // Damit der neue Satz auch drueben ankommt: die Uhr liest ihn aus dem
+  // Team-Dokument, und das geht nur mit einem Abgleich raus.
+  scheduleSync();
 });
 
 $('#filtername').addEventListener('keydown', (e) => {
@@ -2825,7 +2829,10 @@ async function runSync(quiet, pullOnly) {
   try {
     const doc = myTeamDoc();
     // at ist ein Zeitstempel und aendert sich immer - fuer den Vergleich raus.
-    const sig = JSON.stringify([doc.fav, doc.seen, doc.rate]);
+    // filters gehoert mit hinein, seit sie im Dokument stehen: sonst
+    // entscheidet die Signatur "nichts Neues" und ein frisch gespeicherter
+    // Filter wird nie hochgeladen - die Pebble-App saehe ihn nie.
+    const sig = JSON.stringify([doc.fav, doc.seen, doc.rate, doc.filters]);
     const needPush = !pullOnly && sig !== pushedSignature;
     /* Nach neuen Mitgliedern SUCHEN kostet eine Verzeichnis-Abfrage, und davon
        gibt es nur 1.000 am Tag. Also nur, wenn es einen Grund gibt: wir kennen
