@@ -2688,8 +2688,18 @@ function relTime(iso) {
   return new Date(iso).toLocaleString('de-DE');
 }
 
+/* Die gespeicherten Filter gehen mit ins Team-Dokument. Nicht, damit die
+   anderen sie sehen - sondern damit die Pebble-App sie sieht: sie ist ein
+   Mitglied desselben Teams und liest die Dokumente der anderen. Das ist der
+   einzige Kanal, den Web-App und Uhr ohnehin gemeinsam haben, und er ist
+   Ende zu Ende verschluesselt. Ein zweiter waere ein zweiter, der
+   kaputtgehen kann.
+
+   Die Suche ist absichtlich nicht Teil eines gespeicherten Filters (siehe
+   savedFilters), hier geht also nichts Persoenliches mit. */
 function myTeamDoc() {
-  return { fav: [...fav], seen: [...seen], rate, at: new Date().toISOString() };
+  return { fav: [...fav], seen: [...seen], rate, filters: savedFilters,
+           at: new Date().toISOString() };
 }
 
 /* Mehrere Mitglieder werden zu EINER Partneransicht zusammengefasst: fuer zwei
@@ -2705,6 +2715,12 @@ function adoptOthers(others) {
     for (const [id, v] of Object.entries(o.rate || {})) {
       // Bei mehreren Personen gewinnt die bessere Note.
       if (!merged.rate[id] || +v < +merged.rate[id]) merged.rate[id] = +v;
+    }
+    // Die Pebble-App fuehrt seit 1.2 zwei Noten: die Erwartung vorher und
+    // das Urteil nach dem Konzert. Steht ein Urteil da, gilt das Urteil -
+    // was jemand vorher erwartet hat, ist danach ohne Belang.
+    for (const [id, v] of Object.entries(o.rateSeen || {})) {
+      merged.rate[id] = +v;
     }
   }
   partner = merged;
