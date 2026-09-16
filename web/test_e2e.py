@@ -2142,8 +2142,10 @@ with sync_playwright() as p:
           pg7.locator("#tl-when").inner_text()[:70])
     chips7 = pg7.locator("#tl-top .chip").all_inner_texts()
     check("Mit Spotify-Abkürzung, Gesehen und Favorit",
-          len(chips7) == 3 and ("Anspielen" in chips7[0] or "Spotify" in chips7[0])
+          len(chips7) == 4 and ("Anspielen" in chips7[0] or "Spotify" in chips7[0])
           and "Gesehen" in chips7[1] and "Favorit" in chips7[2], str(chips7))
+    check("Und einem Weg zur ausführlichen Künstlerkarte",
+          "Künstlerkarte" in chips7[3], chips7[3])
     check("Und der vollen Notenskala",
           pg7.locator("#tl-rate button").count() == 7)
     seg7 = pg7.locator("#tl-plan button").all_inner_texts()
@@ -2195,6 +2197,33 @@ with sync_playwright() as p:
         f"() => !JSON.parse(localStorage.getItem('rbf26.planpin')||'[]')"
         f".includes('{tl_show}') && !JSON.parse(localStorage.getItem("
         f"'rbf26.planskip')||'[]').includes('{tl_show}')"))
+    # Der Weg hinüber: die Griffe machen zu, die Detailkarte geht auf, und
+    # zwar für DENSELBEN Act. Zwei modale Dialoge übereinander wären eine
+    # Ebene zu viel zum Zurückgehen.
+    tl_titel = pg7.locator("#tl-name").inner_text()
+    pg7.click("#tl-detail"); pg7.wait_for_timeout(700)
+    check("Die Künstlerkarte öffnet sich aus den Griffen heraus",
+          pg7.locator("#detail[open]").count() == 1
+          and pg7.locator("#tlmenu[open]").count() == 0)
+    check("Und zeigt denselben Act",
+          pg7.locator("#detail .d-title").inner_text() == tl_titel,
+          f'{pg7.locator("#detail .d-title").inner_text()} gegen {tl_titel}')
+    check("Mit dem, wofür sie da ist - allen Auftritten und dem Anhören",
+          {"Auftritte", "Anhören"}
+          <= {t.strip().title() for t in
+              pg7.locator("#detail .d-section h3").all_inner_texts()},
+          str(pg7.locator("#detail .d-section h3").all_inner_texts()[:5]))
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
+    check("Ein Zurück reicht von dort in die Zeitleiste",
+          pg7.locator("dialog[open]").count() == 0
+          and pg7.locator("#plan-time").is_visible())
+    # Fuer die letzte Pruefung die Griffe wieder oeffnen - irgendeinen
+    # Block, nicht denselben: der ist inzwischen aus der Leiste gefallen.
+    # Die Note wurde oben gesetzt und wieder geloescht, und ohne Note und
+    # ohne festen Termin gehoert er nicht mehr in den Plan.
+    pg7.locator(".tl-act").first.click()
+    pg7.wait_for_selector("#tlmenu[open]")
+
     pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
     check("Zurück schließt die Griffe", pg7.locator("#tlmenu[open]").count() == 0)
 

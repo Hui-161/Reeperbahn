@@ -1597,7 +1597,9 @@ function renderTlMenu() {
       aria-pressed="${seen.has(act.id)}">✓ Gesehen</button>
     <button type="button" class="chip" id="tl-fav"
       aria-pressed="${fav.has(act.id)}"><span class="heart"
-      aria-hidden="true">♥</span> Favorit</button>`;
+      aria-hidden="true">♥</span> Favorit</button>
+    <button type="button" class="chip chip-ghost" id="tl-detail"
+      >Künstlerkarte →</button>`;
 
   /* Dieselbe Skala wie ueberall - was man nach dem Zuschauen vergibt, ist
      dieselbe Note wie die davor. Zwei Skalen nebeneinander waeren nur
@@ -1642,6 +1644,16 @@ el.tlmenu.addEventListener('click', (e) => {
     // nicht zu bedienen, also macht der Griff den Dialog zu.
     el.tlmenu.close();
     openPlayer(play.dataset.tlplay, act.n, act.id, sh.a);
+    return;
+  }
+  /* Der Weg zur ausfuehrlichen Karte. Die Griffe hier sind fuers Entscheiden
+     gemacht - Bild, Biografie, Team und alle Termine stehen weiter drueben,
+     und manchmal will man genau die sehen. Zwei modale Dialoge
+     uebereinander waeren eine Ebene zu viel zum Zurueckgehen, also macht
+     dieser Griff seinen eigenen zu. */
+  if (e.target.closest('#tl-detail')) {
+    el.tlmenu.close();
+    openDetail(sh.a);
     return;
   }
   if (e.target.closest('#tl-seen')) {
