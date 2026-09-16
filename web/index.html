@@ -56,6 +56,11 @@
   <nav id="days" class="days" aria-label="Festivaltage"></nav>
 
   <div class="filters">
+    <!-- Steht VORN und bleibt beim Scrollen der Leiste stehen: der Ausweg
+         aus einem zu engen Filter muss erreichbar sein, ohne erst nach
+         rechts zu wischen. Nur ein Zeichen, damit er wenig Platz nimmt. -->
+    <button id="f-reset" class="chip chip-ghost icon-chip" hidden
+            aria-label="Filter zurücksetzen" title="Filter zurücksetzen">↺</button>
     <button id="f-fav" class="chip chip-fav" aria-pressed="false">
       <span class="heart" aria-hidden="true">♥</span> Favoriten
     </button>
@@ -64,7 +69,6 @@
     <button id="f-team" class="chip" aria-pressed="false" hidden>Beide</button>
     <button id="f-genre" class="chip">Genres</button>
     <button id="f-venue" class="chip">Spielorte</button>
-    <button id="f-reset" class="chip chip-ghost" hidden>Zurücksetzen</button>
   </div>
 
   <!-- Ersetzt die Filter, solange die Karte offen ist - die wirken sich
@@ -217,6 +221,7 @@
         <button type="button" id="m-import">Datei laden</button>
         <button type="button" id="m-plan">Abendplan öffnen</button>
         <button type="button" id="m-news">Änderungen am Programm</button>
+        <button type="button" id="m-refresh">Line-up jetzt abgleichen</button>
         <button type="button" id="m-seen">Gesehen-Liste exportieren (CSV)</button>
       </div>
       <p class="menu-note" id="m-stats"></p>

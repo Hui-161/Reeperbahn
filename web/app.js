@@ -212,6 +212,18 @@ const pSeen = (id) => !!(partner && partner.seen && partner.seen.includes(id));
    Zusammenfassung der Noten (dort gewinnt die beste), und sie soll sich
    nicht wiederholen. Geteilt ist also die ANSICHT, nicht der Speicher. */
 const seenAny = (id) => seen.has(id) || pSeen(id);
+/* Acts, nicht Auftritte: wer zweimal spielt, zaehlt einmal. Ohne Tagesfilter
+   ueber das ganze Festival. */
+function seenActCount(day = S.day) {
+  if (!S.data) return 0;
+  const ids = new Set();
+  for (const sh of S.data.shows) {
+    if (day && sh.d !== day) continue;
+    const id = S.data.acts[sh.a].id;
+    if (seenAny(id)) ids.add(id);
+  }
+  return ids.size;
+}
 function seenWhoTitle(id) {
   if (seen.has(id)) {
     return pSeen(id) ? `Gesehen — von dir und ${partnerName()}` : 'Gesehen';
@@ -440,9 +452,9 @@ async function load() {
       return;
     }
   }
-  // Waehrend des Festivals der heutige Tag, sonst alles - vorher will man
-  // stoebern, waehrenddessen den Abend.
-  S.day = S.data.days.includes(todayISO()) ? todayISO() : null;
+  // Waehrend des Festivals der laufende Abend, sonst alles - vorher will man
+  // stoebern, waehrenddessen den Abend. Um 00:30 ist das noch der Vortag.
+  S.day = festDayNow();
   // Vor dem ersten render(): die Kuerzel stehen auch in der Liste, nicht nur
   // auf der Karte - sonst muesste man die Zuordnung jedes Mal neu suchen.
   venueCode = venueCodes(S.data.venues);
@@ -505,18 +517,106 @@ function metaLine() {
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+/* Welcher FESTIVALTAG gerade laeuft - null, wenn keiner.
+
+   Nicht der Kalendertag: um 00:30 am Donnerstag laeuft noch der
+   Mittwochabend, und genau den will man dann sehen. Die Karte rechnet das
+   seit jeher so (mapEvalDay), die Tagesauswahl nicht - sie nahm todayISO(),
+   und das ist der Tag in UTC. In Hamburg stimmte das zwischen Mitternacht
+   und zwei Uhr zufaellig, danach nicht mehr. Jetzt steht die Regel an
+   einer Stelle. */
+function festDayNow() {
+  if (!S.data || !S.data.days) return null;
+  const jetzt = new Date();
+  const vorSechs = jetzt.getHours() * 60 + jetzt.getMinutes() < MAP_NIGHT_END_MIN;
+  const ref = new Date(jetzt.getTime() - (vorSechs ? 24 * 3600 * 1000 : 0));
+  const pad = (n) => String(n).padStart(2, '0');
+  const tag = `${ref.getFullYear()}-${pad(ref.getMonth() + 1)}-${pad(ref.getDate())}`;
+  return S.data.days.includes(tag) ? tag : null;
+}
+
 /* ---------- Kopfbereich ---------- */
 
 function renderDays() {
   const all = `<button class="day" role="tab" data-day=""
     aria-selected="${S.day === null}">Alle
     <small>${S.data.days.length} Tage</small></button>`;
+  /* "Jetzt" klebt am rechten Rand der Tagesleiste. Es ist kein Tag, also
+     kein role="tab" - es setzt den Tag und springt an die Uhrzeit. */
+  const now = `<button type="button" id="btn-now" class="day day-now"
+    title="Zum jetzigen Zeitpunkt springen">Jetzt<small>${
+      localHHMM(new Date())}</small></button>`;
   el.days.innerHTML = all + S.data.days.map((d) => {
     const dt = new Date(d + 'T12:00:00');
     return `<button class="day" role="tab" data-day="${d}"
       aria-selected="${d === S.day}">${WD[dt.getDay()]}
       <small>${dt.getDate()}.${dt.getMonth() + 1}.</small></button>`;
-  }).join('');
+  }).join('') + now;
+}
+
+/* ---------- "Jetzt" ----------
+
+   Festivalzeit ist nur die Zeit, in der auch gespielt wird. Wer um halb
+   drei nachmittags auf "Jetzt" tippt, obwohl der Abend erst um 18 Uhr
+   anfaengt, soll nicht ins Leere springen, sondern an den Anfang des Tages.
+
+   Ist heute gar kein Festivaltag, wird KEIN Tag gewaehlt - es gibt ja
+   keinen laufenden. Gesprungen wird trotzdem an die jetzige Uhrzeit, und
+   zwar im ersten Festivaltag; das ist die Stelle, an der man an einem
+   gewoehnlichen Dienstag um 21 Uhr nachschauen wuerde, was dann laeuft. */
+function nowTarget() {
+  if (!S.data) return null;
+  const tag = festDayNow();
+  const ref = tag || S.data.days[0];
+  if (!ref) return null;
+  const shows = S.data.shows
+    .filter((sh) => sh.d === ref && sh.t && !sh.tbd)
+    .sort((a, b) => festMin(hhmm(a.t)) - festMin(hhmm(b.t)));
+  if (!shows.length) return { day: tag, show: null };
+  const jetzt = festMin(localHHMM(new Date()));
+  const anfang = festMin(hhmm(shows[0].t));
+  const ende = festMin(hhmm(shows[shows.length - 1].t)) + 40;
+  const laeuft = jetzt >= anfang && jetzt <= ende;
+  const show = laeuft
+    ? (shows.find((sh) => festMin(hhmm(sh.t)) >= jetzt) || shows[shows.length - 1])
+    : shows[0];
+  return { day: tag, show, laeuft };
+}
+
+function jumpToNow() {
+  const z = nowTarget();
+  if (!z) return;
+  S.day = z.day;
+  S.q = ''; el.q.value = '';
+  filterKeep.clear();
+  renderDays();
+  render();
+  if (S.planOn) {
+    // In der Zeitleiste steht der rote Strich fuer jetzt - dorthin.
+    const line = $('#plan-time .tl-now');
+    const sc = $('#plan-time .tl-scroll');
+    if (line && sc && !$('#plan-time').hidden) {
+      const y = line.getBoundingClientRect().top + scrollY
+        - document.querySelector('.top').offsetHeight - 120;
+      scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      return;
+    }
+  }
+  if (!z.show) { scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  const node = el.list.querySelector(
+    `.row[data-show="${CSS.escape(String(z.show.id))}"]`);
+  if (!node) { scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  const top = document.querySelector('.top').offsetHeight;
+  requestAnimationFrame(() => {
+    const y = node.getBoundingClientRect().top + scrollY - top - 8;
+    scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    node.classList.add('flash');
+    setTimeout(() => node.classList.remove('flash'), 1600);
+  });
+  if (!z.laeuft) {
+    toast(z.day ? 'Gerade spielt nichts — Anfang des Tages.'
+                : 'Heute ist kein Festivaltag — die Uhrzeit im ersten Tag.', 3200);
+  }
 }
 
 function renderGenres() {
@@ -811,6 +911,13 @@ function render() {
   const anyFilter = S.favOnly || S.rates.size > 0 || S.seenOnly || S.teamOnly
     || S.genres.size > 0 || S.venues.size > 0 || S.q.trim() !== '';
   $('#f-reset').hidden = !anyFilter;
+  /* Wie viele ACTS - nicht Konzerte - an diesem Tag schon abgehakt sind.
+     Die Zahl steht nur am laufenden Filter: sonst waere sie eine staendige
+     Bilanz ueber etwas, das man gerade nicht anschaut. Gezaehlt wird ueber
+     die Acts des gewaehlten Tages, ohne Doppelzaehlung bei zwei Auftritten
+     - genau das ist der Unterschied, den die Zahl behauptet. */
+  $('#f-seen').textContent = S.seenOnly
+    ? `✓ Gesehen (${seenActCount()})` : '✓ Gesehen';
   $('#f-genre').classList.toggle('on', S.genres.size > 0);
   $('#f-genre').textContent = S.genres.size ? `Genres (${S.genres.size})` : 'Genres';
   $('#f-rate').classList.toggle('on', S.rates.size > 0);
@@ -891,7 +998,8 @@ function row(sh, act) {
   const multi = total > 1
     ? `<span class="multi" title="Spielt ${total}× beim Festival — das hier ist Auftritt ${nth}">×${total}</span>`
     : '';
-  return `<button class="row${rb ? ' rated-' + rb : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
+  return `<button class="row${rb ? ' rated-' + rb : ''}${
+    seenAny(act.id) ? ' is-seen' : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}${changeMark}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
@@ -1417,12 +1525,18 @@ function renderTimeline(plan, items, opts) {
      Leiste liegt. Wer am Dienstag den Samstag plant, braucht keinen Strich
      am oberen Rand, der so tut, als liefe schon etwas. Gerechnet wird in
      Epochenminuten, damit keine Zeitzone dazwischenkommt. */
-  tlT0 = t0;
+  tlT0 = t0; tlT1 = t1;
+  /* Der Strich fuer JETZT steht immer da, auch wenn "jetzt" ausserhalb
+     dieses Abends liegt - dann klebt er an der Kante, die naeher dran ist,
+     und traegt dieselbe Uhrzeit vom Telefon. So ist er ein Anker, keine
+     Behauptung: die Zeit stimmt in jedem Fall, die Lage sagt "davor" oder
+     "danach". */
   const nowMin = Math.round(Date.now() / 60000);
-  const nowMark = (nowMin >= t0 && nowMin <= t1)
-    ? `<div class="tl-now" data-top="${(nowMin - t0) * TL_PX_PER_MIN}"><span>${
-        localHHMM(new Date())}</span></div>`
-    : '';
+  const drin = nowMin >= t0 && nowMin <= t1;
+  const nowMark = `<div class="tl-now${drin ? '' : ' off'}" data-top="${
+    Math.min(Math.max(nowMin - t0, 0), t1 - t0) * TL_PX_PER_MIN}"
+    title="${drin ? 'Jetzt' : 'Jetzt — außerhalb dieses Abends'}"><span>${
+    localHHMM(new Date())}</span></div>`;
 
   const blocks = placed.map(({ s, a, lane }) => {
     const rb = rateBucket(rate[s.actId]);
@@ -1531,13 +1645,21 @@ function renderTimeline(plan, items, opts) {
    der ganzen Leiste dafuer waere Verschwendung; es reicht, ihn zu schieben.
    Laeuft nur, solange die Leiste ueberhaupt sichtbar ist. */
 let tlT0 = null;
+let tlT1 = null;
 setInterval(() => {
+  // Die Uhrzeit am "Jetzt"-Knopf muss mitlaufen - ein Knopf, der "Jetzt"
+  // sagt und eine alte Zeit zeigt, ist eine kleine Luege.
+  const nun = $('#btn-now small');
+  if (nun) nun.textContent = localHHMM(new Date());
   const box = $('#plan-time');
   if (!box || box.hidden || tlT0 == null) return;
   const line = box.querySelector('.tl-now');
   if (!line) return;
-  const top = (Math.round(Date.now() / 60000) - tlT0) * TL_PX_PER_MIN;
-  line.style.top = `${top}px`;
+  const jetzt = Math.round(Date.now() / 60000);
+  const drin = jetzt >= tlT0 && jetzt <= tlT1;
+  line.classList.toggle('off', !drin);
+  line.style.top = `${Math.min(Math.max(jetzt - tlT0, 0), tlT1 - tlT0)
+    * TL_PX_PER_MIN}px`;
   const lab = line.querySelector('span');
   if (lab) lab.textContent = localHHMM(new Date());
 }, 60000);
@@ -2795,6 +2917,12 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  if (t.closest('#btn-now')) {
+    e.preventDefault(); e.stopPropagation();
+    jumpToNow();
+    return;
+  }
+
   const day = t.closest('.day');
   if (day) {
     S.day = day.dataset.day || null;
@@ -3564,6 +3692,79 @@ $('#m-team-leave').addEventListener('click', () => {
 });
 
 $('#m-sync').addEventListener('click', () => { el.menu.close(); runSync(false); });
+
+/* ---------- Line-up von Hand abgleichen ----------
+
+   Das Programm kommt einmal pro Nacht frisch von der Festival-Seite: ein
+   Lauf holt es ueber deren GraphQL-Schnittstelle, vergleicht mit dem
+   letzten Stand und legt das Ergebnis als data/lineup.json ab. Die App
+   liest diese Datei.
+
+   Dieser Knopf holt sie JETZT, an jedem Zwischenspeicher vorbei: cache
+   'reload' fuer den des Browsers, und am Service Worker vorbei, indem die
+   Adresse einen Zeitstempel bekommt - der Worker legt nur ab, was er
+   gesehen hat, und eine neue Adresse hat er noch nie gesehen.
+
+   Was er NICHT tut: die Festival-Seite selbst befragen. Das laeuft im
+   naechtlichen Lauf und braucht den Python-Teil; aus dem Browser ginge es
+   nur ueber einen eigenen Umweg im Worker, weil connect-src 'self' alles
+   Fremde verwirft. Der Knopf verspricht deshalb den aktuellen VEROEFFENTLICHTEN
+   Stand, nicht den der Website - und sagt das auch. */
+async function refreshLineup() {
+  const btn = $('#m-refresh');
+  const vorher = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Wird geholt…';
+  const alt = S.data
+    ? { acts: S.data.acts.length, shows: S.data.shows.length,
+        at: S.data.generated_at || '' }
+    : null;
+  try {
+    const bust = `?t=${Date.now()}`;
+    const res = await fetch(DATA_URL + bust, { cache: 'reload' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const frisch = await res.json();
+    if (!looksUsable(frisch)) throw new Error('Die Datei ist unvollständig.');
+    S.data = frisch;
+    usingFallback = null;
+    try { store.set(LAST_GOOD, frisch); } catch (e) { /* Speicher voll */ }
+    showsPerAct = null;
+    showById = null;
+    venueCode = venueCodes(S.data.venues);
+    try {
+      const r2 = await fetch('data/changes.json' + bust, { cache: 'reload' });
+      if (r2.ok) changes = await r2.json();
+    } catch (e) { /* Aenderungsliste ist Beiwerk */ }
+    renderDays(); renderGenres(); renderVenues(); renderRates();
+    render(); metaLine(); showStaleBanner();
+    const neu = { acts: S.data.acts.length, shows: S.data.shows.length,
+                  at: S.data.generated_at || '' };
+    const gleich = alt && alt.at === neu.at;
+    el.menu.close();
+    alert(gleich
+      ? `Schon auf Stand. ${neu.acts} Acts, ${neu.shows} Auftritte, `
+        + `Stand ${standText(neu.at)}.`
+      : `Neuer Stand geholt: ${neu.acts} Acts (${zahlDiff(alt && alt.acts, neu.acts)}), `
+        + `${neu.shows} Auftritte (${zahlDiff(alt && alt.shows, neu.shows)}), `
+        + `Stand ${standText(neu.at)}.\n\nWas sich geaendert hat, steht unter `
+        + '„Änderungen am Programm“.');
+  } catch (err) {
+    alert('Abgleich fehlgeschlagen: ' + err.message
+      + '\nDer bisherige Stand bleibt unverändert.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = vorher;
+  }
+}
+
+const zahlDiff = (a, b) => (a == null || a === b) ? 'unverändert'
+  : (b > a ? `+${b - a}` : `${b - a}`);
+const standText = (iso) => {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d) ? d.toLocaleString('de-DE') : 'unbekannt';
+};
+
+$('#m-refresh').addEventListener('click', refreshLineup);
 
 $('#m-plan').addEventListener('click', () => { el.menu.close(); showPlan(true); });
 $('#m-news').addEventListener('click', () => { el.menu.close(); showNews(true); });

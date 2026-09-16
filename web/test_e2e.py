@@ -57,20 +57,25 @@ with sync_playwright() as p:
     pg.goto(BASE + "/", wait_until="load")
     pg.wait_for_selector(".row", timeout=15000)
 
-    days = pg.locator(".day").count()
+    days = pg.locator('.day[role="tab"]').count()
     # Die App stellt auf HEUTE, wenn heute ein Festivaltag ist, sonst auf
     # "Alle Tage". Der Test darf das nicht raten: er lief ab dem 16.9.2026
     # auf die Nase, weil er "Alle Tage" als Vorgabe festgeschrieben hatte -
     # und mit der falschen Vorgabe stimmten danach auch alle Zaehlungen
     # nicht mehr, die sich darauf bezogen.
-    heute = _dt.date.today().isoformat()
+    # Vorgewaehlt ist der laufende FESTIVALABEND, nicht der Kalendertag:
+    # um 00:30 am Donnerstag laeuft noch der Mittwochabend. Vor 6 Uhr zaehlt
+    # deshalb der Vortag - genau so rechnet die App (festDayNow).
+    jetzt_l = _dt.datetime.now()
+    lauf = (jetzt_l - _dt.timedelta(days=1)) if jetzt_l.hour < 6 else jetzt_l
+    heute = lauf.date().isoformat()
     day_sel = pg.evaluate("""() => {
       const d = document.querySelector('.day[aria-selected="true"]');
       return d ? (d.dataset.day || '') : null;
     }""")
-    check("Vorgewaehlt ist heute, sonst 'Alle Tage'",
+    check("Vorgewaehlt ist der laufende Abend, sonst 'Alle Tage'",
           day_sel == (heute if heute in FEST_DAYS else ""),
-          f"gewaehlt {day_sel!r}, heute {heute}")
+          f"gewaehlt {day_sel!r}, laufender Abend {heute}")
     check("Reiter: Alle + vier Tage", days == 5, f"{days} Reiter")
     # Fuer die Zaehlungen unten: einmal ausdruecklich alle Tage, einmal einer.
     pg.locator('.day[data-day=""]').click(); pg.wait_for_timeout(400)
@@ -93,6 +98,25 @@ with sync_playwright() as p:
     rows_g = pg.locator(".row").count()
     check("Genre-Filter wirkt", 0 < rows_g < rows0, f"{rows0} -> {rows_g}")
     check("Reset-Knopf erscheint", pg.locator("#f-reset").is_visible())
+    # Er steht VORN und bleibt beim Scrollen der Leiste stehen: der Ausweg
+    # aus einem zu engen Filter muss erreichbar sein, ohne erst nach rechts
+    # zu wischen. Und er ist nur ein Zeichen, kein Wort.
+    check("Der Ausweg steht ganz vorn in der Leiste",
+          pg.evaluate("() => document.querySelector('.filters')"
+                      ".firstElementChild.id") == "f-reset")
+    check("Und ist nur ein Zeichen", pg.evaluate("""() => {
+      const t = document.querySelector('#f-reset').textContent.trim();
+      return t.length === 1 && !!document.querySelector('#f-reset')
+        .getAttribute('aria-label');
+    }"""), pg.locator("#f-reset").inner_text())
+    check("Auch weit gescrollt bleibt er im Bild", pg.evaluate("""() => {
+      const f = document.querySelector('.filters');
+      f.scrollLeft = f.scrollWidth;
+      const b = document.querySelector('#f-reset').getBoundingClientRect();
+      const r = f.getBoundingClientRect();
+      return getComputedStyle(document.querySelector('#f-reset')).position
+             === 'sticky' && b.left >= r.left - 1 && b.right <= r.right + 1;
+    }"""))
     pg.click("#f-reset"); pg.wait_for_timeout(250)
     check("Reset stellt wieder her", pg.locator(".row").count() == rows0)
 
@@ -466,6 +490,32 @@ with sync_playwright() as p:
     csp = [e for e in errors if "content security policy" in e.lower()
            or "refused to" in e.lower()]
     check("Keine CSP-Verletzung", not csp, str(csp[:3]))
+
+    # --- Line-up von Hand abgleichen ---
+    # Holt die veröffentlichte Datei an jedem Zwischenspeicher vorbei. Was
+    # er NICHT tut, steht im Kommentar bei refreshLineup: die Festivalseite
+    # selbst befragen - das läuft im nächtlichen Lauf.
+    pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
+    check("Im Menü steht ein Abgleich für das Line-up",
+          pg.locator("#m-refresh").is_visible(),
+          pg.locator("#m-refresh").inner_text())
+    rows_vorher = None
+    meldung = []
+    pg.once("dialog", lambda d: (meldung.append(d.message), d.accept()))
+    pg.click("#m-refresh")
+    pg.wait_for_timeout(2500)
+    check("Er meldet, was dabei herauskam",
+          meldung and ("Stand" in meldung[0]),
+          (meldung[0] if meldung else "keine Meldung")[:80].replace("\n", " "))
+    check("Nennt Acts und Auftritte",
+          meldung and re.search(r"\d+ Acts", meldung[0])
+          and re.search(r"\d+ Auftritte", meldung[0]),
+          (meldung[0] if meldung else "")[:90].replace("\n", " "))
+    check("Und die Liste steht danach noch",
+          pg.locator(".row").count() > 0, pg.locator(".row").count())
+    check("Das Menü ist danach zu", pg.locator("#menu[open]").count() == 0)
+    check("Der Knopf ist wieder benutzbar",
+          pg.evaluate("() => !document.querySelector('#m-refresh').disabled"))
     # "Alle Tage": Suche und Stoebern ueber Tagesgrenzen
     pg.locator('.day[data-day="2026-09-17"]').click(); pg.wait_for_timeout(300)
     pg.locator('.day[data-day=""]').click()
@@ -1003,6 +1053,33 @@ with sync_playwright() as p:
           f"{pg.locator('.row').count()} Zeile(n), markiert waren {marked}")
     pg.click("#f-seen"); pg.wait_for_timeout(350)
     check("Gesehen-Filter wieder aus", pg.locator(".row").count() > 1)
+
+    # Was abgehakt ist, ist schraffiert - man sieht es, ohne den Haken am
+    # Namen zu suchen.
+    check("Gesehene Zeilen sind schraffiert",
+          pg.locator(".row.is-seen").count() == marked,
+          f'{pg.locator(".row.is-seen").count()} von {marked} markierten')
+    check("Und zwar mit einem Streifenmuster", pg.evaluate("""() => {
+      const e = document.querySelector('.row.is-seen');
+      return e && getComputedStyle(e).backgroundImage.includes('repeating-linear');
+    }"""))
+    # Der Zaehler am laufenden Filter zaehlt ACTS, nicht Konzerte: wer
+    # zweimal spielt, zaehlt einmal. Genau das behauptet die Zahl.
+    acts_gesehen = pg.evaluate("""() => {
+      const s = new Set([...document.querySelectorAll('.row.is-seen')]
+        .map((e) => e.dataset.act));
+      return s.size;
+    }""")
+    pg.click("#f-seen"); pg.wait_for_timeout(400)
+    chip = pg.locator("#f-seen").inner_text()
+    check("Der laufende Gesehen-Filter nennt die Zahl im Kopf",
+          chip.strip() == f"✓ Gesehen ({acts_gesehen})", chip)
+    check("Und zählt Acts, nicht Konzerte",
+          acts_gesehen <= marked, f"{acts_gesehen} Acts aus {marked} Zeilen")
+    pg.click("#f-seen"); pg.wait_for_timeout(300)
+    check("Ohne Filter steht die Zahl nicht da",
+          pg.locator("#f-seen").inner_text().strip() == "✓ Gesehen",
+          pg.locator("#f-seen").inner_text())
 
     pg.click("#btn-menu"); pg.wait_for_selector("#menu[open]")
     with pg.expect_download() as dl:
@@ -2151,11 +2228,16 @@ with sync_playwright() as p:
       return x > b.left - 2 && x < b.right + 2 && Math.abs(y - b.top) < 3;
     }"""))
 
-    # Der rote Strich für JETZT gehört NUR in eine Leiste, in der "jetzt"
-    # auch liegt. Dieser Tag ist nicht heute.
-    check("Kein Jetzt-Strich an einem Tag, der nicht heute ist",
-          pg7.locator(".tl-now").count() == 0,
-          f'{pg7.locator(".tl-now").count()} Striche für {day7}')
+    # Der rote Strich steht IMMER da - auch an einem Tag, der nicht heute
+    # ist. Dann klebt er an der Kante und sagt das im Titel; die Uhrzeit
+    # vom Telefon stimmt in jedem Fall.
+    strich7 = pg7.locator(".tl-now")
+    check("Ein Strich für jetzt steht auch an einem anderen Tag",
+          strich7.count() == 1, f'{strich7.count()} Striche für {day7}')
+    check("Und ist als 'außerhalb' gekennzeichnet",
+          strich7.evaluate("e => e.classList.contains('off')")
+          and "außerhalb" in (strich7.get_attribute("title") or ""),
+          f'{strich7.get_attribute("class")} | {strich7.get_attribute("title")}')
 
     # --- Die Griffe zu einem Auftritt ---
     # Aus der Zeitleiste geht bewusst NICHT die Detailkarte auf.
@@ -2416,8 +2498,82 @@ with sync_playwright() as p:
                   return r.top <= y && r.bottom >= y;
                 });
               }"""))
+    # Der Strich steht AUCH da, wenn "jetzt" gar nicht in diesen Abend
+    # faellt - dann klebt er an der Kante und sagt es. Die Uhrzeit vom
+    # Telefon stimmt in jedem Fall, die Lage sagt "davor" oder "danach".
+    anderer = next(d for d in lineup7["days"] if d != day7)
+    pg8.click(f'.day[data-day="{anderer}"]'); pg8.wait_for_timeout(900)
+    rand8 = pg8.locator(".tl-now")
+    check("Auch an einem anderen Tag steht ein Strich für jetzt",
+          rand8.count() == 1, f"{rand8.count()}")
+    if rand8.count():
+        check("Er klebt dann an der Kante und sagt das",
+              rand8.evaluate("e => e.classList.contains('off')")
+              and "außerhalb" in (rand8.get_attribute("title") or ""),
+              f'{rand8.get_attribute("class")} | {rand8.get_attribute("title")}')
+        check("Mit derselben minutengenauen Uhrzeit",
+              rand8.locator("span").inner_text().strip() == "21:00",
+              rand8.locator("span").inner_text())
+        check("Und innerhalb der Leiste, nicht darüber hinaus",
+              pg8.evaluate("""() => {
+                const t = parseFloat(document.querySelector('.tl-now').style.top);
+                const h = document.querySelector('.tl-canvas').offsetHeight;
+                return t >= 0 && t <= h;
+              }"""))
+
+    # --- Der "Jetzt"-Knopf neben den Tagen ---
+    pg8.click("#btn-plan"); pg8.wait_for_timeout(500)   # zurück zur Liste
+    check("Neben den Tagen steht ein Sprung auf jetzt",
+          pg8.locator("#btn-now").is_visible()
+          and "21:00" in pg8.locator("#btn-now").inner_text(),
+          pg8.locator("#btn-now").inner_text().replace("\n", " "))
+    pg8.click('.day[data-day=""]'); pg8.wait_for_timeout(400)
+    pg8.click("#btn-now"); pg8.wait_for_timeout(1400)
+    check("Er wählt den laufenden Tag", pg8.evaluate(
+        """() => { const d = document.querySelector('.day[aria-selected="true"]');
+                   return d ? d.dataset.day : null; }""") == day7, day7)
+    # Und springt an die Uhrzeit: die erste Zeile unter dem Kopf ist die
+    # nächste, die um 21:00 oder später anfängt.
+    treffer8 = pg8.evaluate("""() => {
+      const top = document.querySelector('.top').getBoundingClientRect().bottom;
+      const r = [...document.querySelectorAll('.row')].find(
+        (e) => e.getBoundingClientRect().top >= top - 30);
+      return r ? r.querySelector('.row-time').textContent.trim().slice(0, 5) : null;
+    }""")
+    check("Und springt an die jetzige Uhrzeit",
+          treffer8 and re.fullmatch(r"\d\d:\d\d", treffer8)
+          and treffer8 >= "21:00", str(treffer8))
+
     check("Keine JS-Fehler im Uhr-Kontext", not err8, str(err8[:2]))
     ctx8.close()
+
+    # --- "Jetzt" ausserhalb der Festivaltage ---
+    # Dann gibt es keinen laufenden Tag, also wird auch keiner gewaehlt -
+    # gesprungen wird trotzdem an die Uhrzeit.
+    ctx10 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE",
+                          timezone_id="Europe/Berlin")
+    ctx10.clock.install(time=_dt.datetime(2026, 9, 10, 19, 0, 0,
+                                          tzinfo=_dt.timezone.utc))
+    ctx10.clock.resume()
+    pg10 = ctx10.new_page()
+    err10 = []
+    pg10.on("pageerror", lambda e: err10.append(str(e)))
+    pg10.goto(BASE + "/", wait_until="load")
+    pg10.wait_for_selector(".row", timeout=20000)
+    check("Vor dem Festival steht 'Alle Tage'", pg10.evaluate(
+        """() => { const d = document.querySelector('.day[aria-selected="true"]');
+                   return d ? d.dataset.day : null; }""") == "")
+    pg10.click("#btn-now"); pg10.wait_for_timeout(1400)
+    check("'Jetzt' wählt dann keinen Tag aus", pg10.evaluate(
+        """() => { const d = document.querySelector('.day[aria-selected="true"]');
+                   return d ? d.dataset.day : null; }""") == "")
+    check("Springt aber trotzdem an eine Uhrzeit", pg10.evaluate("""() => {
+      const top = document.querySelector('.top').getBoundingClientRect().bottom;
+      return [...document.querySelectorAll('.row')].some(
+        (e) => Math.abs(e.getBoundingClientRect().top - top) < 120);
+    }"""))
+    check("Keine JS-Fehler im Vorfeld-Kontext", not err10, str(err10[:2]))
+    ctx10.close()
 
     # --- Team-Durchschnitt in der Zeitleiste ---
     # Die Partneransicht fasst alle Mitglieder zur BESTEN Note zusammen -
