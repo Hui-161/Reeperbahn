@@ -1079,6 +1079,11 @@ let lastItems = null;
 
 function collectPlanItems(opts) {
   const items = [];
+  /* Von Hand ausgeschlossene Termine gehoeren nicht in die Rechnung, aber
+     sehr wohl ins Bild: in der Zeitleiste bleiben sie grau stehen, statt
+     spurlos zu verschwinden. Sonst sucht man den Act, den man eben
+     weggetan hat, und weiss nicht mehr, ob er je da war. */
+  const skipped = [];
   let undated = 0;
   for (const sh of S.data.shows) {
     if (!sh.t) continue;
@@ -1094,7 +1099,6 @@ function collectPlanItems(opts) {
       continue;
     }
     if (S.day && sh.d !== S.day) continue;
-    if (planSkip.has(sh.id)) continue;          // von Hand ausgeschlossen
     const act = S.data.acts[sh.a];
     const r = rateBucket(rate[act.id]);
     const pinned = planPin.has(sh.id);
@@ -1105,16 +1109,23 @@ function collectPlanItems(opts) {
     const value = pinned ? PIN_VALUE : planValue(act.id, opts);
     if (value <= 0) continue;
     const v = sh.v != null ? S.data.venues[sh.v] : null;
-    items.push({
+    const eintrag = {
       id: sh.id, actIdx: sh.a, actId: act.id, name: act.n,
       startIso: sh.t, value,
       venue: v ? { lat: v.lat, lng: v.lng, name: v.n } : null,
       venueIdx: sh.v,
       pinned,
       note: +rate[act.id] || 0,     // die echte Note, auch 1,5
-    });
+    };
+    if (planSkip.has(sh.id)) {
+      eintrag.skipped = true;
+      skipped.push(eintrag);
+    } else {
+      items.push(eintrag);
+    }
   }
   items.undatedCount = undated;
+  items.skipped = skipped;
   return items;
 }
 
@@ -1137,7 +1148,10 @@ function renderPlan() {
         ? `${items.undatedCount} passende Acts haben noch keine Uhrzeit und
            lassen sich deshalb nicht einplanen.`
         : 'Bewerte erst ein paar Acts.'}</p>`;
-    lastPlan = null; lastItems = null; renderTimeline(null, null, opts);
+    lastPlan = null; lastItems = null;
+    // Auch ohne planbare Acts kann die Leiste etwas zeigen: die von Hand
+    // ausgeschlossenen stehen dort grau.
+    renderTimeline(null, items, opts);
     return;
   }
 
@@ -1300,14 +1314,20 @@ const TL_GUTTER = 48;   // Platz fuer die Uhrzeiten links, siehe .tl-acts
 function renderTimeline(plan, items, opts) {
   const box = $('#plan-time');
   if (!box) return;
-  if (!items || !items.length) {
+  /* Die Leiste zeigt MEHR als die Rechnung kennt: auch die von Hand
+     ausgeschlossenen Termine. Die Liste laesst sie zu Recht weg - sie
+     stehen nicht im Plan -, aber hier sollen sie grau stehenbleiben, damit
+     man sieht, was man weggetan hat, und es mit einem Tipper
+     zurueckholen kann. */
+  const alle = items ? [...items, ...(items.skipped || [])] : [];
+  if (!alle.length) {
     box.innerHTML = '<p class="empty">Nichts zu zeigen — erst einen Tag wählen '
       + 'und ein paar Acts bewerten.</p>';
     return;
   }
   const set = opts.setMinutes;
   const mins = (iso) => Math.round(new Date(iso).getTime() / 60000);
-  const sorted = [...items].sort((a, b) => mins(a.startIso) - mins(b.startIso));
+  const sorted = [...alle].sort((a, b) => mins(a.startIso) - mins(b.startIso));
   const t0 = mins(sorted[0].startIso);
   const t1 = Math.max(...sorted.map((s) => mins(s.startIso))) + set;
   const inPlan = new Map((plan ? plan.stops : [])
@@ -1336,6 +1356,9 @@ function renderTimeline(plan, items, opts) {
      gesagt hat), zaehlt die eigene Note. Was gar keine Note hat, steht ganz
      links. */
   const rankOf = (s) => {
+    // Ausgeschlossene ganz nach links, egal wie gut sie bewertet sind:
+    // "nicht heute" ist die Aussage, nicht die Note.
+    if (s.skipped) return 99;
     const t = teamOpinionShown(s.actId) ? teamAvg(s.actId) : null;
     if (t) return t.avg;
     return (rateBucket(rate[s.actId]) > 0 ? +rate[s.actId] : 0) || 9;
@@ -1354,7 +1377,7 @@ function renderTimeline(plan, items, opts) {
   const placed = [];
   // Kleine Zahl = gute Note = zuerst dran, damit sie sich die rechte Spur
   // nehmen kann, bevor eine schlechtere sie belegt.
-  const byRank = [...items].sort((x, y) =>
+  const byRank = [...alle].sort((x, y) =>
     rankOf(x) - rankOf(y) || mins(x.startIso) - mins(y.startIso));
   for (const s of byRank) {
     const a = mins(s.startIso);
@@ -1407,13 +1430,15 @@ function renderTimeline(plan, items, opts) {
     const code = venueCode[s.venueIdx] || '';
     const total = actShowCount(s.actIdx);
     return `<button type="button" class="tl-act${rb ? ' rated-' + rb : ''}${
-      no ? ' in-plan' : ''}" data-tlshow="${esc(s.id)}"
+      no ? ' in-plan' : ''}${s.skipped ? ' skipped' : ''}" data-tlshow="${esc(s.id)}"
       data-top="${(a - t0) * TL_PX_PER_MIN}" data-lane="${lane}"
       title="${esc(s.name)} — ${hhmm(s.startIso)}${
         s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}${
-        total > 1 ? `, spielt ${total}× beim Festival` : ''}">
+        total > 1 ? `, spielt ${total}× beim Festival` : ''}${
+        s.skipped ? ' — heute nicht; tippen holt ihn zurück' : ''}">
       ${no ? `<span class="tl-no">${no}</span>` : ''}
-      <span class="tl-time">${hhmm(s.startIso)}</span>
+      <span class="tl-time">${hhmm(s.startIso)}${
+        s.skipped ? '<span class="tl-out" aria-hidden="true">✕</span>' : ''}</span>
       <span class="tl-name">${esc(s.name)}${
         total > 1 ? `<span class="multi">×${total}</span>` : ''}</span>
       <span class="tl-foot">${

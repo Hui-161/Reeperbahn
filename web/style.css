@@ -850,6 +850,20 @@ main { min-height: 60vh; }
   cursor: pointer;
   opacity: .72;
 }
+/* "Heute nicht": bleibt stehen, aber sichtbar beiseitegelegt - grau
+   hinterlegt, entfaerbt und ganz links. Weggerechnet ist es schon, jetzt
+   soll es nur noch nicht verschwinden: wer einen Act wegtut, will spaeter
+   sehen koennen, dass er es war, und ihn mit einem Tipper zurueckholen. */
+.tl-act.skipped {
+  opacity: .45;
+  background: var(--bg-sunken);
+  border-style: dashed;
+  border-left-color: var(--line) !important;
+  filter: grayscale(1);
+}
+.tl-act.skipped .tl-name { font-weight: 500; text-decoration: line-through; }
+.tl-out { margin-left: .2rem; font-weight: 700; }
+
 /* Was im Plan steht, tritt hervor - alles andere ist Umfeld. */
 .tl-act.in-plan {
   opacity: 1;

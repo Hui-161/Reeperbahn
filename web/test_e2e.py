@@ -2234,6 +2234,79 @@ with sync_playwright() as p:
         f"() => !JSON.parse(localStorage.getItem('rbf26.planpin')||'[]')"
         f".includes('{tl_show}') && !JSON.parse(localStorage.getItem("
         f"'rbf26.planskip')||'[]').includes('{tl_show}')"))
+
+    # --- "Nicht heute" blendet in der Leiste nicht aus, sondern legt beiseite ---
+    # Mit einem EIGENEN Block: der von oben hat inzwischen keine Note mehr
+    # (gesetzt und wieder gelöscht) und gehört damit ohnehin nicht mehr in
+    # die Leiste - ausgeschlossen wird nur sichtbar, was sonst zu sehen wäre.
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
+    weg = pg7.evaluate("""() => {
+      const e = [...document.querySelectorAll('.tl-act')].find(
+        (x) => x.querySelector('.grade:not(.grade-p)') && !x.classList.contains('skipped'));
+      return e ? [e.dataset.tlshow, parseFloat(e.style.left)] : null;
+    }""")
+    if weg:
+        weg_id, links_vorher = weg[0], weg[1]
+        pg7.locator(f'.tl-act[data-tlshow="{weg_id}"]').click()
+        pg7.wait_for_selector("#tlmenu[open]")
+        pg7.locator('#tl-plan button[data-tlplan="raus"]').click()
+        pg7.wait_for_timeout(700)
+        pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
+        raus7 = pg7.locator(f'.tl-act[data-tlshow="{weg_id}"]')
+        check("Ausgeschlossen heißt in der Leiste nicht verschwunden",
+              raus7.count() == 1
+              and weg_id not in pg7.evaluate(PLAN7),
+              f"{weg_id} noch da: {raus7.count()}")
+        check("Grau hinterlegt und entfärbt", pg7.evaluate(
+            f"""() => {{
+              const e = document.querySelector('.tl-act[data-tlshow="{weg_id}"]');
+              const s = getComputedStyle(e);
+              return e.classList.contains('skipped') && +s.opacity < 0.7
+                     && s.filter.includes('grayscale');
+            }}"""), raus7.get_attribute("class"))
+        links_nachher = float(str(raus7.evaluate("e => e.style.left"))
+                              .replace("px", ""))
+        check("Und nach links geschoben", links_nachher < links_vorher,
+              f"{links_vorher} -> {links_nachher}")
+        # Die Regel dahinter: was heute nicht stattfindet, steht links von
+        # allem, was gleichzeitig läuft und noch in Frage kommt.
+        ordnung7 = pg7.evaluate("""() => {
+          const a = [...document.querySelectorAll('.tl-act')].map((e) => ({
+            left: parseFloat(e.style.left), top: parseFloat(e.style.top),
+            h: parseFloat(e.style.height),
+            raus: e.classList.contains('skipped'),
+          }));
+          let paare = 0, falsch = 0;
+          for (const r of a.filter((x) => x.raus)) {
+            for (const n of a.filter((x) => !x.raus)) {
+              if (!(r.top < n.top + n.h && n.top < r.top + r.h)) continue;
+              paare++;
+              if (r.left > n.left) falsch++;
+            }
+          }
+          return { paare, falsch };
+        }""")
+        check("Er steht links von allem, was gleichzeitig noch zählt",
+              ordnung7["paare"] >= 1 and ordnung7["falsch"] == 0,
+              f'{ordnung7["falsch"]} von {ordnung7["paare"]} Paaren verkehrt')
+        # Und mit einem Tipper zurückzuholen - dafür steht er ja noch da.
+        pg7.locator(f'.tl-act[data-tlshow="{weg_id}"]').click()
+        pg7.wait_for_selector("#tlmenu[open]")
+        check("Ein Tipper darauf öffnet die Griffe mit 'Nicht heute' aktiv",
+              pg7.evaluate("""() => [...document.querySelectorAll('#tl-plan button')]
+                   .filter((x) => x.getAttribute('aria-pressed') === 'true')
+                   .map((x) => x.dataset.tlplan)""") == ["raus"])
+        pg7.locator('#tl-plan button[data-tlplan="auto"]').click()
+        pg7.wait_for_timeout(700)
+        check("Und zurückgeholt ist er wieder ganz da",
+              "skipped" not in (pg7.locator(f'.tl-act[data-tlshow="{weg_id}"]')
+                                .get_attribute("class") or ""),
+              pg7.locator(f'.tl-act[data-tlshow="{weg_id}"]').get_attribute("class"))
+    # Die naechsten Pruefungen brauchen offene Griffe - egal, ob der Abstecher
+    # oben einen Block gefunden hat.
+    if pg7.locator("#tlmenu[open]").count() == 0:
+        pg7.locator(".tl-act").first.click()
+        pg7.wait_for_selector("#tlmenu[open]")
     # Der Weg hinüber: die Griffe machen zu, die Detailkarte geht auf, und
     # zwar für DENSELBEN Act. Zwei modale Dialoge übereinander wären eine
     # Ebene zu viel zum Zurückgehen.
