@@ -1967,6 +1967,69 @@ with sync_playwright() as p:
           for (let i = 1; i <= 8; i++) fire('touchmove', x0 + (dx * i) / 8);
           fire('touchend', x0 + dx);
         }"""
+        # Erst nur HALTEN, nicht loslassen: waehrend der Geste muss der
+        # naechste Act schon von der Seite hereinschauen. Ohne das war der
+        # Wisch eine Wette - man gab die Station aus der Hand und sah erst
+        # nach dem Loslassen, was man bekommt.
+        HOLD = """([id, dx]) => {
+          const stop = document.querySelector(`.stop[data-stop="${id}"]`);
+          const r = stop.getBoundingClientRect();
+          const x0 = r.left + r.width / 2, y0 = r.top + r.height / 2;
+          const fire = (type, x) => {
+            const t = new Touch({ identifier: 4, target: stop, clientX: x,
+                                  clientY: y0, pageX: x, pageY: y0 });
+            stop.dispatchEvent(new TouchEvent(type, { bubbles: true,
+              cancelable: true, touches: [t], targetTouches: [t],
+              changedTouches: [t] }));
+          };
+          fire('touchstart', x0);
+          for (let i = 1; i <= 8; i++) fire('touchmove', x0 + (dx * i) / 8);
+        }"""
+        DROP = """([id]) => {
+          const stop = document.querySelector(`.stop[data-stop="${id}"]`);
+          const t = new Touch({ identifier: 4, target: stop, clientX: 0, clientY: 0 });
+          stop.dispatchEvent(new TouchEvent('touchend', { bubbles: true,
+            cancelable: true, touches: [], targetTouches: [], changedTouches: [t] }));
+        }"""
+        held = pg7.locator("#plan .alt-count").first.evaluate(
+            "e => e.closest('.stop').dataset.stop")
+        held_name = pg7.locator(f'#plan .stop[data-stop="{held}"] .row-name').first \
+            .evaluate("e => e.childNodes[0].textContent.trim()")
+        pg7.evaluate(HOLD, [held, -90]); pg7.wait_for_timeout(250)
+        peek = pg7.evaluate("""() => {
+          const p = document.getElementById('swap-peek');
+          const s = document.querySelector('.stop.swapping');
+          const pr = p.getBoundingClientRect();
+          const sr = s ? s.getBoundingClientRect() : null;
+          const n = p.querySelector('.row-name');
+          return { offen: !p.hidden, name: n ? n.childNodes[0].textContent.trim() : null,
+                   links: pr.left, breite: pr.width,
+                   stationLinks: sr ? sr.left : null,
+                   versatz: s ? s.style.transform : null };
+        }""")
+        check("Während des Wischens schiebt sich der nächste Act herein",
+              peek["offen"] and peek["name"], str(peek)[:110])
+        check("Und zwar ein anderer als der, den man wegschiebt",
+              peek["name"] != held_name, f'{held_name} -> {peek["name"]}')
+        # Er kommt von RECHTS, also genau eine Zeilenbreite hinter der
+        # Station her - sonst laege er auf ihr.
+        check("Er hängt am Finger, eine Zeilenbreite versetzt",
+              peek["breite"] > 100
+              and abs((peek["links"] - peek["stationLinks"]) - peek["breite"]) < 2,
+              f'Vorschau {round(peek["links"])}, Station {round(peek["stationLinks"])}, '
+              f'Breite {round(peek["breite"])}')
+        pg7.evaluate(DROP, [held]); pg7.wait_for_timeout(800)
+        check("Nach dem Loslassen ist die Vorschau weg",
+              pg7.evaluate("() => document.getElementById('swap-peek').hidden"))
+        check("Und der vorgeschaute Act steht jetzt im Plan",
+              pg7.locator("#plan .stop .row-name").evaluate_all(
+                  "els => els.map(e => e.childNodes[0].textContent.trim())")
+              .count(peek["name"]) >= 1,
+              f'{peek["name"]} in '
+              + str(pg7.locator("#plan .stop .row-name").evaluate_all(
+                  "els => els.map(e => e.childNodes[0].textContent.trim())")[:6]))
+        pg7.locator("#toast .toast-undo").click(); pg7.wait_for_timeout(700)
+
         swipe_from = pg7.evaluate(PLAN7)
         pg7.evaluate(SWAP, [stop_id, -120]); pg7.wait_for_timeout(800)
         check("Wischen tauscht genauso",
@@ -2024,19 +2087,198 @@ with sync_playwright() as p:
     check("Und die Stationen des Plans sind numeriert",
           pg7.locator(".tl-act.in-plan .tl-no").count()
           == pg7.locator(".tl-act.in-plan").count())
+    # Ortskürzel und Mehrfachauftritte gehören an den Block: sonst muss man
+    # für "wo ist das denn?" jedes Mal aufmachen.
+    check("Jeder Block nennt sein Ortskürzel",
+          pg7.locator(".tl-act .vcode").count() == tl.count(),
+          f'{pg7.locator(".tl-act .vcode").count()} von {tl.count()}')
+    check("Und das Kürzel sind zwei Zeichen",
+          re.fullmatch(r"\S{1,3}",
+                       pg7.locator(".tl-act .vcode").first.inner_text().strip()),
+          pg7.locator(".tl-act .vcode").first.inner_text())
+    check("Wer mehrfach spielt, trägt das am Block",
+          pg7.locator(".tl-act .multi").count() >= 1
+          and pg7.locator(".tl-act .multi").first.inner_text().startswith("×"),
+          f'{pg7.locator(".tl-act .multi").count()} Marken')
+
+    # Die Verbindung von Station zu Station mit der Laufzeit.
+    n_stops_tl = pg7.locator(".tl-act.in-plan").count()
+    check("Zwischen den Stationen läuft eine Linie",
+          pg7.locator(".tl-link").count() == n_stops_tl - 1,
+          f'{pg7.locator(".tl-link").count()} Linien bei {n_stops_tl} Stationen')
+    check("Mit der Laufzeit daran",
+          pg7.locator(".tl-link-label").count() == n_stops_tl - 1
+          and re.fullmatch(r"\d+ min",
+              pg7.locator(".tl-link-label").first.text_content().strip()),
+          pg7.locator(".tl-link-label").first.text_content())
+    # Die Linie muss die beiden Kästen wirklich verbinden, nicht irgendwo
+    # liegen - geprüft am Endpunkt gegen die Lage des zweiten Blocks.
+    check("Die Linie trifft die nächste Station", pg7.evaluate("""() => {
+      const l = document.querySelector('.tl-link');
+      const acts = [...document.querySelectorAll('.tl-act.in-plan')];
+      if (!l || acts.length < 2) return false;
+      const svg = document.querySelector('.tl-links').getBoundingClientRect();
+      const b = acts[1].getBoundingClientRect();
+      const x = svg.left + +l.getAttribute('x2');
+      const y = svg.top + +l.getAttribute('y2');
+      return x > b.left - 2 && x < b.right + 2 && Math.abs(y - b.top) < 3;
+    }"""))
+
+    # Der rote Strich für JETZT gehört NUR in eine Leiste, in der "jetzt"
+    # auch liegt. Dieser Tag ist nicht heute.
+    check("Kein Jetzt-Strich an einem Tag, der nicht heute ist",
+          pg7.locator(".tl-now").count() == 0,
+          f'{pg7.locator(".tl-now").count()} Striche für {day7}')
+
+    # --- Die Griffe zu einem Auftritt ---
+    # Aus der Zeitleiste geht bewusst NICHT die Detailkarte auf.
     pg7.locator(".tl-act").first.click(); pg7.wait_for_timeout(700)
-    check("Ein Block öffnet die Detailkarte", pg7.locator("#detail[open]").count() == 1)
-    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(300)
+    check("Ein Block öffnet die Griffe, nicht die Detailkarte",
+          pg7.locator("#tlmenu[open]").count() == 1
+          and pg7.locator("#detail[open]").count() == 0)
+    check("Sie nennen Tag, Zeit, Kürzel und Spielort",
+          re.search(r"(Mi|Do|Fr|Sa) \d\d:\d\d · \S+ ",
+                    pg7.locator("#tl-when").inner_text()),
+          pg7.locator("#tl-when").inner_text()[:70])
+    chips7 = pg7.locator("#tl-top .chip").all_inner_texts()
+    check("Mit Spotify-Abkürzung, Gesehen und Favorit",
+          len(chips7) == 3 and ("Anspielen" in chips7[0] or "Spotify" in chips7[0])
+          and "Gesehen" in chips7[1] and "Favorit" in chips7[2], str(chips7))
+    check("Und der vollen Notenskala",
+          pg7.locator("#tl-rate button").count() == 7)
+    seg7 = pg7.locator("#tl-plan button").all_inner_texts()
+    check("Dazu die Wahl, ob das in den Abendplan kommt",
+          len(seg7) == 3, str(seg7))
+    check("Genau eine der drei gilt", pg7.evaluate(
+        """() => [...document.querySelectorAll('#tl-plan button')]
+             .filter(b => b.getAttribute('aria-pressed') === 'true').length""") == 1)
+
+    tl_show = pg7.locator("#tlmenu").get_attribute("data-show")
+    # Note aus diesem Dialog: setzt sich UND lässt den Plan neu rechnen,
+    # ohne den Dialog zu schließen - man ist ja noch beim Entscheiden.
+    tl_before = pg7.evaluate(PLAN7)
+    pg7.locator('#tl-rate button[data-r="5"]').click(); pg7.wait_for_timeout(700)
+    check("Eine Note von hier setzt sich",
+          pg7.locator('#tl-rate button[data-r="5"]').get_attribute("aria-pressed")
+          == "true")
+    check("Und der Dialog bleibt dabei offen",
+          pg7.locator("#tlmenu[open]").count() == 1)
+    check("Der Plan rechnet neu", pg7.evaluate(PLAN7) != tl_before,
+          f"{tl_before[:4]} -> {pg7.evaluate(PLAN7)[:4]}")
+    pg7.locator('#tl-rate button[data-r="5"]').click(); pg7.wait_for_timeout(500)
+
+    pg7.click("#tl-seen"); pg7.wait_for_timeout(400)
+    check("Gesehen lässt sich hier abhaken",
+          pg7.locator("#tl-seen").get_attribute("aria-pressed") == "true"
+          and pg7.evaluate("() => JSON.parse(localStorage.getItem("
+                           "'rbf26.seen')||'[]').length") >= 1)
+
+    # Die drei Stufen schreiben in dieselben Mengen wie 📌 und ✕ in der Liste.
+    pg7.locator('#tl-plan button[data-tlplan="fest"]').click()
+    pg7.wait_for_timeout(700)
+    check("'Muss rein' hält den Termin fest", pg7.evaluate(
+        f"() => JSON.parse(localStorage.getItem('rbf26.planpin')||'[]')"
+        f".includes('{tl_show}')"))
+    check("Und der Termin steht danach im Plan", tl_show in pg7.evaluate(PLAN7),
+          f"{tl_show} in {pg7.evaluate(PLAN7)}")
+    pg7.locator('#tl-plan button[data-tlplan="raus"]').click()
+    pg7.wait_for_timeout(700)
+    check("'Nicht heute' schließt ihn aus", pg7.evaluate(
+        f"() => !JSON.parse(localStorage.getItem('rbf26.planpin')||'[]')"
+        f".includes('{tl_show}') && JSON.parse(localStorage.getItem("
+        f"'rbf26.planskip')||'[]').includes('{tl_show}')"))
+    check("Und er ist aus dem Plan verschwunden",
+          tl_show not in pg7.evaluate(PLAN7))
+    pg7.locator('#tl-plan button[data-tlplan="auto"]').click()
+    pg7.wait_for_timeout(700)
+    check("'Wenn es passt' nimmt beides zurück", pg7.evaluate(
+        f"() => !JSON.parse(localStorage.getItem('rbf26.planpin')||'[]')"
+        f".includes('{tl_show}') && !JSON.parse(localStorage.getItem("
+        f"'rbf26.planskip')||'[]').includes('{tl_show}')"))
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
+    check("Zurück schließt die Griffe", pg7.locator("#tlmenu[open]").count() == 0)
+
     pg7.click("#plan-timeline"); pg7.wait_for_timeout(500)
     check("Nochmal tippen führt zurück zur Liste",
           not pg7.locator("#plan-body").is_hidden()
           and pg7.locator("#plan-time").is_hidden())
+
+    # --- Abendplan als Abkürzung oben ---
+    pg7.click("#btn-plan"); pg7.wait_for_timeout(500)
+    check("Der Kopfknopf schließt den Plan wieder",
+          pg7.locator("#plan").is_hidden()
+          and pg7.locator("#btn-plan").get_attribute("aria-pressed") == "false")
+    pg7.click("#btn-plan"); pg7.wait_for_timeout(600)
+    check("Und öffnet ihn ohne Umweg über das Menü",
+          pg7.locator("#plan").is_visible()
+          and pg7.locator("#btn-plan").get_attribute("aria-pressed") == "true"
+          and pg7.locator("#menu[open]").count() == 0)
+    check("Die Kopfzeile bleibt dabei in einer Reihe", pg7.evaluate("""() => {
+      const h1 = document.querySelector('.top h1').getBoundingClientRect();
+      const a = document.querySelector('.top-actions').getBoundingClientRect();
+      return h1.right <= a.left + 1 && a.right <= innerWidth + 1;
+    }"""))
 
     csp7 = [e for e in err7 if "content security policy" in e.lower()
             or "refused to apply" in e.lower()]
     check("Keine CSP-Verletzung im Abendplan", not csp7, str(csp7[:2]))
     check("Keine JS-Fehler im Plan-Kontext", not err7, str(err7[:2]))
     ctx7.close()
+
+    # --- Der rote Strich für JETZT ---
+    # Mit GESTELLTER Uhr, nicht mit der echten: sonst prüfte der Test nur an
+    # vier Abenden im Jahr etwas und wäre sonst blind. Gestellt wird auf
+    # 21:00 Ortszeit an einem Festivaltag - dann läuft wirklich etwas.
+    ctx8 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE",
+                         timezone_id="Europe/Berlin")
+    ctx8.clock.install(time=_dt.datetime(
+        *[int(x) for x in day7.split("-")], 19, 0, 0,
+        tzinfo=_dt.timezone.utc))          # 19:00 UTC = 21:00 in Hamburg
+    ctx8.clock.resume()
+    pg8 = ctx8.new_page()
+    err8 = []
+    pg8.on("pageerror", lambda e: err8.append(str(e)))
+    pg8.goto(BASE + "/", wait_until="load")
+    pg8.wait_for_selector(".row", timeout=20000)
+    pg8.evaluate("""(ids) => {
+      const r = {};
+      ids.forEach((id, i) => { r[id] = (i % 3) + 1; });
+      localStorage.setItem('rbf26.rate', JSON.stringify(r));
+    }""", ids7)
+    pg8.reload(wait_until="load")
+    pg8.wait_for_selector(".row", timeout=20000)
+    check("Bei gestellter Uhr wählt die App den laufenden Tag vor",
+          pg8.evaluate("""() => {
+            const d = document.querySelector('.day[aria-selected="true"]');
+            return d ? d.dataset.day : null;
+          }""") == day7, day7)
+    pg8.click("#btn-plan"); pg8.wait_for_timeout(700)
+    pg8.click("#plan-timeline"); pg8.wait_for_timeout(800)
+    now8 = pg8.locator(".tl-now")
+    check("Läuft der Abend, steht ein Strich für jetzt da", now8.count() == 1,
+          f"{now8.count()} Striche")
+    if now8.count():
+        check("Er ist mit der Uhrzeit beschriftet",
+              now8.locator("span").inner_text().strip() == "21:00",
+              now8.locator("span").inner_text())
+        check("Und rot, nicht in der Rasterfarbe", pg8.evaluate("""() => {
+          const c = getComputedStyle(document.querySelector('.tl-now')).borderTopColor;
+          const m = c.match(/\\d+/g).map(Number);
+          return m[0] > 140 && m[0] > m[1] * 1.5 && m[0] > m[2] * 1.5;
+        }"""), pg8.evaluate("() => getComputedStyle("
+                            "document.querySelector('.tl-now')).borderTopColor"))
+        # Er muss an der richtigen Stelle liegen: auf Höhe der Acts, die um
+        # 21:00 laufen. Sonst wäre er hübsch und falsch.
+        check("Er liegt auf der Höhe der Acts, die gerade laufen",
+              pg8.evaluate("""() => {
+                const y = document.querySelector('.tl-now').getBoundingClientRect().top;
+                return [...document.querySelectorAll('.tl-act')].some(a => {
+                  const r = a.getBoundingClientRect();
+                  return r.top <= y && r.bottom >= y;
+                });
+              }"""))
+    check("Keine JS-Fehler im Uhr-Kontext", not err8, str(err8[:2]))
+    ctx8.close()
 
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e

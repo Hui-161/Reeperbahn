@@ -27,6 +27,11 @@
       <button id="btn-map" class="icon-btn" aria-label="Karte" title="Karte" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
       </button>
+      <button id="btn-plan" class="icon-btn" aria-label="Abendplan"
+              title="Abendplan" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17"
+          height="15" rx="2.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/></svg>
+      </button>
       <button id="btn-theme" class="icon-btn" aria-label="Ansicht wechseln">
         <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
       </button>
@@ -264,6 +269,29 @@
     </div>
   </div>
 </dialog>
+
+<!-- Was in der Zeitleiste auf einen Act hin aufgeht. Bewusst NICHT die
+     Detailkarte: dort steht Biografie, Bild und Team - hier geht es um die
+     vier Griffe, die man mitten im Abend braucht. -->
+<dialog id="tlmenu" class="quick" aria-label="Auftritt">
+  <div class="quick-wrap">
+    <div class="quick-head">
+      <span class="quick-name" id="tl-name"></span>
+      <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
+    </div>
+    <p class="tl-when" id="tl-when"></p>
+    <div class="quick-extra" id="tl-top"></div>
+    <div class="rate" id="tl-rate"></div>
+    <h4 class="tl-h">Im Abendplan</h4>
+    <div class="seg" id="tl-plan"></div>
+    <p class="menu-note" id="tl-plan-note"></p>
+  </div>
+</dialog>
+
+<!-- Waehrend des Wischens im Abendplan: der naechste parallele Act schiebt
+     sich von der Seite herein wie an einem Rad. Liegt ausserhalb des Plans,
+     damit ein Neuaufbau ihn nicht mitten in der Geste wegzieht. -->
+<div id="swap-peek" class="swap-peek" hidden aria-hidden="true"></div>
 
 <!-- Anspiel-Leiste: liegt ausserhalb von #list, damit sie ein render()
      ueberlebt und beim Weiterscrollen weiterspielt. -->

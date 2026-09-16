@@ -869,6 +869,50 @@ main { min-height: 60vh; }
   font-size: .65rem;
   font-weight: 700;
 }
+/* Jetzt. Nur da, wenn "jetzt" wirklich in dieser Leiste liegt - ein Strich
+   am oberen Rand waere eine Behauptung, kein Hinweis. Ueber den Bloecken,
+   damit er nicht hinter einem Kasten verschwindet, aber ohne Klickfang. */
+.tl-now {
+  position: absolute;
+  left: 0; right: 0;
+  z-index: 3;
+  border-top: 2px solid var(--r5);
+  pointer-events: none;
+}
+.tl-now span {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  padding: 0 .25rem;
+  border-radius: 0 0 4px 0;
+  background: var(--r5);
+  color: var(--on-scale);
+  font-size: .65rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Die Verbindung von Station zu Station. Liegt zwischen Raster und
+   Bloecken - sichtbar, aber nie im Weg. */
+.tl-links { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
+.tl-link { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tl-link-label {
+  fill: var(--accent);
+  font: 700 .62rem system-ui, sans-serif;
+  /* Der Weg fuehrt quer ueber Kaesten und Stundenlinien; ohne Rand darunter
+     verliert sich die Zahl im Gewimmel. */
+  paint-order: stroke;
+  stroke: var(--bg-raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* Note, Mehrfachauftritt und Ortskuerzel in einer Fusszeile. Das Kuerzel
+   stand zuerst oben neben der Uhrzeit - dort verdeckt es bei Stationen die
+   runde Nummer, bzw. die Nummer das Kuerzel ("SN" wurde zu "S"). */
+.tl-foot { display: flex; align-items: center; gap: .25rem; margin-top: auto; }
+.tl-act .vcode { margin: 0 0 0 auto; font-size: .62rem; min-width: 1.7em; }
+.tl-act .multi { margin: 0; font-size: .6rem; }
 .tl-time { font-variant-numeric: tabular-nums; color: var(--ink-faint); }
 .tl-name {
   font-weight: 600;
@@ -878,7 +922,47 @@ main { min-height: 60vh; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.tl-act .grade { align-self: flex-start; margin-top: auto; }
+.tl-act .grade { align-self: center; }
+
+/* ---------- Der naechste Act beim Wischen ----------
+   Schwebt ueber der Liste und folgt dem Finger von der Seite herein. Kein
+   Klickfang: waehrend der Geste wird nichts angetippt. */
+.swap-peek {
+  position: fixed;
+  z-index: 700;
+  pointer-events: none;
+  overflow: hidden;
+}
+.swap-peek .stop { opacity: .85; }
+.swap-peek .row { box-shadow: var(--shadow); }
+.swap-peek .stop-no { background: var(--ink-faint); }
+
+/* ---------- Griffe zu einem Auftritt (aus der Zeitleiste) ---------- */
+.tl-when { margin: 0 0 .6rem; font-size: .8rem; color: var(--ink-soft); }
+.tl-h { margin: .9rem 0 .35rem; font-size: .78rem; color: var(--ink-soft); }
+/* Drei Moeglichkeiten, von denen genau eine gilt - also ein Schalter, keine
+   drei Knoepfe, die auch gemeinsam an sein koennten. */
+.seg { display: flex; gap: 0; }
+.seg button {
+  flex: 1;
+  min-height: var(--tap);
+  padding: 0 .4rem;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .78rem;
+  cursor: pointer;
+}
+.seg button:first-child { border-radius: 999px 0 0 999px; }
+.seg button:last-child { border-radius: 0 999px 999px 0; }
+.seg button + button { border-left: 0; }
+.seg button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
 
 .plan-warn {
   margin: .5rem 0;

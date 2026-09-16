@@ -162,7 +162,8 @@ const el = {
   filePartner: $('#file-partner'),
   q: $('#q'), searchbar: $('#searchbar'), file: $('#file'),
   player: $('#player'), toast: $('#toast'),
-  quick: $('#quick'), swipe: $('#swipe'),
+  quick: $('#quick'), swipe: $('#swipe'), tlmenu: $('#tlmenu'),
+  swapPeek: $('#swap-peek'),
 };
 
 /* Kurze Rueckmeldung ohne Dialog - fuer Dinge, die keine Bestaetigung
@@ -783,6 +784,7 @@ function render() {
     return;
   }
   el.news.hidden = true;
+  $('#btn-plan').setAttribute('aria-pressed', String(S.planOn));
   if (S.planOn) {
     el.list.hidden = true; el.mapBox.hidden = true; el.plan.hidden = false;
     renderPlan();
@@ -1283,27 +1285,46 @@ function renderTimeline(plan, items, opts) {
       <span>${window.RBFPlan.clockInSourceZone(sorted[0].startIso, m - t0)}</span>
       </div>`;
   }
+  /* Roter Strich fuer JETZT - aber nur, wenn "jetzt" ueberhaupt in dieser
+     Leiste liegt. Wer am Dienstag den Samstag plant, braucht keinen Strich
+     am oberen Rand, der so tut, als liefe schon etwas. Gerechnet wird in
+     Epochenminuten, damit keine Zeitzone dazwischenkommt. */
+  tlT0 = t0;
+  const nowMin = Math.round(Date.now() / 60000);
+  const nowMark = (nowMin >= t0 && nowMin <= t1)
+    ? `<div class="tl-now" data-top="${(nowMin - t0) * TL_PX_PER_MIN}"><span>${
+        localHHMM(new Date())}</span></div>`
+    : '';
 
   const blocks = placed.map(({ s, a, lane }) => {
     const rb = rateBucket(rate[s.actId]);
     const no = inPlan.get(String(s.id));
+    const code = venueCode[s.venueIdx] || '';
+    const total = actShowCount(s.actIdx);
     return `<button type="button" class="tl-act${rb ? ' rated-' + rb : ''}${
-      no ? ' in-plan' : ''}" data-tlact="${s.actIdx}"
+      no ? ' in-plan' : ''}" data-tlshow="${esc(s.id)}"
       data-top="${(a - t0) * TL_PX_PER_MIN}" data-lane="${lane}"
       title="${esc(s.name)} — ${hhmm(s.startIso)}${
-        s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}">
+        s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}${
+        total > 1 ? `, spielt ${total}× beim Festival` : ''}">
       ${no ? `<span class="tl-no">${no}</span>` : ''}
       <span class="tl-time">${hhmm(s.startIso)}</span>
       <span class="tl-name">${esc(s.name)}</span>
-      ${rb ? `<span class="grade grade-${rb}">${rateText(rate[s.actId])}</span>` : ''}
+      <span class="tl-foot">${
+        rb ? `<span class="grade grade-${rb}">${rateText(rate[s.actId])}</span>` : ''}${
+        total > 1 ? `<span class="multi">×${total}</span>` : ''}${
+        code ? `<span class="vcode" title="${esc(s.venue ? s.venue.name : '')}"
+          >${esc(code)}</span>` : ''}</span>
     </button>`;
   }).join('');
 
   box.innerHTML = `<p class="menu-note">Zeit läuft nach unten, Gleichzeitiges
     steht nebeneinander. Farbe ist die eigene Note; umrandet und numeriert,
-    was im Plan steht. Seitlich wischen zeigt weitere parallele Acts.</p>
+    was im Plan steht, mit der Laufzeit an der Verbindung. Ein Tipper öffnet
+    die Griffe für diesen Auftritt.</p>
     <div class="tl-scroll"><div class="tl-canvas">
-      <div class="tl-marks">${marks}</div>
+      <div class="tl-marks">${marks}${nowMark}</div>
+      <svg class="tl-links" aria-hidden="true"></svg>
       <div class="tl-acts">${blocks}</div>
     </div></div>`;
 
@@ -1313,18 +1334,71 @@ function renderTimeline(plan, items, opts) {
      beim ersten Versuch passiert. Ueber element.style greift die Regel
      nicht, das ist kein Inline-Stil im Sinne der CSP. */
   const canvas = box.querySelector('.tl-canvas');
-  canvas.style.height = `${(t1 - t0) * TL_PX_PER_MIN + 16}px`;
-  canvas.style.width = `${lanes * TL_LANE + TL_GUTTER}px`;
-  for (const m of box.querySelectorAll('.tl-hour')) {
+  const height = (t1 - t0) * TL_PX_PER_MIN + 16;
+  const width = lanes * TL_LANE + TL_GUTTER;
+  canvas.style.height = `${height}px`;
+  canvas.style.width = `${width}px`;
+  for (const m of box.querySelectorAll('.tl-hour, .tl-now')) {
     m.style.top = `${m.dataset.top}px`;
   }
+  const blockH = set * TL_PX_PER_MIN - 3;
+  const blockW = TL_LANE - 6;
   for (const b of box.querySelectorAll('.tl-act')) {
     b.style.top = `${b.dataset.top}px`;
     b.style.left = `${+b.dataset.lane * TL_LANE}px`;
-    b.style.height = `${set * TL_PX_PER_MIN - 3}px`;
-    b.style.width = `${TL_LANE - 6}px`;
+    b.style.height = `${blockH}px`;
+    b.style.width = `${blockW}px`;
+  }
+
+  /* Die Verbindung von Station zu Station mit der Laufzeit daran. Als SVG,
+     weil eine schraege duenne Linie mit gedrehten Kaesten nur haesslich
+     wird - und weil x1/y1/x2/y2 Praesentationsattribute sind, keine Stile:
+     die CSP laesst sie durch. */
+  const svg = box.querySelector('.tl-links');
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const pos = new Map(placed.map(({ s, a, lane }) =>
+    [String(s.id), { x: TL_GUTTER + lane * TL_LANE + blockW / 2,
+                     y: (a - t0) * TL_PX_PER_MIN }]));
+  const NS = 'http://www.w3.org/2000/svg';
+  const stops = plan ? plan.stops : [];
+  for (let i = 1; i < stops.length; i++) {
+    const from = pos.get(String(stops[i - 1].id));
+    const to = pos.get(String(stops[i].id));
+    if (!from || !to) continue;
+    const y1 = from.y + blockH;
+    const line = document.createElementNS(NS, 'line');
+    line.setAttribute('class', 'tl-link');
+    line.setAttribute('x1', String(from.x)); line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(to.x));   line.setAttribute('y2', String(to.y));
+    svg.appendChild(line);
+    const label = document.createElementNS(NS, 'text');
+    label.setAttribute('class', 'tl-link-label');
+    label.setAttribute('x', String((from.x + to.x) / 2));
+    label.setAttribute('y', String((y1 + to.y) / 2));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.textContent = `${stops[i].walkFromPrev} min`;
+    svg.appendChild(label);
   }
 }
+
+/* Der rote Strich muss weiterwandern, auch wenn niemand etwas antippt -
+   sonst steht er nach einer Stunde Konzert eine Stunde falsch. Ein Neuaufbau
+   der ganzen Leiste dafuer waere Verschwendung; es reicht, ihn zu schieben.
+   Laeuft nur, solange die Leiste ueberhaupt sichtbar ist. */
+let tlT0 = null;
+setInterval(() => {
+  const box = $('#plan-time');
+  if (!box || box.hidden || tlT0 == null) return;
+  const line = box.querySelector('.tl-now');
+  if (!line) return;
+  const top = (Math.round(Date.now() / 60000) - tlT0) * TL_PX_PER_MIN;
+  line.style.top = `${top}px`;
+  const lab = line.querySelector('span');
+  if (lab) lab.textContent = localHHMM(new Date());
+}, 60000);
 
 function showTimeline(on) {
   const btn = $('#plan-timeline');
@@ -1332,6 +1406,118 @@ function showTimeline(on) {
   el.planBody.hidden = on;
   $('#plan-time').hidden = !on;
 }
+
+/* ---------- Die Griffe zu einem Auftritt ----------
+
+   Aus der Zeitleiste geht bewusst NICHT die Detailkarte auf. Die ist zum
+   Stoebern gemacht - Bild, Biografie, Team, alle Termine. Wer mitten im
+   Abend auf einen Kasten tippt, will vier Dinge: kurz reinhoeren, abhaken,
+   benoten und sagen, ob das in den Plan soll.
+
+   Die Auswahl "Im Abendplan" haengt am AUFTRITT, nicht am Act: wer zweimal
+   spielt, hat zwei Termine, und genau die Wahl zwischen ihnen ist der Punkt.
+   Daraus entsteht die eigene Reihenfolge - der Plan ordnet nach Uhrzeit,
+   aber WAS drinsteht, bestimmt hier die Hand. */
+let tlShow = null;                 // die Kennung des offenen Auftritts
+
+function openTlMenu(showId) {
+  const sh = showMap().get(String(showId));
+  if (!sh) return;
+  tlShow = String(showId);
+  renderTlMenu();
+  if (!el.tlmenu.open) { el.tlmenu.showModal(); syncDialogCount(); }
+}
+
+function renderTlMenu() {
+  const sh = tlShow && showMap().get(tlShow);
+  if (!sh) return;
+  const act = S.data.acts[sh.a];
+  const v = sh.v != null ? S.data.venues[sh.v] : null;
+  const total = actShowCount(sh.a);
+  const emb = spotifyEmbed(act.sp);
+  const pinned = planPin.has(tlShow);
+  const skipped = planSkip.has(tlShow);
+
+  el.tlmenu.dataset.ai = sh.a;          // der gemeinsame data-r-Zuhoerer liest das
+  el.tlmenu.dataset.show = tlShow;
+  $('#tl-name').textContent = act.n;
+  $('#tl-when').textContent = [
+    dayLabel(sh) + (sh.tbd ? ', Zeit offen' : ' ' + hhmm(sh.t)),
+    v ? `${venueCode[sh.v] || ''} ${v.n}`.trim() : 'Spielort offen',
+    total > 1 ? `spielt ${total}× beim Festival` : '',
+  ].filter(Boolean).join(' · ');
+
+  $('#tl-top').innerHTML = `
+    ${emb ? `<button type="button" class="chip" data-tlplay="${esc(emb)}"
+        >▶ Anspielen</button>`
+      : `<a class="chip" href="${esc(spotifySearch(act.n))}" target="_blank"
+        rel="noopener noreferrer">Bei Spotify suchen</a>`}
+    <button type="button" class="chip" id="tl-seen"
+      aria-pressed="${seen.has(act.id)}">✓ Gesehen</button>
+    <button type="button" class="chip" id="tl-fav"
+      aria-pressed="${fav.has(act.id)}"><span class="heart"
+      aria-hidden="true">♥</span> Favorit</button>`;
+
+  /* Dieselbe Skala wie ueberall - was man nach dem Zuschauen vergibt, ist
+     dieselbe Note wie die davor. Zwei Skalen nebeneinander waeren nur
+     Buchhaltung. */
+  $('#tl-rate').innerHTML = RATES.map(([k, label]) =>
+    `<button data-r="${k}" class="${Number.isInteger(k) ? '' : 'is-half'}"
+      aria-pressed="${+rate[act.id] === k}"
+      aria-label="${rateText(k)} - ${label}"><b>${rateText(k)}</b><small
+      >${esc(label)}</small></button>`).join('');
+
+  const mode = pinned ? 'fest' : skipped ? 'raus' : 'auto';
+  $('#tl-plan').innerHTML = [
+    ['fest', '📌 Muss rein'],
+    ['auto', 'Wenn es passt'],
+    ['raus', '✕ Nicht heute'],
+  ].map(([k, label]) => `<button type="button" data-tlplan="${k}"
+      aria-pressed="${mode === k}">${label}</button>`).join('');
+  $('#tl-plan-note').textContent = {
+    fest: 'Dieser Termin steht fest. Der Abend wird darum herum gerechnet.',
+    auto: 'Die Rechnung entscheidet — nach Note, Fußweg und Überschneidung.',
+    raus: 'Bleibt heute draußen. Ein anderer Termin desselben Acts darf rein.',
+  }[mode];
+}
+
+function setTlPlan(mode) {
+  if (!tlShow) return;
+  planPin.delete(tlShow); planSkip.delete(tlShow);
+  if (mode === 'fest') planPin.add(tlShow);
+  if (mode === 'raus') planSkip.add(tlShow);
+  savePlanChoice();
+  renderPlan();
+  renderTlMenu();
+}
+
+el.tlmenu.addEventListener('click', (e) => {
+  const sh = tlShow && showMap().get(tlShow);
+  if (!sh) return;
+  const act = S.data.acts[sh.a];
+  const play = e.target.closest('[data-tlplay]');
+  if (play) {
+    // Der Player sitzt unten am Bildschirm - hinter dem Dialog waere er
+    // nicht zu bedienen, also macht der Griff den Dialog zu.
+    el.tlmenu.close();
+    openPlayer(play.dataset.tlplay, act.n, act.id, sh.a);
+    return;
+  }
+  if (e.target.closest('#tl-seen')) {
+    seen.has(act.id) ? seen.delete(act.id) : seen.add(act.id);
+    saveSeen(); scheduleSync(); refreshAct(sh.a); renderPlan(); renderTlMenu();
+    return;
+  }
+  if (e.target.closest('#tl-fav')) {
+    fav.has(act.id) ? fav.delete(act.id) : fav.add(act.id);
+    saveFav(); scheduleSync(); refreshAct(sh.a); renderPlan(); renderTlMenu();
+    return;
+  }
+  const planBtn = e.target.closest('[data-tlplan]');
+  if (planBtn) { setTlPlan(planBtn.dataset.tlplan); return; }
+});
+
+el.tlmenu.addEventListener('close', () => { tlShow = null; syncDialogCount(); });
 
 function renderNews() {
   const n = changes.entries.length;
@@ -2196,10 +2382,10 @@ document.addEventListener('click', (e) => {
     planSwap(altBtn.dataset.alt, 1);
     return;
   }
-  const tlAct = t.closest('[data-tlact]');
+  const tlAct = t.closest('[data-tlshow]');
   if (tlAct) {
     e.preventDefault(); e.stopPropagation();
-    openDetail(+tlAct.dataset.tlact);
+    openTlMenu(tlAct.dataset.tlshow);
     return;
   }
   const skipBtn = t.closest('[data-skip]');
@@ -2361,6 +2547,9 @@ document.addEventListener('click', (e) => {
     if (host !== el.player && +el.player.dataset.ai === ai) renderPlayerRate(ai);
     // Die Schnellbewertung ist genau fuer diesen einen Griff da.
     if (host === el.quick) el.quick.close();
+    // Eine Note aendert, was im Plan steht - also dort neu rechnen. Hier und
+    // nicht in einem eigenen Zuhoerer am Dialog: der liefe VOR diesem.
+    if (host === el.tlmenu) { renderPlan(); renderTlMenu(); }
     refreshAct(ai);
     refreshTeamBox(ai);
     return;
@@ -2578,6 +2767,9 @@ function setSearch(on) {
 }
 
 $('#btn-map').addEventListener('click', () => setMap(!S.mapOn));
+/* Der Abendplan lag nur im Menue - drei Griffe fuer die Ansicht, die man am
+   Festivalabend am oeftesten braucht. Jetzt oben neben Karte und Suche. */
+$('#btn-plan').addEventListener('click', () => showPlan(!S.planOn));
 
 $('#maptime-now').addEventListener('click', () => {
   S.mapLive = !S.mapLive;
@@ -3192,12 +3384,46 @@ el.planBody.addEventListener('touchmove', (e) => {
   psw.dx = dx;
   psw.stop.style.transform = `translateX(${dx}px)`;
   psw.stop.classList.toggle('armed', Math.abs(dx) >= PLAN_SWIPE_DIST);
+  paintPeek(dx);
 }, { passive: true });
+
+/* Der naechste Act schiebt sich von der Seite herein, wie an einem Rad.
+   Ohne das war der Wisch eine Wette: man gab die Station aus der Hand und
+   sah erst nach dem Loslassen, was man bekommt.
+
+   Als eigenes Element ueber der Liste, nicht als Geschwisterzeile: eine
+   zweite Zeile im Fluss wuerde alles darunter verschieben, und der naechste
+   Neuaufbau zieht sie mitten in der Geste weg. */
+function paintPeek(dx) {
+  const peek = el.swapPeek;
+  const dir = dx < 0 ? 1 : -1;
+  if (dir !== psw.dir) {
+    psw.dir = dir;
+    const r = planRing(psw.id);
+    const next = r && r.ring[((dir % r.ring.length) + r.ring.length) % r.ring.length];
+    const sh = next && showMap().get(String(next.id));
+    if (!sh) { peek.hidden = true; psw.peek = false; return; }
+    peek.innerHTML = `<div class="stop"><span class="stop-no">↻</span>
+      ${row(sh, S.data.acts[sh.a])}<span class="stop-acts"></span></div>`;
+    psw.peek = true;
+  }
+  if (!psw.peek) return;
+  // Die eigene Verschiebung herausrechnen: die Station traegt den Versatz
+  // schon, ihr Rechteck ist also mitgewandert.
+  const r = psw.stop.getBoundingClientRect();
+  const left = r.left - dx;
+  peek.hidden = false;
+  peek.style.top = `${r.top}px`;
+  peek.style.width = `${r.width}px`;
+  peek.style.height = `${r.height}px`;
+  peek.style.left = `${left + dx + (dx < 0 ? r.width : -r.width)}px`;
+}
 
 function planSwipeCancel() {
   if (!psw) return;
   psw.stop.style.transform = '';
   psw.stop.classList.remove('swapping', 'armed');
+  el.swapPeek.hidden = true;
   psw = null;
 }
 
@@ -3609,6 +3835,7 @@ let leaveTimer = null;
 /* Was das Zurueck der Reihe nach schliesst. Erste zutreffende Ebene gewinnt. */
 function closeOneLayer() {
   if (el.quick.open) { el.quick.close(); return true; }
+  if (el.tlmenu.open) { el.tlmenu.close(); return true; }
   if (el.detail.open) { el.detail.close(); return true; }
   if (el.menu.open) { el.menu.close(); return true; }
   if (!el.player.hidden) { closePlayer(); return true; }
@@ -3643,7 +3870,7 @@ function rearmGuard() {
    popstate noch leer. Genau daran ist mein erster Versuch gescheitert, und
    in echtem Firefox waere er genauso gescheitert. Der Vergleich unten ist
    synchron. */
-const DIALOGS = [el.detail, el.menu, el.quick];
+const DIALOGS = [el.detail, el.menu, el.quick, el.tlmenu];
 let dialogsOpen = 0;
 function syncDialogCount() {
   dialogsOpen = DIALOGS.filter((d) => d.open).length;
