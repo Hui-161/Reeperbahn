@@ -202,6 +202,22 @@ const hhmm = (iso) => iso ? iso.slice(11, 16) : '';
 const pRate = (id) => (partner && partner.rate ? +partner.rate[id] || 0 : 0);
 const pFav = (id) => !!(partner && partner.fav && partner.fav.includes(id));
 const pSeen = (id) => !!(partner && partner.seen && partner.seen.includes(id));
+/* "Gesehen" gilt fuers ganze Team: wer zusammen hingeht, hakt es einmal ab,
+   und es steht bei allen. Die eigene Menge bleibt aber die eigene - ein
+   Haken der Gegenseite wird NICHT in sie hineingeschrieben.
+
+   Der Unterschied zaehlt: waere er es, kaeme ein zurueckgenommener Haken
+   beim naechsten Abgleich aus dem Dokument der anderen zurueck, und man
+   bekaeme ihn nie wieder weg. Genau diese Falle steckt schon in der
+   Zusammenfassung der Noten (dort gewinnt die beste), und sie soll sich
+   nicht wiederholen. Geteilt ist also die ANSICHT, nicht der Speicher. */
+const seenAny = (id) => seen.has(id) || pSeen(id);
+function seenWhoTitle(id) {
+  if (seen.has(id)) {
+    return pSeen(id) ? `Gesehen — von dir und ${partnerName()}` : 'Gesehen';
+  }
+  return `Gesehen von ${partnerName()}`;
+}
 /* "Beide": ein Act, den beide als Favorit haben oder beide mit 1-2 bewerten.
    Das ist die Frage, die ein Team wirklich hat - wo wollen wir zusammen hin.
    Ueber den Eimer gerechnet, damit 1,5 und 2,5 mitzaehlen. */
@@ -219,7 +235,7 @@ const bothWant = (id) => {
 function matchesUserFilters(id) {
   if (S.favOnly && !fav.has(id)) return false;
   if (S.rates.size && !S.rates.has(rateBucket(rate[id]))) return false;
-  if (S.seenOnly && !seen.has(id)) return false;
+  if (S.seenOnly && !seenAny(id)) return false;
   if (S.teamOnly && !bothWant(id)) return false;
   return true;
 }
@@ -879,7 +895,9 @@ function row(sh, act) {
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}${changeMark}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
-        seen.has(act.id) ? ' seen-mark' : ''}">${esc(act.n)}${multi}${
+        seenAny(act.id) ? ' seen-mark' : ''}"${
+        seenAny(act.id) ? ` title="${esc(seenWhoTitle(act.id))}"` : ''
+        }>${esc(act.n)}${multi}${
         rb ? `<span class="grade grade-${rb}${Number.isInteger(+r) ? '' : ' grade-half'}"
               title="Meine Note: ${rateText(r)}">${rateText(r)}</span>`
           : (hint[act.id] ? `<span class="hint hint-${hint[act.id].v}"
@@ -1594,7 +1612,9 @@ function renderTlMenu() {
       : `<a class="chip" href="${esc(spotifySearch(act.n))}" target="_blank"
         rel="noopener noreferrer">Bei Spotify suchen</a>`}
     <button type="button" class="chip" id="tl-seen"
-      aria-pressed="${seen.has(act.id)}">✓ Gesehen</button>
+      aria-pressed="${seen.has(act.id)}"
+      title="${seen.has(act.id) ? 'Von dir abgehakt' : 'Noch nicht von dir abgehakt'}${
+        pSeen(act.id) ? ` — ${esc(partnerName())} war da` : ''}">✓ Gesehen</button>
     <button type="button" class="chip" id="tl-fav"
       aria-pressed="${fav.has(act.id)}"><span class="heart"
       aria-hidden="true">♥</span> Favorit</button>
@@ -1657,8 +1677,10 @@ el.tlmenu.addEventListener('click', (e) => {
     return;
   }
   if (e.target.closest('#tl-seen')) {
-    seen.has(act.id) ? seen.delete(act.id) : seen.add(act.id);
+    const war = seen.has(act.id);
+    war ? seen.delete(act.id) : seen.add(act.id);
     saveSeen(); scheduleSync(); refreshAct(sh.a); renderPlan(); renderTlMenu();
+    if (!war) openQuick(sh.a, true);
     return;
   }
   if (e.target.closest('#tl-fav')) {
@@ -2669,7 +2691,11 @@ document.addEventListener('click', (e) => {
       n.setAttribute('aria-pressed', String(on));
       n.textContent = on ? '✓ Gesehen' : 'Als gesehen markieren';
     }
-    refreshAct(+el.detail.dataset.ai);
+    const ai = +el.detail.dataset.ai;
+    refreshAct(ai);
+    // Abhaken und benoten gehoeren zusammen: wer gerade herauskommt, hat
+    // eine Meinung. Nur beim Setzen, nicht beim Zuruecknehmen.
+    if (on) openQuick(ai, true);
     return;
   }
 
@@ -2693,11 +2719,24 @@ document.addEventListener('click', (e) => {
     store.set('rate', rate);
     noteOwnRating(id);
     scheduleSync();
-    for (const b of host.querySelectorAll('[data-r]')) {
-      b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
+    /* Dieselbe Note kann an mehreren Stellen GLEICHZEITIG sichtbar sein.
+       Seit die Skala nach dem Abhaken ueber der Detailkarte aufgeht, ist das
+       der Normalfall: man benotet oben, und darunter stand weiter die alte
+       Note - bis man den Act neu oeffnete. Also alle Stellen nachziehen, die
+       denselben Act zeigen, nicht nur die angefasste. */
+    for (const h of [el.detail, el.quick, el.tlmenu]) {
+      if (+h.dataset.ai !== ai) continue;
+      for (const b of h.querySelectorAll('[data-r]')) {
+        b.setAttribute('aria-pressed', String(+rate[id] === +b.dataset.r));
+      }
     }
-    // Die Leiste zeigt vielleicht denselben Act - dann dort mitziehen.
-    if (host !== el.player && +el.player.dataset.ai === ai) renderPlayerRate(ai);
+    /* Die Anspielleiste baut ihre Knoepfe selbst auf (der Punkt daneben
+       traegt die Farbe der Note), also nicht ueber die Schleife oben,
+       sondern ueber ihren eigenen Aufbau - und IMMER, wenn sie denselben
+       Act zeigt. Vorher stand hier "host !== el.player"; seit die Schleife
+       den Player nicht mehr mitnimmt, blieb sein Punkt sonst ungefaerbt,
+       wenn man in der Leiste selbst benotet. */
+    if (+el.player.dataset.ai === ai) renderPlayerRate(ai);
     // Die Schnellbewertung ist genau fuer diesen einen Griff da.
     if (host === el.quick) el.quick.close();
     // Eine Note aendert, was im Plan steht - also dort neu rechnen. Hier und
@@ -3931,11 +3970,22 @@ el.list.addEventListener('click', (e) => {
 
 let quickAct = null;
 
-function openQuick(ai) {
+/* Mit danach=true ist es die Nachbetrachtung: eben gesehen, wie war es?
+   Dieselbe Skala wie vorher - was man nach dem Konzert vergibt, ist die
+   Note, die dann gilt; zwei Skalen nebeneinander waeren nur Buchhaltung.
+   Anders ist nur der Anlass, und der gehoert drangeschrieben. */
+function openQuick(ai, danach = false) {
   const act = S.data.acts[ai];
   if (!act) return;
   quickAct = ai;
   $('#quick-name').textContent = act.n;
+  const sub = $('#quick-sub');
+  sub.hidden = !danach;
+  if (danach) {
+    sub.textContent = rate[act.id]
+      ? `Gesehen. Wie war es wirklich? Vorher stand hier Note ${rateText(rate[act.id])}.`
+      : 'Gesehen. Wie war es?';
+  }
   // Dieselben data-r-Knoepfe wie im Detaildialog. Erst hatten sie data-qr,
   // damit der gemeinsame Zuhoerer sie nicht faengt - aber das CSS zielt auf
   // data-r, also fehlte der farbige Grund und eine gesetzte Note war dunkel

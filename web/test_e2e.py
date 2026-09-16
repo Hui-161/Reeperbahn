@@ -958,9 +958,36 @@ with sync_playwright() as p:
     pg.locator(".row").nth(1).locator(".row-time").click()
     pg.wait_for_selector("[data-seen]")
     act_name = pg.locator("#detail .d-title").inner_text()
-    pg.locator("[data-seen]").click(); pg.wait_for_timeout(250)
+    pg.locator("[data-seen]").click(); pg.wait_for_timeout(500)
     check("Gesehen setzt sich",
           pg.locator("[data-seen]").get_attribute("aria-pressed") == "true")
+    # Abhaken und benoten gehören zusammen: wer gerade herauskommt, hat eine
+    # Meinung. Deshalb geht die Skala von selbst auf - mit dem Anlass
+    # drangeschrieben, damit klar ist, warum sie da ist.
+    check("Nach dem Abhaken geht die Skala von selbst auf",
+          pg.locator("#quick[open]").count() == 1)
+    check("Für denselben Act",
+          pg.locator("#quick-name").inner_text() == act_name,
+          f'{pg.locator("#quick-name").inner_text()} gegen {act_name}')
+    check("Und sagt, warum sie aufgeht",
+          pg.locator("#quick-sub").is_visible()
+          and "Gesehen" in pg.locator("#quick-sub").inner_text(),
+          pg.locator("#quick-sub").inner_text())
+    check("Mit der vollen Skala", pg.locator("#quick-rate button").count() == 7)
+    seen_rate = pg.locator("#quick-name").inner_text()
+    pg.locator('#quick-rate button[data-r="3"]').click(); pg.wait_for_timeout(400)
+    check("Eine Note von dort setzt sich und schließt die Skala",
+          pg.locator("#quick[open]").count() == 0
+          and pg.locator('#detail .rate button[data-r="3"]')
+              .get_attribute("aria-pressed") == "true", seen_rate)
+    # Zurücknehmen ist kein Anlass für eine Note.
+    pg.locator("[data-seen]").click(); pg.wait_for_timeout(500)
+    check("Das Zurücknehmen öffnet nichts",
+          pg.locator("#quick[open]").count() == 0
+          and pg.locator("[data-seen]").get_attribute("aria-pressed") == "false")
+    pg.locator("[data-seen]").click(); pg.wait_for_timeout(500)
+    if pg.locator("#quick[open]").count():
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     check("Gesehen-Marke in der Liste", pg.locator("#list .seen-mark").count() >= 1)
 
@@ -2169,11 +2196,21 @@ with sync_playwright() as p:
           f"{tl_before[:4]} -> {pg7.evaluate(PLAN7)[:4]}")
     pg7.locator('#tl-rate button[data-r="5"]').click(); pg7.wait_for_timeout(500)
 
-    pg7.click("#tl-seen"); pg7.wait_for_timeout(400)
+    pg7.click("#tl-seen"); pg7.wait_for_timeout(600)
     check("Gesehen lässt sich hier abhaken",
           pg7.locator("#tl-seen").get_attribute("aria-pressed") == "true"
           and pg7.evaluate("() => JSON.parse(localStorage.getItem("
                            "'rbf26.seen')||'[]').length") >= 1)
+    # Auch von hier aus geht danach die Skala auf - dieselbe Frage, egal
+    # über welchen Weg man abhakt.
+    check("Und die Skala geht auch von hier auf",
+          pg7.locator("#quick[open]").count() == 1
+          and "Gesehen" in pg7.locator("#quick-sub").inner_text(),
+          pg7.locator("#quick-sub").inner_text())
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
+    check("Zurück führt in die Griffe, nicht weiter hinaus",
+          pg7.locator("#quick[open]").count() == 0
+          and pg7.locator("#tlmenu[open]").count() == 1)
 
     # Die drei Stufen schreiben in dieselben Mengen wie 📌 und ✕ in der Liste.
     pg7.locator('#tl-plan button[data-tlplan="fest"]').click()
@@ -2331,18 +2368,41 @@ with sync_playwright() as p:
     linda9 = {str(i): ((n + 1) % 5) + 1 for n, i in enumerate(ids7)}
     momo9 = {str(i): ((n + 3) % 5) + 1 for n, i in enumerate(ids7)}
     fav9 = [ids7[45], ids7[46]] if len(ids7) > 46 else []
-    pg9.evaluate("""([mine, a, bb, favs]) => {
+    # Was NUR die anderen gesehen haben - ich selbst habe nichts abgehakt.
+    seen9 = [ids7[2], ids7[3]]
+    pg9.evaluate("""([mine, a, bb, favs, gesehen]) => {
       localStorage.setItem('rbf26.rate', JSON.stringify(mine));
       localStorage.setItem('rbf26.fav', JSON.stringify(favs));
       localStorage.setItem('rbf26.partner', JSON.stringify({
-        name: 'Linda, Momo', fav: [], seen: [], rate: a,
+        name: 'Linda, Momo', fav: [], seen: gesehen, rate: a,
         members: [{ name: 'Linda', rate: a }, { name: 'Momo', rate: bb }],
       }));
       localStorage.removeItem('rbf26.revealed');
-    }""", [mine9, linda9, momo9, fav9])
+      localStorage.removeItem('rbf26.seen');
+    }""", [mine9, linda9, momo9, fav9, seen9])
     pg9.reload(wait_until="load")
     pg9.wait_for_selector(".row", timeout=20000)
     pg9.click(f'.day[data-day="{day7}"]'); pg9.wait_for_timeout(400)
+
+    # --- "Gesehen" gilt fürs ganze Team ---
+    # Wer zusammen hingeht, hakt es einmal ab. Die eigene Menge bleibt aber
+    # die eigene: ein Haken der Gegenseite wird NICHT hineingeschrieben,
+    # sonst käme ein zurückgenommener Haken beim nächsten Abgleich zurück.
+    marken9 = pg9.locator("#list .seen-mark")
+    check("Was die anderen gesehen haben, ist auch bei mir markiert",
+          marken9.count() >= 2, f"{marken9.count()} Marken")
+    titel9 = marken9.first.get_attribute("title") or ""
+    check("Und die Marke sagt, von wem", "Gesehen von" in titel9, titel9)
+    check("Ohne dass es in meiner eigenen Liste landet",
+          pg9.evaluate("() => JSON.parse(localStorage.getItem("
+                       "'rbf26.seen')||'[]').length") == 0)
+    pg9.click("#f-seen"); pg9.wait_for_timeout(450)
+    check("Der Gesehen-Filter nimmt sie mit",
+          pg9.locator(".row").count() == marken9.count()
+          and pg9.locator(".row").count() >= 2,
+          f"{pg9.locator('.row').count()} Zeilen")
+    pg9.click("#f-seen"); pg9.wait_for_timeout(400)
+
     pg9.click("#btn-plan"); pg9.wait_for_timeout(700)
     pg9.click("#plan-timeline"); pg9.wait_for_timeout(800)
 
