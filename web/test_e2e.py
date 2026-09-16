@@ -2357,6 +2357,63 @@ with sync_playwright() as p:
     check("Und die Zahl ist wirklich das Mittel, nicht die beste Note",
           not falsch, str(falsch[:3]))
 
+    # --- Wonach die Spalten geordnet sind ---
+    # Vorher nach gar nichts: jeder Auftritt kam in die erste freie Spur.
+    # Jetzt gilt "je weiter rechts, desto besser bewertet" - als Tendenz,
+    # nicht als Zusage: ein Kasten haelt seine Spalte über seine ganze
+    # Länge, ein später beginnender besserer Act findet sie also belegt.
+    ordnung = pg9.evaluate("""() => {
+      const a = [...document.querySelectorAll('.tl-act')].map((e) => ({
+        left: Math.round(parseFloat(e.style.left)),
+        top: parseFloat(e.style.top), h: parseFloat(e.style.height),
+        // Geordnet wird nach dem Team-Schnitt; nur wo es keinen gibt,
+        // zaehlt die eigene Note.
+        note: (() => {
+          const p = e.querySelector('.grade-p:not(.team-hidden)');
+          if (p) return parseFloat(p.textContent.replace(/[^\\d,]/g, '')
+                                    .replace(',', '.'));
+          const g = e.querySelector('.grade:not(.grade-p)');
+          return g ? parseFloat(g.textContent.replace(',', '.')) : 9;
+        })(),
+      }));
+      let falsch = 0, geprueft = 0;
+      for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
+        const A = a[i], B = a[j];
+        if (!(A.top < B.top + B.h && B.top < A.top + A.h)) continue;
+        if (A.note === B.note) continue;
+        geprueft++;
+        const gut = A.note < B.note ? A : B;
+        const schlecht = gut === A ? B : A;
+        if (gut.left < schlecht.left) falsch++;
+      }
+      /* Und die Frage, die man wirklich stellt: schaue ich zu einem
+         Zeitpunkt ganz nach rechts - steht dort das Beste, was gerade
+         laeuft? Gemessen an jedem Beginn, an dem mehr als eines laeuft. */
+      let momente = 0, rechtsBeste = 0;
+      for (const p of a) {
+        const laufend = a.filter((x) => x.top <= p.top && x.top + x.h > p.top);
+        if (laufend.length < 2) continue;
+        momente++;
+        const rechts = laufend.reduce((m, x) => (x.left > m.left ? x : m));
+        const beste = Math.min(...laufend.map((x) => x.note));
+        if (rechts.note === beste) rechtsBeste++;
+      }
+      const spuren = [...new Set(a.map((x) => x.left))].sort((p, q) => p - q);
+      return { falsch, geprueft, spuren: spuren.length, momente, rechtsBeste };
+    }""")
+    check("Gleichzeitige Acts stehen nach Note geordnet",
+          ordnung["geprueft"] >= 20
+          and ordnung["falsch"] / ordnung["geprueft"] <= 0.1,
+          f'{ordnung["falsch"]} von {ordnung["geprueft"]} Paaren verkehrt')
+    check("Ganz rechts steht fast immer das Beste, was gerade läuft",
+          ordnung["momente"] >= 10
+          and ordnung["rechtsBeste"] / ordnung["momente"] >= 0.9,
+          f'{ordnung["rechtsBeste"]} von {ordnung["momente"]} Zeitpunkten '
+          f'bei {ordnung["spuren"]} Spalten')
+    check("Und die Legende sagt das auch",
+          "rechts" in pg9.locator("#plan-time .menu-note").inner_text(),
+          pg9.locator("#plan-time .menu-note").inner_text()[:80])
+
     # Der Schutz gilt auch hier: ohne eigene Note kein fremdes Urteil.
     hid9 = pg9.locator(".tl-act .team-hidden")
     check("Ohne eigene Note bleibt der Schnitt verdeckt", hid9.count() >= 1,

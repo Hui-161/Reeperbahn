@@ -815,11 +815,17 @@ main { min-height: 60vh; }
   border-top: 1px dashed var(--line);
   pointer-events: none;
 }
+/* Die Uhrzeit klebt links und muss ueber den Kaesten liegen: seit die
+   Leiste rechts anfaengt, schiebt sich beim Scrollen wirklich etwas
+   darunter. Nur die Beschriftung wird angehoben, nicht die Linie - die
+   gehoert weiter hinter die Kaesten. */
 .tl-hour span {
   position: sticky;
   left: 0;
+  z-index: 2;
   display: inline-block;
-  padding: 0 .25rem;
+  padding: 0 .3rem 0 .25rem;
+  border-right: 1px solid var(--line);
   font-size: .7rem;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);

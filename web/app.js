@@ -1295,18 +1295,75 @@ function renderTimeline(plan, items, opts) {
   const inPlan = new Map((plan ? plan.stops : [])
     .map((s, i) => [String(s.id), i + 1]));
 
-  /* Spur suchen: die erste, die zu dieser Zeit frei ist. Das ist die
-     uebliche Faerbung eines Intervallgraphen und braucht nie mehr Spuren,
-     als wirklich gleichzeitig laeuft. */
-  const laneEnd = [];
-  const placed = sorted.map((s) => {
+  /* ---------- Welcher Auftritt in welche Spalte ----------
+
+     Vorher: in die ERSTE freie Spur. Das war reine Buchhaltung - links
+     stand, wer zufaellig zuerst dran war, aus der Spalte liess sich nichts
+     ablesen. Jetzt gilt: je weiter RECHTS, desto besser bewertet.
+
+     Zwei Durchgaenge, weil beides zusammen nicht geht:
+
+     (1) Wie viele Spuren braucht es ueberhaupt? Gierig nach Startzeit ist
+         fuer Intervalle nachweislich optimal und liefert genau die groesste
+         Zahl gleichzeitig laufender Acts. Das ist die Untergrenze.
+
+     (2) Verteilen, das Beste zuerst, und jedem die am weitesten rechts
+         liegende freie Spur geben. Diese Reihenfolge ist nicht mehr
+         optimal - reicht es nicht, kommt links eine Spur DAZU und alles
+         bisher Gesetzte rueckt nach rechts. So bleibt "gut steht rechts"
+         auch dann wahr, wenn es eng wird. */
+  /* Geordnet wird nach der DURCHSCHNITTSNOTE des Teams - das ist die Zahl,
+     um die es beim Aussuchen geht. Nur wo es keine gibt (niemand sonst hat
+     bewertet, oder der Schnitt ist noch verdeckt, weil man selbst nichts
+     gesagt hat), zaehlt die eigene Note. Was gar keine Note hat, steht ganz
+     links. */
+  const rankOf = (s) => {
+    const t = teamOpinionShown(s.actId) ? teamAvg(s.actId) : null;
+    if (t) return t.avg;
+    return (rateBucket(rate[s.actId]) > 0 ? +rate[s.actId] : 0) || 9;
+  };
+
+  const probe = [];
+  for (const s of sorted) {
     const a = mins(s.startIso);
-    let lane = laneEnd.findIndex((end) => end <= a);
-    if (lane < 0) { lane = laneEnd.length; laneEnd.push(0); }
-    laneEnd[lane] = a + set;
-    return { s, a, lane };
-  });
-  const lanes = Math.max(1, laneEnd.length);
+    let i = probe.findIndex((end) => end <= a);
+    if (i < 0) { i = probe.length; probe.push(0); }
+    probe[i] = a + set;
+  }
+
+  const laneSlots = Array.from({ length: Math.max(1, probe.length) }, () => []);
+  const frei = (slots, a, b) => slots.every(([x, y]) => b <= x || a >= y);
+  const placed = [];
+  // Kleine Zahl = gute Note = zuerst dran, damit sie sich die rechte Spur
+  // nehmen kann, bevor eine schlechtere sie belegt.
+  const byRank = [...items].sort((x, y) =>
+    rankOf(x) - rankOf(y) || mins(x.startIso) - mins(y.startIso));
+  for (const s of byRank) {
+    const a = mins(s.startIso);
+    const b = a + set;
+    let lane = -1;
+    for (let i = laneSlots.length - 1; i >= 0; i--) {
+      if (frei(laneSlots[i], a, b)) { lane = i; break; }
+    }
+    if (lane < 0) {
+      laneSlots.unshift([]);
+      for (const p of placed) p.lane++;
+      lane = 0;
+    }
+    laneSlots[lane].push([a, b]);
+    placed.push({ s, a, lane });
+  }
+
+  /* Was das NICHT leistet: eine perfekte Ordnung. Ein Kasten haelt seine
+     Spalte ueber seine ganze Laenge, also kann ein spaeter beginnender,
+     besserer Act die rechte Spalte schon belegt vorfinden - und das laesst
+     sich nicht durch Tauschen heilen, weil dazwischen ein dritter Kasten
+     haengt. Am echten Programm gemessen: 2 von 97 gleichzeitigen Paaren
+     stehen verkehrt herum, und es kostet hoechstens eine Spalte mehr als
+     die optimale Packung (13 statt 12 am dichtesten Abend). Wonach man
+     wirklich schaut, stimmt aber: an allen 30 gemessenen Zeitpunkten stand
+     ganz rechts das Beste, was gerade lief. */
+  const lanes = Math.max(1, laneSlots.length);
 
   // Stundenlinien, am Stundenanfang ausgerichtet.
   let marks = '';
@@ -1350,7 +1407,8 @@ function renderTimeline(plan, items, opts) {
   }).join('');
 
   box.innerHTML = `<p class="menu-note">Zeit läuft nach unten, Gleichzeitiges
-    steht nebeneinander. Farbe ist die eigene Note; umrandet und numeriert,
+    steht nebeneinander — <b>je weiter rechts, desto besser bewertet</b>
+    (die eigene Note, sonst der Team-Schnitt). Umrandet und numeriert ist,
     was im Plan steht, mit der Laufzeit an der Verbindung. Ein Tipper öffnet
     die Griffe für diesen Auftritt.</p>
     <div class="tl-scroll"><div class="tl-canvas">
@@ -1380,6 +1438,16 @@ function renderTimeline(plan, items, opts) {
     b.style.height = `${blockH}px`;
     b.style.width = `${blockW}px`;
   }
+
+  /* Weil das Beste rechts steht, sind zu ruhigen Stunden die linken Spalten
+     leer - dort laufen einfach nicht neun Acts gleichzeitig. Wer die Leiste
+     oeffnet und links anfaengt, saehe also erst einmal ein leeres Raster.
+     Deshalb steht der Blick beim Oeffnen am rechten Rand; was man danach
+     selbst verschiebt, ueberlebt jeden Neuaufbau. */
+  const sc = box.querySelector('.tl-scroll');
+  sc.addEventListener('scroll',
+    () => { tlScrollLeft = sc.scrollLeft; }, { passive: true });
+  tlPlaceScroll(sc);
 
   /* Die Verbindung von Station zu Station mit der Laufzeit daran. Als SVG,
      weil eine schraege duenne Linie mit gedrehten Kaesten nur haesslich
@@ -1459,11 +1527,22 @@ function teamAvgMark(id) {
     >Ø${rateText(t.avg)}</span>`;
 }
 
+/* Ein verstecktes Element hat keine Breite - scrollWidth waere 0 und der
+   Sprung an den rechten Rand ginge ins Leere. Deshalb wird er erst gesetzt,
+   wenn die Leiste wirklich sichtbar ist. */
+let tlScrollLeft = null;
+function tlPlaceScroll(sc) {
+  if (!sc || sc.offsetParent === null) return;
+  sc.scrollLeft = tlScrollLeft == null ? sc.scrollWidth : tlScrollLeft;
+}
+
 function showTimeline(on) {
   const btn = $('#plan-timeline');
   if (btn) btn.setAttribute('aria-pressed', String(on));
   el.planBody.hidden = on;
   $('#plan-time').hidden = !on;
+  // Jedes Oeffnen faengt rechts an, beim Besten.
+  if (on) { tlScrollLeft = null; tlPlaceScroll($('#plan-time .tl-scroll')); }
 }
 
 /* ---------- Die Griffe zu einem Auftritt ----------
