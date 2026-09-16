@@ -227,6 +227,36 @@ function matchesUserFilters(id) {
 /* Ob es zu einem Act ueberhaupt eine Team-Meinung gibt (Note oder Favorit -
    "gesehen" allein zaehlt nicht, das ist keine Wertung). */
 const teamHasOpinion = (id) => rateBucket(pRate(id)) > 0 || pFav(id);
+
+/* Durchschnitt ueber das ganze Team, die eigene Note eingerechnet.
+
+   Dafuer braucht es die Noten der EINZELNEN Mitglieder. Die Partneransicht
+   fuehrt sie nicht: adoptOthers() fasst alle zu EINER Note zusammen, und
+   zwar zur besten - richtig fuer "wollen wir da hin?", aber aus einer
+   besten Note laesst sich kein Mittel zurueckrechnen. Deshalb liegen die
+   Einzelnoten seit dieser Fassung zusaetzlich in partner.members.
+
+   Aeltere gespeicherte Partnerdaten haben das Feld nicht. Dann gibt es eben
+   keinen Durchschnitt, bis einmal abgeglichen wurde - lieber nichts als
+   eine Zahl, die etwas anderes bedeutet, als sie behauptet.
+
+   Gemittelt werden nur abgegebene Noten: wer nichts gesagt hat, zieht den
+   Schnitt nicht nach unten. */
+function teamAvg(id) {
+  const members = (partner && partner.members) || [];
+  const votes = [];
+  let others = 0;
+  for (const m of members) {
+    const v = +((m.rate || {})[id]) || 0;
+    if (v > 0) { votes.push(v); others++; }
+  }
+  if (!others) return null;
+  if (rateBucket(rate[id]) > 0) votes.push(+rate[id]);
+  const sum = votes.reduce((a, b) => a + b, 0);
+  return { avg: Math.round((sum / votes.length) * 10) / 10, n: votes.length,
+           others };
+}
+
 /* Erst zeigen, wenn man selbst bewertet hat, sonst faerbt die fremde Note die
    eigene ein, bevor sie entsteht - oder wenn bewusst aufgedeckt wurde. */
 const teamOpinionShown = (id) => rateBucket(rate[id]) > 0 || revealed.has(id);
@@ -1246,7 +1276,7 @@ function planSwap(stopId, dir) {
 
    Gefaerbt wird nach der eigenen Note, gerahmt, was im Plan steht. */
 const TL_PX_PER_MIN = 1.9;
-const TL_LANE = 108;
+const TL_LANE = 126;   // Note, Team-Schnitt, ×N und Kuerzel muessen nebeneinander
 const TL_GUTTER = 48;   // Platz fuer die Uhrzeiten links, siehe .tl-acts
 
 function renderTimeline(plan, items, opts) {
@@ -1309,10 +1339,11 @@ function renderTimeline(plan, items, opts) {
         total > 1 ? `, spielt ${total}× beim Festival` : ''}">
       ${no ? `<span class="tl-no">${no}</span>` : ''}
       <span class="tl-time">${hhmm(s.startIso)}</span>
-      <span class="tl-name">${esc(s.name)}</span>
+      <span class="tl-name">${esc(s.name)}${
+        total > 1 ? `<span class="multi">×${total}</span>` : ''}</span>
       <span class="tl-foot">${
         rb ? `<span class="grade grade-${rb}">${rateText(rate[s.actId])}</span>` : ''}${
-        total > 1 ? `<span class="multi">×${total}</span>` : ''}${
+        teamAvgMark(s.actId)}${
         code ? `<span class="vcode" title="${esc(s.venue ? s.venue.name : '')}"
           >${esc(code)}</span>` : ''}</span>
     </button>`;
@@ -1400,6 +1431,34 @@ setInterval(() => {
   if (lab) lab.textContent = localHHMM(new Date());
 }, 60000);
 
+/* Der Team-Schnitt am Block der Zeitleiste.
+
+   Derselbe Schutz wie ueberall sonst: solange man selbst nicht bewertet hat
+   (und nichts bewusst aufgedeckt hat), steht dort ein "?" statt der Zahl.
+   Der Sinn der Verdeckung ist ja, dass die fremde Einschaetzung die eigene
+   nicht einfaerbt, bevor sie entsteht - eine Zeitleiste, die den Schnitt
+   trotzdem hinschreibt, waere ein Hintertuerchen in genau diese Falle.
+   Bewertet man im Auftrittsmenue, deckt sich der Schnitt sofort auf: der
+   Plan wird danach ohnehin neu gezeichnet. */
+function teamAvgMark(id) {
+  if (!teamHasOpinion(id)) return '';
+  if (!teamOpinionShown(id)) {
+    return `<span class="grade grade-p team-hidden"
+      title="Das Team hat schon bewertet — sichtbar, sobald du selbst bewertest"
+      >?</span>`;
+  }
+  const t = teamAvg(id);
+  if (!t) {
+    return pFav(id)
+      ? `<span class="heart-p" title="${esc(partnerName())}: Favorit">♥</span>` : '';
+  }
+  return `<span class="grade grade-p grade-p-${rateBucket(t.avg)}"
+    title="Team-Durchschnitt ${rateText(t.avg)} aus ${t.n} ${
+      t.n === 1 ? 'Stimme' : 'Stimmen'}${
+      rateBucket(rate[id]) > 0 ? ' (deine mitgezählt)' : ''}"
+    >Ø${rateText(t.avg)}</span>`;
+}
+
 function showTimeline(on) {
   const btn = $('#plan-timeline');
   if (btn) btn.setAttribute('aria-pressed', String(on));
@@ -1441,11 +1500,14 @@ function renderTlMenu() {
   el.tlmenu.dataset.ai = sh.a;          // der gemeinsame data-r-Zuhoerer liest das
   el.tlmenu.dataset.show = tlShow;
   $('#tl-name').textContent = act.n;
-  $('#tl-when').textContent = [
+  // Der Team-Schnitt gehoert auch hierhin: das ist der Ort, an dem man
+  // entscheidet - und wer hier bewertet, deckt ihn im selben Griff auf.
+  const teamMark = teamAvgMark(act.id);
+  $('#tl-when').innerHTML = esc([
     dayLabel(sh) + (sh.tbd ? ', Zeit offen' : ' ' + hhmm(sh.t)),
     v ? `${venueCode[sh.v] || ''} ${v.n}`.trim() : 'Spielort offen',
     total > 1 ? `spielt ${total}× beim Festival` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' · ')) + (teamMark ? ' · Team ' + teamMark : '');
 
   $('#tl-top').innerHTML = `
     ${emb ? `<button type="button" class="chip" data-tlplay="${esc(emb)}"
@@ -3082,7 +3144,7 @@ function adoptOthers(others) {
   const usable = others.filter((o) => !o.undecryptable);
   if (!usable.length) return 0;
   const merged = { name: usable.map((o) => o.name || 'Team').join(', '),
-                   fav: [], seen: [], rate: {} };
+                   fav: [], seen: [], rate: {}, members: [] };
   for (const o of usable) {
     for (const id of (o.fav || [])) merged.fav.push(+id);
     for (const id of (o.seen || [])) merged.seen.push(+id);
@@ -3096,6 +3158,14 @@ function adoptOthers(others) {
     for (const [id, v] of Object.entries(o.rateSeen || {})) {
       merged.rate[id] = +v;
     }
+    /* Die Einzelnoten daneben aufheben. Die Zusammenfassung oben nimmt die
+       BESTE Note - daraus laesst sich kein Durchschnitt zurueckrechnen, und
+       genau den zeigt die Zeitleiste. Dieselbe Regel wie oben: ein Urteil
+       nach dem Konzert ersticht die Erwartung davor. */
+    merged.members.push({
+      name: o.name || 'Team',
+      rate: { ...(o.rate || {}), ...(o.rateSeen || {}) },
+    });
   }
   partner = merged;
   store.set('partner', partner);
@@ -3108,6 +3178,8 @@ function partnerSignature() {
   if (!partner) return '';
   return JSON.stringify([partner.name, (partner.fav || []).length,
                          Object.keys(partner.rate || {}).length,
+                         (partner.members || []).map(
+                           (m) => Object.keys(m.rate || {}).length),
                          (partner.seen || []).length]);
 }
 
@@ -3537,6 +3609,10 @@ el.filePartner.addEventListener('change', async () => {
     fav: (data.fav || []).map(Number),
     seen: (data.seen || []).map(Number),
     rate: data.rate || {},
+    // Auch eine einzelne Person ist ein Mitglied - sonst haette der
+    // Durchschnitt in der Zeitleiste ausgerechnet im haeufigsten Fall
+    // (zu zweit, per Datei) nichts zu mitteln.
+    members: [{ name, rate: data.rate || {} }],
     loaded_at: new Date().toISOString().slice(0, 16).replace('T', ' '),
   };
   store.set('partner', partner);

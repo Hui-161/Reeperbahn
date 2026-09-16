@@ -912,6 +912,22 @@ main { min-height: 60vh; }
    runde Nummer, bzw. die Nummer das Kuerzel ("SN" wurde zu "S"). */
 .tl-foot { display: flex; align-items: center; gap: .25rem; margin-top: auto; }
 .tl-act .vcode { margin: 0 0 0 auto; font-size: .62rem; min-width: 1.7em; }
+/* Eigene Note und Team-Schnitt stehen nebeneinander - eng, aber beide
+   lesbar. Das Ø sagt, welche der beiden Zahlen der Schnitt ist.
+
+   .grade hat eine feste Breite von 1,15 rem; die reicht fuer EINE Ziffer.
+   "Ø2,3" lief darueber hinaus und schob sich ueber das Kuerzel daneben.
+   Der Schnitt waechst deshalb hier mit seinem Inhalt. */
+.tl-act .grade { margin-left: 0; font-size: .66rem; }
+.tl-act .grade-p {
+  width: auto;
+  min-width: 1.15rem;
+  padding: 0 .22rem;
+  font-size: .6rem;
+  letter-spacing: -.02em;
+}
+.tl-act .multi { margin-left: .25rem; font-weight: 600; }
+.tl-when .grade { vertical-align: -.15em; }
 .tl-act .multi { margin: 0; font-size: .6rem; }
 .tl-time { font-variant-numeric: tabular-nums; color: var(--ink-faint); }
 .tl-name {

@@ -2280,6 +2280,125 @@ with sync_playwright() as p:
     check("Keine JS-Fehler im Uhr-Kontext", not err8, str(err8[:2]))
     ctx8.close()
 
+    # --- Team-Durchschnitt in der Zeitleiste ---
+    # Die Partneransicht fasst alle Mitglieder zur BESTEN Note zusammen -
+    # daraus liesse sich kein Mittel zurueckrechnen. Geprueft wird deshalb
+    # gegen die Einzelnoten, die jetzt zusaetzlich mitlaufen.
+    ctx9 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg9 = ctx9.new_page()
+    err9 = []
+    pg9.on("pageerror", lambda e: err9.append(str(e)))
+    pg9.on("console",
+           lambda m: err9.append(m.text) if m.type == "error"
+           and "ERR_" not in m.text else None)
+    pg9.goto(BASE + "/", wait_until="load")
+    pg9.wait_for_selector(".row", timeout=20000)
+    # Ich bewerte die ersten 40, zwei Mitglieder bewerten anders. Zwei Acts
+    # sind NUR Favorit, ohne eigene Note - an denen muss der Schnitt
+    # verdeckt bleiben.
+    # Schluessel als Text: JSON-Objekte haben nur Text-Schluessel, und
+    # Playwright gibt ein dict mit Zahlen-Schluesseln gar nicht erst durch.
+    mine9 = {str(ids7[i]): (i % 3) + 1 for i in range(min(40, len(ids7)))}
+    linda9 = {str(i): ((n + 1) % 5) + 1 for n, i in enumerate(ids7)}
+    momo9 = {str(i): ((n + 3) % 5) + 1 for n, i in enumerate(ids7)}
+    fav9 = [ids7[45], ids7[46]] if len(ids7) > 46 else []
+    pg9.evaluate("""([mine, a, bb, favs]) => {
+      localStorage.setItem('rbf26.rate', JSON.stringify(mine));
+      localStorage.setItem('rbf26.fav', JSON.stringify(favs));
+      localStorage.setItem('rbf26.partner', JSON.stringify({
+        name: 'Linda, Momo', fav: [], seen: [], rate: a,
+        members: [{ name: 'Linda', rate: a }, { name: 'Momo', rate: bb }],
+      }));
+      localStorage.removeItem('rbf26.revealed');
+    }""", [mine9, linda9, momo9, fav9])
+    pg9.reload(wait_until="load")
+    pg9.wait_for_selector(".row", timeout=20000)
+    pg9.click(f'.day[data-day="{day7}"]'); pg9.wait_for_timeout(400)
+    pg9.click("#btn-plan"); pg9.wait_for_timeout(700)
+    pg9.click("#plan-timeline"); pg9.wait_for_timeout(800)
+
+    avg9 = pg9.locator(".tl-act .grade-p:not(.team-hidden)")
+    check("Die Zeitleiste zeigt den Team-Schnitt", avg9.count() >= 1,
+          f"{avg9.count()} von {pg9.locator('.tl-act').count()} Blöcken")
+    check("Neben der eigenen Note, nicht statt ihr", pg9.evaluate("""() => {
+      const b = [...document.querySelectorAll('.tl-act')].find(
+        e => e.querySelector('.grade-p:not(.team-hidden)')
+             && e.querySelector('.grade:not(.grade-p)'));
+      return !!b;
+    }"""))
+    check("Als Mittelwert gekennzeichnet",
+          avg9.first.inner_text().startswith("Ø"), avg9.first.inner_text())
+    check("Mit der Zahl der Stimmen im Titel",
+          re.search(r"aus \d+ Stimme", avg9.first.get_attribute("title") or ""),
+          avg9.first.get_attribute("title"))
+    # Nachrechnen: die gezeigte Zahl muss das Mittel aus den drei Noten
+    # sein, nicht die beste - genau daran wäre die alte Zusammenfassung
+    # gescheitert.
+    shown9 = pg9.evaluate("""() => {
+      const out = {};
+      for (const b of document.querySelectorAll('.tl-act')) {
+        const g = b.querySelector('.grade-p:not(.team-hidden)');
+        if (g) out[b.dataset.tlshow] = g.textContent.trim();
+      }
+      return out;
+    }""")
+    act_of = {str(sh["id"]): str(lineup7["acts"][sh["a"]]["id"])
+              for sh in lineup7["shows"]}
+    falsch = []
+    for show_id, txt in shown9.items():
+        aid = act_of.get(str(show_id))
+        stimmen = [v for v in (linda9.get(aid), momo9.get(aid), mine9.get(aid))
+                   if v]
+        # Wie die App: auf eine Nachkommastelle, deutsches Komma, glatte
+        # Werte ohne ",0".
+        soll = "Ø" + f"{round(sum(stimmen) / len(stimmen), 1):g}".replace(".", ",")
+        if txt != soll:
+            falsch.append((txt, soll, stimmen))
+    check("Und die Zahl ist wirklich das Mittel, nicht die beste Note",
+          not falsch, str(falsch[:3]))
+
+    # Der Schutz gilt auch hier: ohne eigene Note kein fremdes Urteil.
+    hid9 = pg9.locator(".tl-act .team-hidden")
+    check("Ohne eigene Note bleibt der Schnitt verdeckt", hid9.count() >= 1,
+          f"{hid9.count()} verdeckte Marken")
+    if hid9.count():
+        check("Der verdeckte Block hat wirklich keine eigene Note",
+              hid9.first.evaluate("e => !e.closest('.tl-act')"
+                                  ".querySelector('.grade:not(.grade-p)')"))
+        check("Und die Marke verrät nichts als '?'",
+              hid9.first.inner_text().strip() == "?", hid9.first.inner_text())
+        # Selbst bewerten deckt ihn im selben Griff auf.
+        hid9.first.evaluate("e => e.closest('.tl-act').click()")
+        pg9.wait_for_selector("#tlmenu[open]")
+        check("Auch die Griffe zeigen ihn erst verdeckt",
+              "Team ?" in pg9.locator("#tl-when").inner_text(),
+              pg9.locator("#tl-when").inner_text()[-30:])
+        pg9.locator('#tl-rate button[data-r="2"]').click(); pg9.wait_for_timeout(800)
+        check("Eine eigene Note deckt den Schnitt sofort auf",
+              re.search(r"Team Ø\d", pg9.locator("#tl-when").inner_text()),
+              pg9.locator("#tl-when").inner_text()[-30:])
+        pg9.keyboard.press("Escape"); pg9.wait_for_timeout(400)
+
+    # Ältere gespeicherte Partnerdaten kennen die Einzelnoten nicht. Dann
+    # gibt es eben keinen Schnitt - aber keinen Absturz und keine Zahl, die
+    # etwas anderes bedeutet, als sie behauptet.
+    pg9.evaluate("""([a]) => {
+      localStorage.setItem('rbf26.partner', JSON.stringify({
+        name: 'Alt', fav: [], seen: [], rate: a,
+      }));
+    }""", [linda9])
+    pg9.reload(wait_until="load")
+    pg9.wait_for_selector(".row", timeout=20000)
+    pg9.click("#btn-plan"); pg9.wait_for_timeout(700)
+    pg9.click("#plan-timeline"); pg9.wait_for_timeout(800)
+    check("Alte Partnerdaten ohne Einzelnoten zeigen keinen Schnitt",
+          pg9.locator(".tl-act .grade-p:not(.team-hidden)").count() == 0
+          and pg9.locator(".tl-act").count() >= 1,
+          f'{pg9.locator(".tl-act .grade-p:not(.team-hidden)").count()} Schnitte '
+          f'bei {pg9.locator(".tl-act").count()} Blöcken')
+    check("Keine JS-Fehler im Team-Kontext", not err9, str(err9[:2]))
+    ctx9.close()
+
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e
             and e not in csp]
