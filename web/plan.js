@@ -17,9 +17,35 @@
 const PLAN_DEFAULTS = {
   setMinutes: 40,        // Spielzeit eines Slots; die Quelle nennt keine Endzeit
   bufferMinutes: 5,      // Luft fuers Reinkommen, Anstehen, Pinkeln
+  overlapMinutes: 0,     // wie viele Minuten des laufenden Konzerts man opfert
   walkSpeed: 80,         // Meter pro Minute, entspanntes Gehen
   detour: 1.3,           // Strassen sind laenger als die Luftlinie
 };
+
+/**
+ * Wie viel Zeit bleibt zwischen zwei Auftritten uebrig, nachdem der Fussweg
+ * abgezogen ist? Negativ heisst: so viele Minuten des ERSTEN Konzerts fallen
+ * weg, wenn man rechtzeitig beim zweiten sein will.
+ */
+function slackBetween(a, b, o) {
+  return b.start - (a.end + walkMinutes(a.venue, b.venue, o));
+}
+
+/**
+ * Ab wann gelten zwei Auftritte als vertraeglich?
+ *
+ * Ohne Ueberschneidungsbudget bleibt es bei der alten Regel: nach dem Ende
+ * des ersten Konzerts muss der Fussweg PLUS die Luft passen.
+ *
+ * Mit Budget zaehlt nur noch, wie viele Minuten des laufenden Konzerts man
+ * aufgibt - die Luft IST dann das, was man aufgibt, sie ein zweites Mal zu
+ * verlangen waere doppelt gezaehlt. "10 min Ueberschneidung" heisst deshalb
+ * genau das: hoechstens 10 Minuten des laufenden Konzerts verpassen. So
+ * stimmt die Zahl im Kopf mit der Zahl in der Zeile ueberein.
+ */
+function minSlack(o) {
+  return o.overlapMinutes > 0 ? -o.overlapMinutes : o.bufferMinutes;
+}
 
 /** Luftlinie in Metern (Haversine). */
 function metersBetween(a, b) {
@@ -137,7 +163,7 @@ function solvePlan(items, o) {
     let prev = 0;
     for (let j = i - 1; j >= 1; j--) {
       const cand = shows[j - 1];
-      if (cand.end + walkMinutes(cand.venue, cur.venue, o) + o.bufferMinutes <= cur.start) {
+      if (slackBetween(cand, cur, o) >= minSlack(o)) {
         prev = j;
         break;
       }
@@ -164,14 +190,16 @@ function solvePlan(items, o) {
   const chosen = new Set(picked.map((s) => s.id));
   const stops = picked.map((s, idx) => {
     const before = picked[idx - 1];
+    const slack = before ? slackBetween(before, s, o) : 0;
     return {
       ...s,
       walkFromPrev: before ? walkMinutes(before.venue, s.venue, o) : 0,
       /* Wartezeit sichtbar machen: eine Stunde Leerlauf ist ein Hinweis, dass
          noch etwas dazwischen passt. */
-      idleBefore: before
-        ? s.start - (before.end + walkMinutes(before.venue, s.venue, o))
-        : 0,
+      idleBefore: Math.max(0, slack),
+      /* Und die Gegenrichtung: so viele Minuten des vorherigen Konzerts
+         fallen weg. Beides kann nicht gleichzeitig groesser als 0 sein. */
+      overlapBefore: Math.max(0, -slack),
     };
   });
 
@@ -196,5 +224,34 @@ function solvePlan(items, o) {
   };
 }
 
+/**
+ * Wer spielt zur selben Zeit wie ein Auftritt?
+ *
+ * "Parallel" heisst hier: die beiden Spielfenster ueberlappen sich um
+ * mindestens eine Minute. Bewusst NICHT "passt in den Plan" - wer kurz
+ * vorbeischauen will, will erst einmal sehen, was ueberhaupt gleichzeitig
+ * laeuft; ob es sich ausgeht, rechnet die Auswahl danach.
+ *
+ * Derselbe Act zaehlt nicht als Alternative zu sich selbst: 62 Acts spielen
+ * mehrfach, und zwei Termine desselben Acts sind kein anderes Konzert.
+ *
+ * Sortiert nach Wert, bei Gleichstand nach Beginn - so steht beim
+ * Durchtippen das Naheliegendste vorn.
+ */
+function parallelTo(items, ref, opt = {}) {
+  const o = { ...PLAN_DEFAULTS, ...opt };
+  const startOf = (s) => minutesOf(s.startIso);
+  const refStart = ref.start != null ? ref.start : startOf(ref);
+  const refEnd = refStart + o.setMinutes;
+  return items
+    .filter((s) => s.startIso && String(s.id) !== String(ref.id))
+    .filter((s) => ref.actId == null || s.actId == null || s.actId !== ref.actId)
+    .filter((s) => {
+      const a = startOf(s);
+      return a < refEnd && refStart < a + o.setMinutes;
+    })
+    .sort((a, b) => (b.value || 0) - (a.value || 0) || startOf(a) - startOf(b));
+}
+
 window.RBFPlan = { buildPlan, walkMinutes, metersBetween, clockInSourceZone,
-                   PLAN_DEFAULTS };
+                   parallelTo, slackBetween, minSlack, PLAN_DEFAULTS };

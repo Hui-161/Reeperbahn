@@ -6,7 +6,7 @@
 globalThis.window = {};
 const src = await import('node:fs').then(fs => fs.promises.readFile('web/plan.js','utf8'));
 eval(src.replace("window.RBFPlan", "globalThis.RBFPlan"));
-const { buildPlan, walkMinutes, clockInSourceZone } = globalThis.RBFPlan;
+const { buildPlan, walkMinutes, clockInSourceZone, parallelTo } = globalThis.RBFPlan;
 
 const A = { lat: 53.5500, lng: 9.9600, name: 'A' };
 const B = { lat: 53.5505, lng: 9.9650, name: 'B' };   // ~340 m
@@ -143,6 +143,65 @@ const ohne = [
 ok('Ohne Act-Kennung bleiben beide drin',
    buildPlan(ohne, { setMinutes: 40 }).stops.length === 2,
    buildPlan(ohne, { setMinutes: 40 }).stops.length);
+
+/* ---------- Ueberschneidung ----------
+   "Kurz vorbeischauen und weiter": ein Wechsel darf ein paar Minuten des
+   laufenden Konzerts kosten. 0 muss sich exakt wie vorher verhalten. */
+const O = { lat: 53.5500, lng: 9.9600, name: 'O' };   // ein Haus, kein Fussweg
+const eng = [
+  { id: 'o1', actId: 1, name: 'Erst', startIso: '2026-09-18T20:00:00+02:00',
+    venue: O, value: 3 },
+  { id: 'o2', actId: 2, name: 'Dann', startIso: '2026-09-18T20:30:00+02:00',
+    venue: O, value: 3 },
+];
+ok('Ohne Budget bleibt es bei einem Konzert',
+   buildPlan(eng, { setMinutes: 40 }).stops.length === 1);
+const mit = buildPlan(eng, { setMinutes: 40, overlapMinutes: 15 });
+ok('Mit 15 min Budget passen beide', mit.stops.length === 2,
+   mit.stops.map((s) => s.name).join(','));
+ok('Und die Zeile nennt die echten verlorenen Minuten',
+   mit.stops[1] && mit.stops[1].overlapBefore === 10,
+   `${mit.stops[1] && mit.stops[1].overlapBefore} min`);
+ok('Luft und Ueberschneidung schliessen sich aus',
+   mit.stops[1] && mit.stops[1].idleBefore === 0);
+// 10 Minuten Budget reichen fuer 10 Minuten Verlust - 9 nicht mehr.
+ok('Das Budget ist eine harte Grenze',
+   buildPlan(eng, { setMinutes: 40, overlapMinutes: 10 }).stops.length === 2
+   && buildPlan(eng, { setMinutes: 40, overlapMinutes: 9 }).stops.length === 1);
+// Der Fussweg zaehlt weiter mit: dasselbe Budget, aber ein Weg dazwischen.
+const weit = [
+  { id: 'w1', actId: 1, name: 'Erst', startIso: '2026-09-18T20:00:00+02:00',
+    venue: A, value: 3 },
+  { id: 'w2', actId: 2, name: 'Dann', startIso: '2026-09-18T20:30:00+02:00',
+    venue: far, value: 3 },
+];
+ok('Ein weiter Weg frisst das Budget auf',
+   buildPlan(weit, { setMinutes: 40, overlapMinutes: 15 }).stops.length === 1,
+   buildPlan(weit, { setMinutes: 40, overlapMinutes: 15 }).stops
+     .map((s) => s.name).join(','));
+
+/* ---------- Was laeuft gleichzeitig ---------- */
+const gleich = [
+  { id: 'p0', actId: 1, name: 'Bezug', startIso: '2026-09-18T20:00:00+02:00',
+    venue: O, value: 3 },
+  { id: 'p1', actId: 2, name: 'Mittendrin', startIso: '2026-09-18T20:20:00+02:00',
+    venue: O, value: 5 },
+  { id: 'p2', actId: 3, name: 'Faengt an, wenn der andere endet',
+    startIso: '2026-09-18T20:40:00+02:00', venue: O, value: 9 },
+  { id: 'p3', actId: 4, name: 'Eine Minute vorher',
+    startIso: '2026-09-18T20:39:00+02:00', venue: O, value: 1 },
+  { id: 'p4', actId: 1, name: 'Derselbe Act nochmal',
+    startIso: '2026-09-18T20:10:00+02:00', venue: O, value: 3 },
+];
+const par = parallelTo(gleich, gleich[0], { setMinutes: 40 });
+ok('Nur echt Gleichzeitiges zaehlt',
+   par.map((x) => x.id).join(',') === 'p1,p3',
+   par.map((x) => x.id).join(','));
+ok('Nahtlos anschliessend ist NICHT parallel',
+   !par.some((x) => x.id === 'p2'));
+ok('Derselbe Act ist keine Alternative zu sich selbst',
+   !par.some((x) => x.id === 'p4'));
+ok('Das Wertvollste steht vorn', par[0] && par[0].id === 'p1');
 
 console.log(fails ? `\nFEHLGESCHLAGEN: ${fails}` : '\nPLAN-ALGORITHMUS: ALLE PRUEFUNGEN BESTANDEN');
 process.exit(fails ? 1 : 0);

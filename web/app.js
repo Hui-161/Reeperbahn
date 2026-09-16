@@ -1018,12 +1018,14 @@ function planOptions() {
   return {
     maxNote: +($('#plan-max') || {}).value || 2,
     setMinutes: +($('#plan-set') || {}).value || 40,
+    overlapMinutes: +($('#plan-ovl') || {}).value || 0,
     withFav: !!($('#plan-fav') || {}).checked,
     teamBonus: !!($('#plan-team') || {}).checked && !!partner,
   };
 }
 
 let lastPlan = null;
+let lastItems = null;
 
 function collectPlanItems(opts) {
   const items = [];
@@ -1074,7 +1076,7 @@ function renderPlan() {
   if (!S.day) {
     el.planBody.innerHTML = '<p class="empty"><b>Erst einen Tag wählen.</b>'
       + 'Ein Abendplan gilt für einen Abend — oben auf Mi, Do, Fr oder Sa tippen.</p>';
-    lastPlan = null;
+    lastPlan = null; lastItems = null; renderTimeline(null, null, opts);
     return;
   }
   if (!items.length) {
@@ -1085,12 +1087,14 @@ function renderPlan() {
         ? `${items.undatedCount} passende Acts haben noch keine Uhrzeit und
            lassen sich deshalb nicht einplanen.`
         : 'Bewerte erst ein paar Acts.'}</p>`;
-    lastPlan = null;
+    lastPlan = null; lastItems = null; renderTimeline(null, null, opts);
     return;
   }
 
-  const plan = window.RBFPlan.buildPlan(items, { setMinutes: opts.setMinutes });
+  const plan = window.RBFPlan.buildPlan(items, {
+    setMinutes: opts.setMinutes, overlapMinutes: opts.overlapMinutes });
   lastPlan = plan;
+  lastItems = items;
   const pinnedOut = items.filter((x) => x.pinned)
     .filter((x) => !plan.stops.some((s) => s.id === x.id));
 
@@ -1124,22 +1128,35 @@ function renderPlan() {
       zurücknehmen</button></p>`;
   }
 
+  const inPlanIds = new Set(plan.stops.map((s) => String(s.id)));
   plan.stops.forEach((s, i) => {
     if (i > 0) {
-      const tight = s.idleBefore <= 5;
+      const over = s.overlapBefore > 0;
+      const tight = !over && s.idleBefore <= 5;
       const gap = s.idleBefore >= 60;
       const wait = s.idleBefore >= 60
         ? `${Math.floor(s.idleBefore / 60)} h ${s.idleBefore % 60} min`
         : `${s.idleBefore} min`;
-      html += `<div class="leg${tight ? ' tight' : ''}${gap ? ' gap' : ''}">
-        ${s.walkFromPrev} min Fußweg${s.idleBefore > 0
-          ? ` · ${wait} Luft` : ' · direkt anschließend'}
+      /* "Überschneidung" passt als Wort nicht in eine Etappenzeile neben
+         Fußweg und Luft. Das Ungleichzeichen steht dafür - mit Titel, damit
+         es nicht geraten werden muss. */
+      const overTxt = over
+        ? ` · <b class="leg-ovl" title="${s.overlapBefore} Minuten Überschneidung`
+          + ` — so viel vom vorherigen Konzert fällt weg">≠ ${s.overlapBefore} min</b>`
+        : '';
+      html += `<div class="leg${tight ? ' tight' : ''}${gap ? ' gap' : ''}${
+        over ? ' over' : ''}">
+        ${s.walkFromPrev} min Fußweg${over ? '' : (s.idleBefore > 0
+          ? ` · ${wait} Luft` : ' · direkt anschließend')}${overTxt}
         ${tight ? ' — knapp' : ''}${gap ? ' — große Lücke, da passt noch was rein'
           : ''}</div>`;
     }
     const sh = showMap().get(String(s.id));
     const total = actShowCount(s.actIdx);
-    html += `<div class="stop"><span class="stop-no">${i + 1}</span>
+    const alts = window.RBFPlan.parallelTo(items, s, opts)
+      .filter((x) => !inPlanIds.has(String(x.id)));
+    html += `<div class="stop" data-stop="${esc(s.id)}">
+      <span class="stop-no">${i + 1}</span>
       ${row(sh, S.data.acts[s.actIdx])}
       <span class="stop-acts">
         <button type="button" class="pill${planPin.has(s.id) ? ' on' : ''}"
@@ -1148,6 +1165,12 @@ function renderPlan() {
         <button type="button" class="pill" data-skip="${esc(s.id)}"
           title="${total > 1 ? 'Diesen Termin nicht — der andere darf rein'
                              : 'Diesen Auftritt heute nicht'}">✕</button>
+        ${alts.length ? `<button type="button" class="pill alt-count"
+          data-alt="${esc(s.id)}" title="${alts.length} ${
+          alts.length === 1 ? 'anderer Act läuft' : 'andere Acts laufen'
+          } zur selben Zeit — tippen oder wischen wechselt durch: ${
+          esc(alts.slice(0, 4).map((x) => x.name).join(', '))}${
+          alts.length > 4 ? ' …' : ''}">+${alts.length}</button>` : ''}
       </span></div>`;
   });
 
@@ -1168,6 +1191,146 @@ function renderPlan() {
       Plan rechnet dann alles andere darum herum neu.</p></div>`;
   }
   el.planBody.innerHTML = html;
+  renderTimeline(plan, items, opts);
+}
+
+/* ---------- Parallel laufende Acts durchwechseln ----------
+
+   "Oft guckt man nur kurz vorbei und geht gleich zum naechsten": dafuer muss
+   der Tausch schneller gehen als ueber die Liste "Passt nicht mehr rein".
+   Der Zaehler +N an der Station sagt, wie viele Acts zur selben Zeit laufen;
+   Tippen oder Wischen geht sie durch.
+
+   Umgesetzt ueber die festen Termine, nicht ueber eine eigene Auswahl: wer
+   einen davon setzt, bekommt den ganzen Abend darum herum neu gerechnet -
+   sonst waere der Tausch zwar schnell, aber der Rest des Plans falsch. */
+function planRing(stopId) {
+  if (!lastPlan || !lastItems) return null;
+  const stop = lastPlan.stops.find((s) => String(s.id) === String(stopId));
+  if (!stop) return null;
+  const inPlan = new Set(lastPlan.stops.map((s) => String(s.id)));
+  const alts = window.RBFPlan.parallelTo(lastItems, stop, planOptions())
+    .filter((x) => !inPlan.has(String(x.id)));
+  return alts.length ? { stop, ring: [stop, ...alts] } : null;
+}
+
+function planSwap(stopId, dir) {
+  const r = planRing(stopId);
+  if (!r) return;
+  const { stop, ring } = r;
+  const next = ring[((dir % ring.length) + ring.length) % ring.length];
+  if (String(next.id) === String(stop.id)) return;
+  const before = [...planPin];
+  for (const x of ring) planPin.delete(String(x.id));
+  planPin.add(String(next.id));
+  savePlanChoice();
+  renderPlan();
+  toast(`Stattdessen: ${next.name}, ${hhmm(next.startIso)}`, 3600, () => {
+    planPin = new Set(before);
+    savePlanChoice();
+    renderPlan();
+  });
+}
+
+/* ---------- Zeitleiste ----------
+
+   Die Liste beantwortet "was mache ich wann". Was sie NICHT zeigt: wie viel
+   gleichzeitig laeuft und wie gut das Parallele ist - genau das, was man
+   braucht, um sich fuer einen Abstecher zu entscheiden.
+
+   Deshalb: Zeit laeuft nach unten, Gleichzeitiges steht nebeneinander. Die
+   Spalte (Spur) ist nicht der Spielort, sondern nur eine freie Bahn - mit
+   Spielorten als Spalten waeren es 43 Spalten, fast alle leer.
+
+   Gefaerbt wird nach der eigenen Note, gerahmt, was im Plan steht. */
+const TL_PX_PER_MIN = 1.9;
+const TL_LANE = 108;
+const TL_GUTTER = 48;   // Platz fuer die Uhrzeiten links, siehe .tl-acts
+
+function renderTimeline(plan, items, opts) {
+  const box = $('#plan-time');
+  if (!box) return;
+  if (!items || !items.length) {
+    box.innerHTML = '<p class="empty">Nichts zu zeigen — erst einen Tag wählen '
+      + 'und ein paar Acts bewerten.</p>';
+    return;
+  }
+  const set = opts.setMinutes;
+  const mins = (iso) => Math.round(new Date(iso).getTime() / 60000);
+  const sorted = [...items].sort((a, b) => mins(a.startIso) - mins(b.startIso));
+  const t0 = mins(sorted[0].startIso);
+  const t1 = Math.max(...sorted.map((s) => mins(s.startIso))) + set;
+  const inPlan = new Map((plan ? plan.stops : [])
+    .map((s, i) => [String(s.id), i + 1]));
+
+  /* Spur suchen: die erste, die zu dieser Zeit frei ist. Das ist die
+     uebliche Faerbung eines Intervallgraphen und braucht nie mehr Spuren,
+     als wirklich gleichzeitig laeuft. */
+  const laneEnd = [];
+  const placed = sorted.map((s) => {
+    const a = mins(s.startIso);
+    let lane = laneEnd.findIndex((end) => end <= a);
+    if (lane < 0) { lane = laneEnd.length; laneEnd.push(0); }
+    laneEnd[lane] = a + set;
+    return { s, a, lane };
+  });
+  const lanes = Math.max(1, laneEnd.length);
+
+  // Stundenlinien, am Stundenanfang ausgerichtet.
+  let marks = '';
+  for (let m = Math.ceil(t0 / 60) * 60; m <= t1; m += 60) {
+    marks += `<div class="tl-hour" data-top="${(m - t0) * TL_PX_PER_MIN}">
+      <span>${window.RBFPlan.clockInSourceZone(sorted[0].startIso, m - t0)}</span>
+      </div>`;
+  }
+
+  const blocks = placed.map(({ s, a, lane }) => {
+    const rb = rateBucket(rate[s.actId]);
+    const no = inPlan.get(String(s.id));
+    return `<button type="button" class="tl-act${rb ? ' rated-' + rb : ''}${
+      no ? ' in-plan' : ''}" data-tlact="${s.actIdx}"
+      data-top="${(a - t0) * TL_PX_PER_MIN}" data-lane="${lane}"
+      title="${esc(s.name)} — ${hhmm(s.startIso)}${
+        s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}">
+      ${no ? `<span class="tl-no">${no}</span>` : ''}
+      <span class="tl-time">${hhmm(s.startIso)}</span>
+      <span class="tl-name">${esc(s.name)}</span>
+      ${rb ? `<span class="grade grade-${rb}">${rateText(rate[s.actId])}</span>` : ''}
+    </button>`;
+  }).join('');
+
+  box.innerHTML = `<p class="menu-note">Zeit läuft nach unten, Gleichzeitiges
+    steht nebeneinander. Farbe ist die eigene Note; umrandet und numeriert,
+    was im Plan steht. Seitlich wischen zeigt weitere parallele Acts.</p>
+    <div class="tl-scroll"><div class="tl-canvas">
+      <div class="tl-marks">${marks}</div>
+      <div class="tl-acts">${blocks}</div>
+    </div></div>`;
+
+  /* Die Masse kommen ueber das Objektmodell, NICHT als style="…" im Markup:
+     style-src 'self' verwirft Inline-Stile, und zwar lautlos - die Leinwand
+     waere 0 Pixel hoch und alle Bloecke laegen aufeinander. Genau so ist es
+     beim ersten Versuch passiert. Ueber element.style greift die Regel
+     nicht, das ist kein Inline-Stil im Sinne der CSP. */
+  const canvas = box.querySelector('.tl-canvas');
+  canvas.style.height = `${(t1 - t0) * TL_PX_PER_MIN + 16}px`;
+  canvas.style.width = `${lanes * TL_LANE + TL_GUTTER}px`;
+  for (const m of box.querySelectorAll('.tl-hour')) {
+    m.style.top = `${m.dataset.top}px`;
+  }
+  for (const b of box.querySelectorAll('.tl-act')) {
+    b.style.top = `${b.dataset.top}px`;
+    b.style.left = `${+b.dataset.lane * TL_LANE}px`;
+    b.style.height = `${set * TL_PX_PER_MIN - 3}px`;
+    b.style.width = `${TL_LANE - 6}px`;
+  }
+}
+
+function showTimeline(on) {
+  const btn = $('#plan-timeline');
+  if (btn) btn.setAttribute('aria-pressed', String(on));
+  el.planBody.hidden = on;
+  $('#plan-time').hidden = !on;
 }
 
 function renderNews() {
@@ -2022,6 +2185,21 @@ document.addEventListener('click', (e) => {
     if (planPin.has(id)) planPin.delete(id); else { planPin.add(id); planSkip.delete(id); }
     savePlanChoice();
     renderPlan();
+    return;
+  }
+  /* Der Zaehler an der Station: einmal tippen heisst "der naechste parallele
+     Act". Dieselbe Bewegung wie das Wischen, nur mit dem Finger auf dem
+     Knopf - auf dem Rechner gibt es keine Wischgeste. */
+  const altBtn = t.closest('[data-alt]');
+  if (altBtn) {
+    e.preventDefault(); e.stopPropagation();
+    planSwap(altBtn.dataset.alt, 1);
+    return;
+  }
+  const tlAct = t.closest('[data-tlact]');
+  if (tlAct) {
+    e.preventDefault(); e.stopPropagation();
+    openDetail(+tlAct.dataset.tlact);
     return;
   }
   const skipBtn = t.closest('[data-skip]');
@@ -2971,10 +3149,73 @@ $('#m-sync').addEventListener('click', () => { el.menu.close(); runSync(false); 
 $('#m-plan').addEventListener('click', () => { el.menu.close(); showPlan(true); });
 $('#m-news').addEventListener('click', () => { el.menu.close(); showNews(true); });
 
-for (const id of ['plan-max', 'plan-set', 'plan-fav', 'plan-team']) {
+for (const id of ['plan-max', 'plan-set', 'plan-ovl', 'plan-fav', 'plan-team']) {
   const node = $('#' + id);
   if (node) node.addEventListener('change', renderPlan);
 }
+$('#plan-timeline').addEventListener('click', (e) => {
+  showTimeline(e.currentTarget.getAttribute('aria-pressed') !== 'true');
+});
+
+/* ---------- Wischen im Abendplan ----------
+   Eigene, immer aktive Geste - nicht die aus der Liste. Die ist abgeschaltet
+   und aendert Bewertungen; hier wird nur zwischen gleichzeitig laufenden Acts
+   umgeschaltet, und das ist mit einem Tipper auf den Zaehler jederzeit
+   zuruecknehmbar.
+
+   Dieselbe Richtungslogik wie in der Liste: erst ab einer klar waagerechten
+   Bewegung uebernehmen, sonst verrutscht jeder Scrollversuch die Station. */
+let psw = null;
+const PLAN_SWIPE_DIST = 64;
+
+el.planBody.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  const stop = e.target.closest && e.target.closest('.stop[data-stop]');
+  if (!stop || e.target.closest('.pill, .row-fav, .row-play, .venue')) return;
+  psw = { stop, id: stop.dataset.stop, x0: e.touches[0].clientX,
+          y0: e.touches[0].clientY, dx: 0, active: false };
+}, { passive: true });
+
+el.planBody.addEventListener('touchmove', (e) => {
+  if (!psw || e.touches.length !== 1) return;
+  const dx = e.touches[0].clientX - psw.x0;
+  const dy = e.touches[0].clientY - psw.y0;
+  if (!psw.active) {
+    if (Math.abs(dy) > Math.abs(dx) || Math.abs(dx) < 12) {
+      if (Math.abs(dy) > 12) planSwipeCancel();
+      return;
+    }
+    if (!planRing(psw.id)) { planSwipeCancel(); return; }  // nichts Paralleles
+    psw.active = true;
+    psw.stop.classList.add('swapping');
+  }
+  psw.dx = dx;
+  psw.stop.style.transform = `translateX(${dx}px)`;
+  psw.stop.classList.toggle('armed', Math.abs(dx) >= PLAN_SWIPE_DIST);
+}, { passive: true });
+
+function planSwipeCancel() {
+  if (!psw) return;
+  psw.stop.style.transform = '';
+  psw.stop.classList.remove('swapping', 'armed');
+  psw = null;
+}
+
+el.planBody.addEventListener('touchend', () => {
+  if (!psw) return;
+  const { dx, id, active } = psw;
+  planSwipeCancel();
+  if (!active || Math.abs(dx) < PLAN_SWIPE_DIST) return;
+  suppressClickUntil = Date.now() + 350;
+  planSwap(id, dx < 0 ? 1 : -1);
+}, { passive: true });
+
+el.planBody.addEventListener('touchcancel', planSwipeCancel, { passive: true });
+
+/* Der Wisch endet auf der Station und waere sonst ein Tipper auf die Zeile. */
+el.planBody.addEventListener('click', (e) => {
+  if (Date.now() < suppressClickUntil) { e.stopPropagation(); e.preventDefault(); }
+}, true);
 $('#plan-map').addEventListener('click', showRoute);
 $('#plan-ics').addEventListener('click', () => {
   if (!lastPlan || !lastPlan.stops.length) { alert('Es gibt noch keinen Plan.'); return; }

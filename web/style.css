@@ -736,8 +736,16 @@ main { min-height: 60vh; }
 }
 .leg.tight { color: var(--r4); font-weight: 600; }
 .leg.gap { color: var(--ink-soft); }
+/* Ueberschneidung: das Wort passt nicht in die Etappenzeile, das
+   Ungleichzeichen schon. Warnfarbe, weil man dafuer etwas aufgibt. */
+.leg.over { color: var(--r4); }
+.leg-ovl { font-weight: 700; white-space: nowrap; }
 
 .stop { display: flex; gap: .6rem; align-items: flex-start; }
+/* Waehrend des Wischens folgt die Station dem Finger; ab der Schwelle zeigt
+   der Rahmen, dass beim Loslassen wirklich getauscht wird. */
+.stop.swapping { transition: none; will-change: transform; }
+.stop.armed .row { border-color: var(--accent); }
 .stop-no {
   flex: 0 0 1.6rem;
   height: 1.6rem;
@@ -775,6 +783,102 @@ main { min-height: 60vh; }
   color: var(--accent-ink);
 }
 .plan-drop .pill { margin-right: .35rem; vertical-align: -.4em; }
+
+/* Wie viele Acts zur selben Zeit laufen. Steht unter den beiden anderen
+   Knoepfen, weil es die Antwort auf "und was sonst?" ist - nicht auf
+   "was mache ich mit diesem hier?". */
+.alt-count {
+  font-size: .75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  border-style: dashed;
+}
+
+/* ---------- Zeitleiste ----------
+   Zeit nach unten, Gleichzeitiges nebeneinander. Die Breite kommt aus dem
+   JavaScript (eine Spur je gleichzeitig laufendem Act), deshalb steht hier
+   nur, wie es aussieht - nicht, wie gross es ist. */
+.timeline { margin-top: .6rem; }
+.tl-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  -webkit-overflow-scrolling: touch;
+}
+.tl-canvas { position: relative; }
+.tl-hour {
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 1px dashed var(--line);
+  pointer-events: none;
+}
+.tl-hour span {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  padding: 0 .25rem;
+  font-size: .7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  background: var(--bg-raised);
+}
+.tl-acts { position: absolute; inset: 0; margin-left: 48px; }
+.tl-act {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  overflow: hidden;
+  padding: .2rem .3rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .72rem;
+  line-height: 1.15;
+  cursor: pointer;
+  opacity: .72;
+}
+/* Was im Plan steht, tritt hervor - alles andere ist Umfeld. */
+.tl-act.in-plan {
+  opacity: 1;
+  border: 2px solid var(--accent);
+  background: var(--bg-raised);
+  color: var(--ink);
+}
+.tl-act.rated-1 { border-left: 4px solid var(--r1); }
+.tl-act.rated-2 { border-left: 4px solid var(--r2); }
+.tl-act.rated-3 { border-left: 4px solid var(--r3); }
+.tl-act.rated-4 { border-left: 4px solid var(--r4); }
+.tl-act.rated-5 { border-left: 4px solid var(--r5); }
+.tl-no {
+  position: absolute;
+  top: .15rem; right: .15rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: .65rem;
+  font-weight: 700;
+}
+.tl-time { font-variant-numeric: tabular-nums; color: var(--ink-faint); }
+.tl-name {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.tl-act .grade { align-self: flex-start; margin-top: auto; }
 
 .plan-warn {
   margin: .5rem 0;

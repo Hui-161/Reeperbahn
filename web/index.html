@@ -129,6 +129,16 @@
             <option value="50">50 min</option>
           </select>
         </label>
+        <label title="Wie viele Minuten des laufenden Konzerts darf ein Wechsel kosten?">Überschneidung
+          <select id="plan-ovl">
+            <option value="0" selected>aus</option>
+            <option value="5">≠ 5 min</option>
+            <option value="10">≠ 10 min</option>
+            <option value="15">≠ 15 min</option>
+            <option value="20">≠ 20 min</option>
+            <option value="30">≠ 30 min</option>
+          </select>
+        </label>
         <label><input type="checkbox" id="plan-fav" checked> Favoriten mitnehmen</label>
         <label id="plan-team-wrap" hidden><input type="checkbox" id="plan-team" checked>
           Team-Treffer bevorzugen</label>
@@ -136,9 +146,12 @@
       <div class="plan-actions">
         <button type="button" id="plan-map" class="chip">Route auf der Karte</button>
         <button type="button" id="plan-ics" class="chip">Als Kalender</button>
+        <button type="button" id="plan-timeline" class="chip"
+          aria-pressed="false">Zeitleiste</button>
       </div>
     </div>
     <div id="plan-body"></div>
+    <div id="plan-time" class="timeline" hidden></div>
   </section>
 </main>
 

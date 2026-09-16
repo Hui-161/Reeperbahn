@@ -9,9 +9,12 @@ wird - siehe DEPLOY.md. Die Kartenkacheln brauchen Netz; ohne Netz
 schlaegt nur die Kachel-Darstellung fehl, nicht der Test.
 """
 from playwright.sync_api import sync_playwright
-import os, sys, re, urllib.parse
+import os, sys, re, urllib.parse, datetime as _dt
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8898")
+# Die vier Festivaltage. Faellt der Testlauf auf einen davon,
+# stellt die App von sich aus auf diesen Tag statt auf "Alle Tage".
+FEST_DAYS = ("2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19")
 
 FAILS=[]
 def check(name, cond, extra=""):
@@ -55,11 +58,23 @@ with sync_playwright() as p:
     pg.wait_for_selector(".row", timeout=15000)
 
     days = pg.locator(".day").count()
-    rows_all_default = pg.locator(".row").count()
-    check("Standard ist 'Alle Tage' (heute liegt vor dem Festival)",
-          pg.locator('.day[data-day=""]').get_attribute("aria-selected") == "true")
+    # Die App stellt auf HEUTE, wenn heute ein Festivaltag ist, sonst auf
+    # "Alle Tage". Der Test darf das nicht raten: er lief ab dem 16.9.2026
+    # auf die Nase, weil er "Alle Tage" als Vorgabe festgeschrieben hatte -
+    # und mit der falschen Vorgabe stimmten danach auch alle Zaehlungen
+    # nicht mehr, die sich darauf bezogen.
+    heute = _dt.date.today().isoformat()
+    day_sel = pg.evaluate("""() => {
+      const d = document.querySelector('.day[aria-selected="true"]');
+      return d ? (d.dataset.day || '') : null;
+    }""")
+    check("Vorgewaehlt ist heute, sonst 'Alle Tage'",
+          day_sel == (heute if heute in FEST_DAYS else ""),
+          f"gewaehlt {day_sel!r}, heute {heute}")
     check("Reiter: Alle + vier Tage", days == 5, f"{days} Reiter")
-    # Ab hier auf einen einzelnen Tag stellen, damit die Zaehlungen eindeutig sind.
+    # Fuer die Zaehlungen unten: einmal ausdruecklich alle Tage, einmal einer.
+    pg.locator('.day[data-day=""]').click(); pg.wait_for_timeout(400)
+    rows_all_default = pg.locator(".row").count()
     pg.locator('.day[data-day="2026-09-17"]').click()
     pg.wait_for_timeout(400)
     rows0 = pg.locator(".row").count()
@@ -103,12 +118,19 @@ with sync_playwright() as p:
     check("Reset raeumt auch die Spielorte auf", pg.locator(".row").count() == rows0)
 
     # Wunsch 5 + 1: Favorit und Notiz
+    # Der Favorit haengt am ACT: spielt der zweimal, gehoeren auch beide
+    # Zeilen durch den Filter. Erwartet wird deshalb die Zeilenzahl dieses
+    # Acts, nicht die feste 1.
+    fav_act = pg.locator(".row").first.get_attribute("data-act")
+    fav_rows = pg.locator(f'.row[data-act="{fav_act}"]').count()
     pg.locator(".row-fav").first.click()
     pg.wait_for_timeout(120)
     check("Herz setzt sich",
           pg.locator(".row-fav").first.get_attribute("aria-pressed") == "true")
     pg.click("#f-fav"); pg.wait_for_timeout(250)
-    check("Favoriten-Filter zeigt genau 1", pg.locator(".row").count() == 1)
+    check("Favoriten-Filter zeigt genau diesen Act",
+          pg.locator(".row").count() == fav_rows,
+          f"{pg.locator('.row').count()} Zeile(n), erwartet {fav_rows}")
     pg.click("#f-fav"); pg.wait_for_timeout(200)
 
     tap_row(pg.locator(".row").first)
@@ -434,6 +456,10 @@ with sync_playwright() as p:
     # Persistenz nach Reload
     pg.goto(BASE + "/", wait_until="load")
     pg.wait_for_selector(".row", timeout=15000)
+    # Nach dem Neuladen steht wieder die Tagesvorgabe. Herz und Note haengen
+    # an Acts vom 17.9. - also erst alle Tage zeigen, sonst sucht der Test
+    # sie an einem Tag, an dem sie gar nicht spielen.
+    pg.locator('.day[data-day=""]').click(); pg.wait_for_timeout(400)
     check("Favorit ueberlebt Reload", pg.locator('.row-fav[aria-pressed="true"]').count() >= 1)
     check("Note ueberlebt Reload", pg.locator(".row.rated-1").count() >= 1)
 
@@ -441,6 +467,7 @@ with sync_playwright() as p:
            or "refused to" in e.lower()]
     check("Keine CSP-Verletzung", not csp, str(csp[:3]))
     # "Alle Tage": Suche und Stoebern ueber Tagesgrenzen
+    pg.locator('.day[data-day="2026-09-17"]').click(); pg.wait_for_timeout(300)
     pg.locator('.day[data-day=""]').click()
     pg.wait_for_timeout(400)
     rows_all = pg.locator(".row").count()
@@ -1829,6 +1856,187 @@ with sync_playwright() as p:
 
     check("Keine JS-Fehler im Notstands-Kontext", not err6, str(err6[:2]))
     ctx6.close()
+
+    # --- Abendplan: Überschneidung, paralleles Umschalten, Zeitleiste ---
+    # EIGENER Kontext mit vielen Noten. Der Plan weiter oben kommt mit ein
+    # bis zwei Stationen aus - da gibt es nichts Paralleles zu sehen, und
+    # genau darum geht es hier.
+    ctx7 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg7 = ctx7.new_page()
+    err7 = []
+    pg7.on("pageerror", lambda e: err7.append("pageerror: " + str(e)))
+    pg7.on("console",
+           lambda m: err7.append(m.text) if m.type == "error"
+           and "ERR_" not in m.text else None)
+    pg7.goto(BASE + "/", wait_until="load")
+    pg7.wait_for_selector(".row", timeout=20000)
+    lineup7 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
+    day7 = lineup7["days"][1]
+    ids7 = list(dict.fromkeys(
+        [lineup7["acts"][s["a"]]["id"] for s in lineup7["shows"]
+         if s["d"] == day7 and not s["tbd"]]))[:60]
+    pg7.evaluate("""(ids) => {
+      const r = {};
+      ids.forEach((id, i) => { r[id] = (i % 3) + 1; });
+      localStorage.setItem('rbf26.rate', JSON.stringify(r));
+    }""", ids7)
+    pg7.reload(wait_until="load")
+    pg7.wait_for_selector(".row", timeout=20000)
+    pg7.click(f'.day[data-day="{day7}"]'); pg7.wait_for_timeout(400)
+    pg7.click("#btn-menu"); pg7.wait_for_selector("#menu[open]")
+    pg7.click("#m-plan"); pg7.wait_for_timeout(800)
+    stops7 = pg7.locator("#plan .stop").count()
+    check("Mit vielen Noten entsteht ein voller Plan", stops7 >= 4,
+          f"{stops7} Stationen")
+
+    # Überschneidung: aus heisst aus.
+    check("Ohne Budget gibt es keine Überschneidung",
+          pg7.locator("#plan .leg.over").count() == 0)
+    pg7.select_option("#plan-ovl", "20"); pg7.wait_for_timeout(700)
+    stops_ovl = pg7.locator("#plan .stop").count()
+    check("Mit Budget passen mehr Konzerte in den Abend", stops_ovl > stops7,
+          f"{stops7} -> {stops_ovl}")
+    over7 = pg7.locator("#plan .leg.over")
+    check("Und die Etappen weisen sie aus", over7.count() >= 1,
+          f"{over7.count()} von {stops_ovl - 1}")
+    # Das Wort passt nicht in die Zeile, das Zeichen schon - aber der Titel
+    # muss es ausschreiben, sonst raet man.
+    ovl_txt = pg7.locator("#plan .leg-ovl").first
+    check("Die Überschneidung steht als ≠ in der Etappe",
+          ovl_txt.inner_text().startswith("≠"), ovl_txt.inner_text())
+    check("Mit ausgeschriebenem Titel",
+          "Überschneidung" in (ovl_txt.get_attribute("title") or ""),
+          ovl_txt.get_attribute("title"))
+    # Keine Etappe darf mehr aufgeben, als das Budget erlaubt.
+    worst = pg7.evaluate("""() => Math.max(0, ...[...document.querySelectorAll(
+      '#plan .leg-ovl')].map(e => parseInt(e.textContent.replace(/\\D+/g, ''), 10)))""")
+    check("Keine Etappe überzieht das gewählte Budget", worst <= 20,
+          f"höchstens {worst} min bei 20 erlaubt")
+    pg7.select_option("#plan-ovl", "0"); pg7.wait_for_timeout(700)
+    check("Zurück auf aus rechnet den alten Plan",
+          pg7.locator("#plan .stop").count() == stops7
+          and pg7.locator("#plan .leg.over").count() == 0)
+
+    # Zähler und Umschalten.
+    PLAN7 = ("() => [...document.querySelectorAll('#plan-body .stop .row')]"
+             ".map(r => r.dataset.show)")
+    alt7 = pg7.locator("#plan .alt-count")
+    check("Stationen mit parallelen Acts tragen einen Zähler",
+          alt7.count() >= 1, f"{alt7.count()} von {stops7}")
+    if alt7.count():
+        first_alt = alt7.first
+        check("Der Zähler nennt eine Anzahl",
+              re.fullmatch(r"\+\d+", first_alt.inner_text().strip()),
+              first_alt.inner_text())
+        check("Und sagt im Titel, wer da parallel läuft",
+              "zur selben Zeit" in (first_alt.get_attribute("title") or ""),
+              (first_alt.get_attribute("title") or "")[:60])
+        stop_id = first_alt.evaluate("e => e.closest('.stop').dataset.stop")
+        before7 = pg7.evaluate(PLAN7)
+        first_alt.click(); pg7.wait_for_timeout(800)
+        after7 = pg7.evaluate(PLAN7)
+        check("Ein Tipper tauscht den Act gegen einen parallelen",
+              stop_id not in after7 and after7 != before7,
+              f"{before7} -> {after7}")
+        check("Der Abend wird dabei neu gerechnet, nicht nur die Zeile",
+              len(after7) >= 1)
+        check("Der Tausch lässt sich zurücknehmen",
+              pg7.locator("#toast .toast-undo").count() == 1,
+              pg7.locator("#toast").inner_text()[:60])
+        pg7.locator("#toast .toast-undo").click(); pg7.wait_for_timeout(800)
+        check("Und ist danach wirklich zurück",
+              pg7.evaluate(PLAN7) == before7,
+              f"{pg7.evaluate(PLAN7)} gegen {before7}")
+
+        # Dieselbe Bewegung mit dem Finger. Die Geste im Plan ist eine
+        # eigene - die der Liste ist abgeschaltet und würde hier Noten
+        # ändern statt umzuschalten.
+        SWAP = """([id, dx]) => {
+          const stop = document.querySelector(`.stop[data-stop="${id}"]`);
+          const r = stop.getBoundingClientRect();
+          const x0 = r.left + r.width / 2, y0 = r.top + r.height / 2;
+          const fire = (type, x) => {
+            const t = new Touch({ identifier: 3, target: stop, clientX: x,
+                                  clientY: y0, pageX: x, pageY: y0 });
+            const empty = type === 'touchend';
+            stop.dispatchEvent(new TouchEvent(type, { bubbles: true,
+              cancelable: true, touches: empty ? [] : [t],
+              targetTouches: empty ? [] : [t], changedTouches: [t] }));
+          };
+          fire('touchstart', x0);
+          for (let i = 1; i <= 8; i++) fire('touchmove', x0 + (dx * i) / 8);
+          fire('touchend', x0 + dx);
+        }"""
+        swipe_from = pg7.evaluate(PLAN7)
+        pg7.evaluate(SWAP, [stop_id, -120]); pg7.wait_for_timeout(800)
+        check("Wischen tauscht genauso",
+              pg7.evaluate(PLAN7) != swipe_from,
+              f"{swipe_from} -> {pg7.evaluate(PLAN7)}")
+        check("Die Station bleibt dabei nicht verschoben liegen",
+              pg7.evaluate("""() => [...document.querySelectorAll('.stop')]
+                .every(s => !s.style.transform && !s.classList.contains('swapping'))"""))
+        check("Und der Wisch öffnet nicht nebenbei die Detailkarte",
+              pg7.locator("#detail[open]").count() == 0)
+        pg7.locator("#toast .toast-undo").click(); pg7.wait_for_timeout(700)
+
+    # --- Zeitleiste ---
+    pg7.click("#plan-timeline"); pg7.wait_for_timeout(800)
+    check("Die Zeitleiste löst die Liste ab",
+          pg7.locator("#plan-time").is_visible()
+          and pg7.locator("#plan-body").is_hidden()
+          and pg7.locator("#plan-timeline").get_attribute("aria-pressed") == "true")
+    tl = pg7.locator(".tl-act")
+    check("Sie zeigt alle in Frage kommenden Acts, nicht nur den Plan",
+          tl.count() > pg7.locator(".tl-act.in-plan").count()
+          and pg7.locator(".tl-act.in-plan").count() >= 1,
+          f"{tl.count()} Blöcke, davon {pg7.locator('.tl-act.in-plan').count()} im Plan")
+    # DAS ist der Zweck: Gleichzeitiges steht nebeneinander. Läge es
+    # übereinander, wäre die Ansicht wertlos - und genau das passiert, wenn
+    # die Maße nicht ankommen (style-src 'self' verwirft style="…").
+    geom = pg7.evaluate("""() => {
+      const a = [...document.querySelectorAll('.tl-act')];
+      let ueber = 0;
+      for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
+        const A = a[i].getBoundingClientRect(), B = a[j].getBoundingClientRect();
+        if (A.top < B.bottom && B.top < A.bottom
+            && A.left < B.right && B.left < A.right) ueber++;
+      }
+      const c = document.querySelector('.tl-canvas');
+      return { ueber, spuren: new Set(a.map(e => e.style.left)).size,
+               hoehe: c.offsetHeight, breite: c.offsetWidth,
+               sicht: document.querySelector('.tl-scroll').clientWidth };
+    }""")
+    check("Kein Block liegt auf einem anderen", geom["ueber"] == 0,
+          f'{geom["ueber"]} Überdeckungen')
+    check("Parallel Laufendes steht in mehreren Spuren", geom["spuren"] >= 2,
+          f'{geom["spuren"]} Spuren')
+    check("Die Leinwand hat eine Höhe", geom["hoehe"] > 200, f'{geom["hoehe"]} px')
+    check("Und ist seitlich scrollbar statt gequetscht",
+          geom["breite"] > geom["sicht"], f'{geom["breite"]} auf {geom["sicht"]} px')
+    check("Die Stunden sind beschriftet",
+          pg7.locator(".tl-hour").count() >= 3
+          and re.fullmatch(r"\d\d:00",
+                           pg7.locator(".tl-hour span").first.inner_text().strip()),
+          pg7.locator(".tl-hour span").first.inner_text())
+    check("Die eigene Note steht an den Blöcken",
+          pg7.locator(".tl-act .grade").count() >= 1,
+          f'{pg7.locator(".tl-act .grade").count()}')
+    check("Und die Stationen des Plans sind numeriert",
+          pg7.locator(".tl-act.in-plan .tl-no").count()
+          == pg7.locator(".tl-act.in-plan").count())
+    pg7.locator(".tl-act").first.click(); pg7.wait_for_timeout(700)
+    check("Ein Block öffnet die Detailkarte", pg7.locator("#detail[open]").count() == 1)
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(300)
+    pg7.click("#plan-timeline"); pg7.wait_for_timeout(500)
+    check("Nochmal tippen führt zurück zur Liste",
+          not pg7.locator("#plan-body").is_hidden()
+          and pg7.locator("#plan-time").is_hidden())
+
+    csp7 = [e for e in err7 if "content security policy" in e.lower()
+            or "refused to apply" in e.lower()]
+    check("Keine CSP-Verletzung im Abendplan", not csp7, str(csp7[:2]))
+    check("Keine JS-Fehler im Plan-Kontext", not err7, str(err7[:2]))
+    ctx7.close()
 
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e
