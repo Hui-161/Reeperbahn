@@ -813,24 +813,30 @@ with sync_playwright() as p:
     # hier zwei Stunden zu wenig.
     summary = pg.locator(".plan-sum").inner_text()
     stop_times = pg.locator("#plan .stop .row-time").all_inner_texts()
-    if stop_times and "bis etwa" in summary:
+    if stop_times and "bis" in summary:
         import re as _re
         # Aus dem Text herausSUCHEN, nicht an ":" zerlegen: in .row-time
         # steht neben der Uhrzeit auch die Aenderungsmarke (⟳), sobald der
         # Termin verschoben oder neu ist. Seit dem 11.9. trifft das die
         # letzte Station, und split(":") lieferte "00\n⟳".
-        last_start = _re.search(r"(\d\d):(\d\d)", stop_times[-1])
-        shown_end = _re.search(r"bis etwa (\d\d):(\d\d)", summary)
-        lh, lm = int(last_start.group(1)), int(last_start.group(2))
-        last_start = last_start.group(0)
+        #
+        # Und seit die echte Spielzeit bekannt ist, stehen dort ZWEI
+        # Uhrzeiten (Beginn und Ende). Gesucht wird beides: das Ende der
+        # letzten Station muss die Endzeit des Abends sein - nicht mehr
+        # "Beginn plus Pauschale".
+        zeiten = _re.findall(r"(\d\d):(\d\d)", stop_times[-1])
+        shown_end = _re.search(r"bis (?:etwa )?(\d\d):(\d\d)", summary)
         eh, em = int(shown_end.group(1)), int(shown_end.group(2))
+        lh, lm = int(zeiten[-1][0]), int(zeiten[-1][1])
         diff = ((eh * 60 + em) - (lh * 60 + lm)) % (24 * 60)
-        # Spielzeit auslesen statt annehmen - sonst prueft der Test seine
-        # eigene Vermutung und nicht die App.
-        set_min = int(pg.locator("#plan-set").input_value())
-        check("Endzeit = letzter Beginn + Spielzeit", diff == set_min,
-              f"letzter Start {last_start}, Ende {eh:02d}:{em:02d}, "
-              f"Differenz {diff} min, Spielzeit {set_min} min")
+        check("Der Abend endet, wenn das letzte Konzert endet", diff == 0,
+              f"letzte Station {zeiten}, Ende laut Plan {eh:02d}:{em:02d}, "
+              f"Differenz {diff} min")
+        # Und wenn die Endzeit bekannt ist, steht dort kein "etwa" mehr -
+        # geschaetzt wird nur, wo die Quelle nichts sagt.
+        check("Und ohne 'etwa', weil die echte Endzeit bekannt ist",
+              len(zeiten) == 2 and "bis etwa" not in summary,
+              f"{len(zeiten)} Uhrzeiten | {summary[:70]}")
 
     check("Zusammenfassung nennt den Fussweg",
           "Fußweg" in pg.locator(".plan-sum").inner_text(),
@@ -923,6 +929,15 @@ with sync_playwright() as p:
         check("Richtungspfeil je Teilstrecke",
               pg.locator(".route-arrow").count() == pins - 1,
               f"{pg.locator('.route-arrow').count()} Pfeile, {pins} Stationen")
+        # Und sie zeigen auch wirklich irgendwohin. Die Drehung stand als
+        # style="…" im Markup, und die CSP verwirft Inline-Stile lautlos -
+        # jahrelang zeigten alle Pfeile stur nach rechts. Geprueft wird
+        # deshalb die gerechnete Drehung, nicht nur die Anzahl.
+        gedreht = pg.evaluate("""() => [...document.querySelectorAll('.route-arrow')]
+          .map(e => getComputedStyle(e).transform)
+          .filter(t => t && t !== 'none').length""")
+        check("Und sie sind in die Laufrichtung gedreht",
+              gedreht == pins - 1, f"{gedreht} von {pins - 1} gedreht")
     check("Spielorte treten hinter die Route zurueck",
           "route-on" in pg.locator("#map").get_attribute("class"))
     faded = pg.evaluate("""() => {
@@ -2276,8 +2291,10 @@ with sync_playwright() as p:
     check("Ein Block öffnet die Griffe, nicht die Detailkarte",
           pg7.locator("#tlmenu[open]").count() == 1
           and pg7.locator("#detail[open]").count() == 0)
-    check("Sie nennen Tag, Zeit, Kürzel und Spielort",
-          re.search(r"(Mi|Do|Fr|Sa) \d\d:\d\d · \S+ ",
+    # Seit die echte Spielzeit bekannt ist, steht dort eine Zeitspanne und
+    # die Dauer in Minuten - nicht mehr nur der Beginn.
+    check("Sie nennen Tag, Spielzeit, Kürzel und Spielort",
+          re.search(r"(Mi|Do|Fr|Sa) \d\d:\d\d–\d\d:\d\d · \d+ min · \S+ ",
                     pg7.locator("#tl-when").inner_text()),
           pg7.locator("#tl-when").inner_text()[:70])
     chips7 = pg7.locator("#tl-top .chip").all_inner_texts()
@@ -2825,6 +2842,133 @@ with sync_playwright() as p:
     check("Keine JS-Fehler im Team-Kontext", not err9, str(err9[:2]))
     ctx9.close()
 
+    # --- Die tatsächliche Spielzeit ---
+    # Die Quelle hat ein Feld für die Endzeit und lässt es leer, schreibt sie
+    # aber im Titel des Auftritts aus (siehe end_from_title in rbf_core.py).
+    # Für 568 der 575 Auftritte ist sie damit bekannt - und ab jetzt überall
+    # zu sehen, statt dass eine Pauschale für alle gilt.
+    ctx15 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg15 = ctx15.new_page()
+    err15 = []
+    pg15.on("pageerror", lambda e: err15.append(str(e)))
+    pg15.on("console", lambda m: err15.append(m.text)
+            if m.type == "error" and "ERR_" not in m.text else None)
+    lineup15 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
+    mit_e = [s for s in lineup15["shows"] if s.get("e")]
+    check("Die Web-Daten tragen die echte Endzeit",
+          len(mit_e) > len(lineup15["shows"]) * 0.9,
+          f'{len(mit_e)} von {len(lineup15["shows"])} Auftritten')
+    # Und die Längen sind nicht alle gleich - sonst wäre es wieder eine
+    # Pauschale, nur an anderer Stelle.
+    laengen = {int((_dt.datetime.fromisoformat(s["e"])
+                    - _dt.datetime.fromisoformat(s["t"])).total_seconds() // 60)
+               for s in mit_e}
+    check("Mit wirklich unterschiedlichen Spielzeiten", len(laengen) >= 8,
+          f"{len(laengen)} verschiedene: {sorted(laengen)[:8]}…")
+
+    day15 = lineup15["days"][1]
+    ids15 = list(dict.fromkeys(
+        [lineup15["acts"][s["a"]]["id"] for s in lineup15["shows"]
+         if s["d"] == day15 and not s["tbd"]]))[:70]
+    pg15.goto(BASE + "/", wait_until="load")
+    pg15.wait_for_selector(".row", timeout=20000)
+    pg15.evaluate("""(ids) => {
+      const r = {};
+      ids.forEach((id, i) => { r[id] = (i % 3) + 1; });
+      localStorage.setItem('rbf26.rate', JSON.stringify(r));
+    }""", ids15)
+    pg15.reload(wait_until="load")
+    pg15.wait_for_selector(".row", timeout=20000)
+    pg15.click(f'.day[data-day="{day15}"]'); pg15.wait_for_timeout(400)
+
+    # In der Liste: die Endzeit unter dem Beginn.
+    zeilen15 = pg15.locator(".row").count()
+    check("Jede Zeile nennt auch das Ende",
+          pg15.locator(".row .row-bis").count() == zeilen15,
+          f"{pg15.locator('.row .row-bis').count()} von {zeilen15}")
+    ersteZeit = pg15.locator(".row .row-time").first
+    check("Und im Titel die Spielzeit in Minuten",
+          re.search(r"\d\d:\d\d bis \d\d:\d\d — \d+ min",
+                    ersteZeit.get_attribute("title") or ""),
+          ersteZeit.get_attribute("title"))
+    # Die Zahl muss stimmen, nicht nur dastehen.
+    krumm15 = pg15.evaluate("""() => {
+      const bad = [];
+      for (const r of document.querySelectorAll('.row')) {
+        const t = r.querySelector('.row-time').getAttribute('title') || '';
+        const m = t.match(/(\\d\\d):(\\d\\d) bis (\\d\\d):(\\d\\d) — (\\d+) min/);
+        if (!m) continue;
+        let d = (+m[3] * 60 + +m[4]) - (+m[1] * 60 + +m[2]);
+        if (d <= 0) d += 1440;
+        if (d !== +m[5]) bad.push(t);
+      }
+      return bad;
+    }""")
+    check("Die Minutenzahl passt zur Zeitspanne", not krumm15, str(krumm15[:2]))
+
+    # Auf der Künstlerkarte: Zeitspanne und Dauer je Auftritt.
+    tap_row(pg15.locator(".row").first)
+    pg15.wait_for_selector("#detail .slots")
+    check("Die Künstlerkarte nennt die Spanne je Auftritt",
+          re.search(r"\d\d:\d\d–\d\d:\d\d",
+                    pg15.locator("#detail .slots time").first.inner_text()),
+          pg15.locator("#detail .slots time").first.inner_text())
+    check("Und die Dauer daneben",
+          re.fullmatch(r"\d+ min",
+                       pg15.locator("#detail .slot-len").first.inner_text()),
+          pg15.locator("#detail .slot-len").first.inner_text())
+    pg15.keyboard.press("Escape"); pg15.wait_for_timeout(300)
+
+    # In der Zeitleiste: Kästen so hoch, wie ihr Konzert dauert.
+    pg15.click("#btn-plan"); pg15.wait_for_timeout(700)
+    pg15.click("#plan-timeline"); pg15.wait_for_timeout(800)
+    tl15 = pg15.evaluate("""() => {
+      const a = [...document.querySelectorAll('.tl-act')];
+      const paare = a.map(e => [+e.dataset.dauer,
+                                Math.round(parseFloat(e.style.height))]);
+      const hoehen = [...new Set(paare.map(p => p[1]))];
+      // Hoehe muss proportional zur Dauer sein: laenger heisst nie niedriger.
+      const sortiert = [...paare].sort((x, y) => x[0] - y[0]);
+      let verkehrt = 0;
+      for (let i = 1; i < sortiert.length; i++) {
+        if (sortiert[i][1] < sortiert[i - 1][1] - 1) verkehrt++;
+      }
+      // Ueberdeckt ein Kasten einen anderen?
+      let kollision = 0;
+      for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
+        const A = a[i].getBoundingClientRect(), B = a[j].getBoundingClientRect();
+        if (A.left < B.right - 1 && B.left < A.right - 1
+            && A.top < B.bottom - 1 && B.top < A.bottom - 1) kollision++;
+      }
+      // Wird eine Zeile im Kasten zusammengequetscht? Flex-Kinder schrumpfen,
+      // statt ueberzulaufen - also die Namenszeile einzeln messen, und zwar
+      // an ihrer EIGENEN Zeilenhoehe: kurze Kaesten setzen kleiner, und das
+      // ist kein Fehler. Gemeint ist die eine Zeile, die immer ganz zu sehen
+      // sein muss; lange Namen brechen um und werden zu Recht abgeschnitten.
+      const gequetscht = a.filter(e => {
+        const n = e.querySelector('.tl-name');
+        if (!n) return false;
+        const lh = parseFloat(getComputedStyle(n).lineHeight) || 0;
+        return n.clientHeight + 1 < Math.min(lh, n.scrollHeight);
+      }).length;
+      return { bloecke: a.length, hoehen: hoehen.length, verkehrt, kollision,
+               gequetscht, kurz: document.querySelectorAll('.tl-act.kurz').length };
+    }""")
+    check("Die Kästen sind unterschiedlich hoch", tl15["hoehen"] >= 4,
+          f'{tl15["hoehen"]} verschiedene Höhen bei {tl15["bloecke"]} Blöcken')
+    check("Und zwar proportional zur Spielzeit", tl15["verkehrt"] == 0,
+          f'{tl15["verkehrt"]} Paare verkehrt herum')
+    check("Kein Block überdeckt einen anderen", tl15["kollision"] == 0,
+          f'{tl15["kollision"]} Überdeckungen')
+    check("Keine Zeile wird im Block zusammengequetscht",
+          tl15["gequetscht"] == 0, f'{tl15["gequetscht"]} gequetschte Namen')
+    check("Kurze Sets bekommen die knappe Fassung", tl15["kurz"] >= 1,
+          f'{tl15["kurz"]} knappe Kästen')
+    check("Die Blöcke nennen Beginn und Ende",
+          pg15.locator(".tl-act .tl-bis").count() >= tl15["bloecke"] - 7,
+          f'{pg15.locator(".tl-act .tl-bis").count()} von {tl15["bloecke"]}')
+    check("Keine JS-Fehler im Spielzeit-Kontext", not err15, str(err15[:2]))
+    ctx15.close()
     # --- Gesehen: das einzelne Konzert gegen den ganzen Künstler ---
     # 62 Acts spielen mehrfach. "Gesehen" am Act allein kann deshalb nicht
     # sagen, ob man einmal oder zweimal da war - und genau das will man am

@@ -266,5 +266,42 @@ for (const budget of [0, 5, 10, 15, 20, 30]) {
 ok('Auch ueber alle Budgets und Spielzeiten hinweg', ueberzogen.length === 0,
    ueberzogen.slice(0, 3).join(' | ') || '18 Kombinationen geprueft');
 
+/* ---------- Die echte Spielzeit schlaegt die Ersatzzeit ----------
+
+   Die Quelle nennt fuer 568 von 575 Auftritten eine Endzeit (sie steht im
+   Titel des Auftritts, siehe end_from_title in rbf_core.py). Gerechnet wird
+   damit, nicht mit dem eingestellten Pauschalwert - der gilt nur noch, wo
+   nichts dasteht. Der Unterschied ist nicht kosmetisch: ein 20-Minuten-Set
+   laesst den naechsten Act zu, den 40 Minuten verschluckt haetten. */
+const kurz = [
+  { id: 'k1', actId: 1, name: 'Kurz', startIso: '2026-09-18T20:00:00+02:00',
+    endIso: '2026-09-18T20:20:00+02:00', venue: O, value: 5 },
+  { id: 'k2', actId: 2, name: 'Danach', startIso: '2026-09-18T20:30:00+02:00',
+    endIso: '2026-09-18T21:00:00+02:00', venue: O, value: 5 },
+];
+const echt = buildPlan(kurz, { setMinutes: 40 });
+ok('Mit echter Endzeit passen beide Konzerte',
+   echt.stops.length === 2, echt.stops.map((s) => s.name).join(','));
+ok('Und die Laenge steht am Halt',
+   echt.stops[0] && echt.stops[0].lengthMinutes === 20,
+   String(echt.stops[0] && echt.stops[0].lengthMinutes));
+// Ohne die Angabe greift die Ersatzzeit, und dann kollidieren sie.
+const pauschal = buildPlan(kurz.map(({ endIso, ...rest }) => rest),
+                           { setMinutes: 40 });
+ok('Ohne Endzeit greift die Ersatz-Spielzeit und es bleibt einer',
+   pauschal.stops.length === 1, pauschal.stops.map((s) => s.name).join(','));
+// Eine unsinnige Angabe (Ende vor Beginn) darf nicht durchschlagen.
+const kaputt = buildPlan([{ id: 'x', actId: 1, name: 'Kaputt',
+  startIso: '2026-09-18T20:00:00+02:00', endIso: '2026-09-18T19:00:00+02:00',
+  venue: O, value: 5 }], { setMinutes: 40 });
+ok('Ende vor Beginn faellt auf die Ersatzzeit zurueck',
+   kaputt.stops[0] && kaputt.stops[0].lengthMinutes === 40,
+   String(kaputt.stops[0] && kaputt.stops[0].lengthMinutes));
+// Und "gleichzeitig" misst ebenfalls an den echten Zeiten: wer um 20:20
+// aufhoert, laeuft nicht mehr parallel zu einem, der 20:30 anfaengt.
+const par2 = parallelTo(kurz, kurz[0], { setMinutes: 40 });
+ok('Gleichzeitigkeit misst an der echten Spielzeit',
+   par2.length === 0, par2.map((x) => x.id).join(','));
+
 console.log(fails ? `\nFEHLGESCHLAGEN: ${fails}` : '\nPLAN-ALGORITHMUS: ALLE PRUEFUNGEN BESTANDEN');
 process.exit(fails ? 1 : 0);

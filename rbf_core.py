@@ -41,6 +41,63 @@ WATCHED_FIELDS = ("start", "end", "venue", "stage", "day", "country",
                   "genres", "url", "time_tbd")
 
 
+# Die Endzeit steht ganz am Ende des Auftrittstitels, mit am/pm.
+_END_RE = re.compile(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*$", re.I)
+# " on " vor einem Wochentagskuerzel trennt den Namen vom Datumsteil.
+# Deutsche und englische Kuerzel stehen gemischt in denselben Daten.
+_ON_RE = re.compile(r"\son\s(?=[A-Za-zÄÖÜäöü]{2,3}\.?,)")
+
+
+def end_from_title(start: str | None, title: str | None) -> str | None:
+    """Die tatsaechliche Endzeit eines Auftritts, aus seinem Titel gelesen.
+
+    Die Quelle hat ein Feld "end", fuellt es aber nicht: bei allen 575
+    Auftritten des Standes vom 17.9.2026 steht dort null. Die echte Spielzeit
+    liegt trotzdem in den Daten - ausgeschrieben im Titel des Auftritts:
+
+        "A Mess @ Pooca Bar on Thu, Sep 17 2026, 11:10pm - Fri, Sep 18 2026, 12:10am"
+        "A Mess @ fritz-kola Buehne on Thu, Sep 17 2026, 3:15 - 3:45pm"
+        "Aaron @ Uebel & Gefaehrlich on Sat, Sep 19 2026, 9 - 10pm"
+
+    Gelesen wird nur die LETZTE Uhrzeit. Der Anfang steht schon als saubere
+    ISO-Angabe im Feld "start", und gegen den ist diese Lesart geprueft: bei
+    allen 575 Auftritten stimmt die erste Uhrzeit im Titel auf die Minute mit
+    dem Feld ueberein. Damit erledigt sich auch die Bastelei mit "3:15 -
+    3:45pm", wo der ersten Uhrzeit die Tageshaelfte fehlt.
+
+    Ohne Zeitspanne im Datumsteil gibt es keine Endzeit. Das sind 7 der 575,
+    alle ohne Spielort ("goldie 333 @ on Sa., Sep 19 2026, 6am") - dort steht
+    nur eine Uhrzeit, und die als Ende zu lesen ergaebe 24 Stunden Spielzeit.
+
+    Der Kalendertag kommt aus dem Start: liegt das Ende davor, ist es der
+    naechste Tag. Das deckt den haeufigen Fall ab, dass ein Konzert ueber
+    Mitternacht geht.
+    """
+    if not start or not title:
+        return None
+    teile = _ON_RE.split(title.strip())
+    if len(teile) < 2:
+        return None
+    rest = teile[-1]
+    if " - " not in rest and " – " not in rest:
+        return None
+    m = _END_RE.search(rest)
+    if not m:
+        return None
+    stunde = int(m.group(1)) % 12
+    minute = int(m.group(2) or 0)
+    if m.group(3).lower() == "pm":
+        stunde += 12
+    try:
+        begin = datetime.fromisoformat(start)
+    except ValueError:
+        return None
+    ende = begin.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+    if ende <= begin:
+        ende += timedelta(days=1)
+    return ende.isoformat()
+
+
 def slugify(text: str) -> str:
     """Normalisiert Kuenstlernamen fuer den Vergleich. 'Sløtface' -> 'slotface'."""
     text = unicodedata.normalize("NFKD", text or "")
@@ -390,6 +447,38 @@ def selftest() -> int:
                            country="DE", genres=["Indie"], url="/act/a")])
     assert "https://www.reeperbahnfestival.com/act/a" in csv_out
     assert csv_out.splitlines()[0].startswith("artist,day,start")
+
+    # --- Endzeit aus dem Auftrittstitel ---
+    # Die Faelle stammen wortwoertlich aus dem Stand vom 17.9.2026.
+    ende = end_from_title
+    # Beide Uhrzeiten am selben Tag, Tageshaelfte nur hinten.
+    assert ende("2026-09-17T15:15:00+02:00",
+                "A Mess @ fritz-kola Bühne on Thu, Sep 17 2026, 3:15 - 3:45pm"
+                ) == "2026-09-17T15:45:00+02:00"
+    # Ueber Mitternacht: das Ende traegt ein eigenes Datum, der Tag springt.
+    assert ende("2026-09-17T23:10:00+02:00",
+                "A Mess @ Pooca Bar on Thu, Sep 17 2026, "
+                "11:10pm - Fri, Sep 18 2026, 12:10am"
+                ) == "2026-09-18T00:10:00+02:00"
+    # Volle Stunden ohne Minuten.
+    assert ende("2026-09-19T21:00:00+02:00",
+                "Aaron @ Uebel & Gefährlich on Sat, Sep 19 2026, 9 - 10pm"
+                ) == "2026-09-19T22:00:00+02:00"
+    # Deutsches Wochentagskuerzel im selben Datenbestand.
+    assert ende("2026-09-16T21:35:00+02:00",
+                "1000 Rabbits @ Molotow Top Ten Bar on Mi., Sep 16 2026, "
+                "9:35 - 10:35pm") == "2026-09-16T22:35:00+02:00"
+    # Die ganze Nacht - laenger, aber echt.
+    assert ende("2026-09-18T23:00:00+02:00",
+                "Newinfluenzer b2b DJ MELL G (All night long) @ Turmzimmer on "
+                "Fr., Sep 18 2026, 11pm - Sa., Sep 19 2026, 7am"
+                ) == "2026-09-19T07:00:00+02:00"
+    # Ohne Zeitspanne KEINE Endzeit - sonst waeren daraus 24 Stunden geworden.
+    assert ende("2026-09-19T06:00:00+02:00",
+                "goldie 333 @ on Sa., Sep 19 2026, 6am") is None
+    assert ende(None, "irgendwas 9 - 10pm") is None
+    assert ende("2026-09-19T21:00:00+02:00", None) is None
+    assert ende("2026-09-19T21:00:00+02:00", "Titel ohne alles") is None
 
     print("selftest: alle Pruefungen bestanden")
     return 0

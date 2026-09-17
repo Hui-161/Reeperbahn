@@ -138,8 +138,12 @@
             <option value="5">5</option>
           </select>
         </label>
-        <label>Spielzeit
-          <select id="plan-set">
+        <!-- Ersatzwert: die Quelle nennt für 568 der 575 Auftritte eine
+             echte Endzeit, und mit der rechnet der Plan. Hier steht nur,
+             womit gerechnet wird, wo keine dasteht. -->
+        <label title="Ersatzwert für Auftritte ohne Endzeit — sonst rechnet der Plan mit der echten Spielzeit.">Spielzeit
+          <select id="plan-set"
+            title="Ersatzwert für Auftritte ohne Endzeit — sonst rechnet der Plan mit der echten Spielzeit.">
             <option value="30" selected>30 min</option>
             <option value="40">40 min</option>
             <option value="50">50 min</option>

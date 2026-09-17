@@ -39,6 +39,7 @@ from pathlib import Path
 
 import gql
 from gql import query
+from rbf_core import end_from_title
 
 PLACEHOLDER_TIME = "06:00"
 
@@ -261,6 +262,11 @@ def to_shows(acts: list[dict]) -> tuple[list[dict], list[dict]]:
                 "ext_id": str(ap["nid"]) if ap.get("nid") is not None else None,
                 "time_tbd": placeholder,
             })
+            # Die Quelle hat ein Feld fuer die Endzeit, fuellt es aber nie.
+            # Ausgeschrieben steht sie im Titel des Auftritts - siehe
+            # end_from_title. Ohne Zeitspanne dort bleibt es bei None; die
+            # App rechnet dann mit der eingestellten Ersatz-Spielzeit.
+            show["end"] = end_from_title(start, ap.get("title"))
             show["extra"] = dict(base["extra"], **{
                 "appearance_nid": ap.get("nid"),
                 "appearance_title": ap.get("title"),

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from fetch_venues import apply_manual, build as build_venues, norm, VENUES_Q
 from gql import query
+from rbf_core import end_from_title
 
 OUT = Path("web/data/lineup.json")
 
@@ -134,10 +135,18 @@ def main() -> int:
         nid = s["extra"].get("nid")
         if nid is None:
             continue
+        # Die echte Endzeit. Neuere Snapshots tragen sie im Feld "end";
+        # aeltere nicht, dort wird sie aus dem Auftrittstitel gelesen - der
+        # steht seit jeher mit im Snapshot. So braucht die App keinen neuen
+        # Abruf abzuwarten, und ein Bau aus dem eingecheckten Stand
+        # (--offline) liefert dasselbe wie einer nach dem naechsten Abruf.
+        ende = s.get("end") or end_from_title(
+            s.get("start"), (s.get("extra") or {}).get("appearance_title"))
         shows.append({
             "id": s.get("ext_id") or s.get("show_id"),
             "a": aidx[nid],
             "t": s.get("start"),
+            "e": ende,
             "d": festival_day(s.get("start")),
             "tbd": bool(s.get("time_tbd")),
             "v": vidx.get(norm(s["venue"])) if s.get("venue") else None,
@@ -168,6 +177,14 @@ def main() -> int:
     print(f"  Spielorte mit Koordinaten: {sum(1 for v in venues if v['lat'])}/{len(venues)}"
           + (f"  OHNE: {unlocated}" if unlocated else ""))
     print(f"  Auftritte mit offener Uhrzeit: {sum(1 for s in shows if s['tbd'])}")
+    # Die echte Spielzeit ist keine Kuer: Abendplan und Zeitleiste rechnen
+    # damit. Bricht die Lesart (end_from_title) oder aendert die Quelle ihre
+    # Titel, soll das hier auffallen und nicht erst in der App.
+    mit_ende = sum(1 for s in shows if s.get("e"))
+    print(f"  Auftritte mit Endzeit: {mit_ende}/{len(shows)}")
+    if shows and mit_ende < len(shows) * 0.8:
+        print(f"  WARNUNG: nur {mit_ende} von {len(shows)} Auftritten haben eine "
+              f"Endzeit - fruehere Staende lagen bei 568 von 575.", file=sys.stderr)
 
     # Wache gegen stillen Datenverlust: bricht ein Feld weg, weil sich das
     # Schema geaendert hat, faellt das hier auf und nicht erst in der App.

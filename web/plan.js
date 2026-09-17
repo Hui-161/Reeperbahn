@@ -15,7 +15,11 @@
 'use strict';
 
 const PLAN_DEFAULTS = {
-  setMinutes: 40,        // Spielzeit eines Slots; die Quelle nennt keine Endzeit
+  // Ersatz-Spielzeit: gilt NUR fuer Auftritte ohne Endzeit. Die Quelle
+  // nennt sie inzwischen fuer 568 von 575 Auftritten (siehe
+  // end_from_title in rbf_core.py) - gerechnet wird also mit der echten
+  // Spielzeit, und dieser Wert ist der Rest.
+  setMinutes: 40,
   bufferMinutes: 5,      // Luft fuers Reinkommen, Anstehen, Pinkeln
   overlapMinutes: 0,     // wie viele Minuten des laufenden Konzerts man opfert
   walkSpeed: 80,         // Meter pro Minute, entspanntes Gehen
@@ -138,12 +142,22 @@ function buildPlan(items, opt = {}) {
   return res;
 }
 
+/* Wann ist ein Auftritt zu Ende? Die echte Endzeit, sonst Start plus der
+   eingestellten Ersatz-Spielzeit. Eine Endzeit VOR dem Start waere eine
+   kaputte Angabe - dann lieber die Ersatzzeit als ein Konzert, das
+   rueckwaerts laeuft. */
+function endMinutes(s, start, o) {
+  if (!s.endIso) return start + o.setMinutes;
+  const e = minutesOf(s.endIso);
+  return Number.isFinite(e) && e > start ? e : start + o.setMinutes;
+}
+
 function solvePlan(items, o) {
   const shows = items
     .filter((s) => s.startIso)
     .map((s) => {
       const start = minutesOf(s.startIso);
-      return { ...s, start, end: start + o.setMinutes };
+      return { ...s, start, end: endMinutes(s, start, o) };
     })
     .sort((a, b) => a.end - b.end || a.start - b.start);
 
@@ -203,6 +217,9 @@ function solvePlan(items, o) {
     const slack = before ? slackBetween(before, s, o) : 0;
     return {
       ...s,
+      // Wie lange dieser Auftritt wirklich dauert - die Zeitleiste zeichnet
+      // danach, und die Liste schreibt es hin.
+      lengthMinutes: s.end - s.start,
       walkFromPrev: before ? walkMinutes(before.venue, s.venue, o) : 0,
       /* Wartezeit sichtbar machen: eine Stunde Leerlauf ist ein Hinweis, dass
          noch etwas dazwischen passt. */
@@ -252,13 +269,13 @@ function parallelTo(items, ref, opt = {}) {
   const o = { ...PLAN_DEFAULTS, ...opt };
   const startOf = (s) => minutesOf(s.startIso);
   const refStart = ref.start != null ? ref.start : startOf(ref);
-  const refEnd = refStart + o.setMinutes;
+  const refEnd = ref.end != null ? ref.end : endMinutes(ref, refStart, o);
   return items
     .filter((s) => s.startIso && String(s.id) !== String(ref.id))
     .filter((s) => ref.actId == null || s.actId == null || s.actId !== ref.actId)
     .filter((s) => {
       const a = startOf(s);
-      return a < refEnd && refStart < a + o.setMinutes;
+      return a < refEnd && refStart < endMinutes(s, a, o);
     })
     .sort((a, b) => (b.value || 0) - (a.value || 0) || startOf(a) - startOf(b));
 }

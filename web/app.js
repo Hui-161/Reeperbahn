@@ -224,6 +224,27 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const hhmm = (iso) => iso ? iso.slice(11, 16) : '';
+
+/* ---------- Die tatsaechliche Spielzeit ----------
+
+   Die Quelle hat ein Feld fuer die Endzeit und laesst es leer, schreibt sie
+   aber im Titel des Auftritts aus. build_web.py liest sie dort heraus (siehe
+   end_from_title in rbf_core.py) und legt sie als "e" ab - fuer 568 der 575
+   Auftritte; die sieben ohne sind genau die, deren Uhrzeit noch offen ist.
+
+   Gerechnet und gezeichnet wird ab jetzt damit. Die eingestellte "Spielzeit"
+   im Abendplan ist nur noch der Ersatzwert fuer Auftritte ohne Endzeit. */
+const showLen = (sh) => {
+  if (!sh || !sh.t || !sh.e) return null;
+  const n = Math.round((new Date(sh.e) - new Date(sh.t)) / 60000);
+  return n > 0 ? n : null;
+};
+/* "21:00–21:45" wenn die Endzeit bekannt ist, sonst nur der Beginn. */
+const timeSpan = (sh) => (showLen(sh) ? `${hhmm(sh.t)}–${hhmm(sh.e)}` : hhmm(sh.t));
+const lenText = (sh) => {
+  const n = showLen(sh);
+  return n ? `${n} min` : '';
+};
 const pRate = (id) => (partner && partner.rate ? +partner.rate[id] || 0 : 0);
 const pFav = (id) => !!(partner && partner.fav && partner.fav.includes(id));
 const pSeen = (id) => !!(partner && partner.seen && partner.seen.includes(id));
@@ -1118,7 +1139,13 @@ function row(sh, act) {
   const gesehen = seenHere(sh, act.id);
   return `<button class="row${rb ? ' rated-' + rb : ''}${
     gesehen ? ' is-seen' : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
-    <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}${changeMark}</span>
+    <span class="row-time${sh.tbd ? ' tbd' : ''}"${
+      showLen(sh) ? ` title="${hhmm(sh.t)} bis ${hhmm(sh.e)} — ${lenText(sh)}"` : ''
+      }>${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}${changeMark}${
+      /* Die Endzeit klein darunter. Sie steht nicht neben dem Beginn,
+         sondern unter ihm: die Spalte ist 3,4 rem breit, und der Beginn
+         soll die Zahl bleiben, die man beim Ueberfliegen liest. */
+      showLen(sh) ? `<small class="row-bis">–${hhmm(sh.e)}</small>` : ''}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
         gesehen ? ' seen-mark' : ''}"${
@@ -1343,7 +1370,9 @@ function collectPlanItems(opts) {
     const v = sh.v != null ? S.data.venues[sh.v] : null;
     const eintrag = {
       id: sh.id, actIdx: sh.a, actId: act.id, name: act.n,
-      startIso: sh.t, value,
+      // Die echte Endzeit, wenn die Quelle sie hergibt. Fehlt sie, rechnet
+      // plan.js mit der eingestellten Ersatz-Spielzeit weiter.
+      startIso: sh.t, endIso: sh.e || null, value,
       venue: v ? { lat: v.lat, lng: v.lng, name: v.n } : null,
       venueIdx: sh.v,
       pinned,
@@ -1394,13 +1423,18 @@ function renderPlan() {
   const pinnedOut = items.filter((x) => x.pinned)
     .filter((x) => !plan.stops.some((s) => s.id === x.id));
 
+  /* Wann der Abend zu Ende ist. Gerechnet mit der ECHTEN Spielzeit des
+     letzten Konzerts; nur wo die Quelle keine nennt, bleibt es ein "etwa"
+     aus der eingestellten Ersatzzeit. */
   const last = plan.stops[plan.stops.length - 1];
+  const genau = !!(last && last.endIso);
   const end = last
-    ? window.RBFPlan.clockInSourceZone(last.startIso, opts.setMinutes)
+    ? window.RBFPlan.clockInSourceZone(last.startIso,
+        last.lengthMinutes || opts.setMinutes)
     : '';
   let html = `<p class="plan-sum"><b>${plan.stops.length} Konzerte</b> aus
     ${items.length} in Frage kommenden · ${plan.walkTotal} min Fußweg gesamt
-    ${plan.stops.length ? `· bis etwa ${esc(end)}` : ''}
+    ${plan.stops.length ? `· bis ${genau ? '' : 'etwa '}${esc(end)}` : ''}
     ${items.undatedCount ? `<br>${items.undatedCount} passende Acts haben noch
       keine Uhrzeit und fehlen deshalb.` : ''}</p>`;
 
@@ -1568,9 +1602,18 @@ function renderTimeline(plan, items, opts) {
   }
   const set = opts.setMinutes;
   const mins = (iso) => Math.round(new Date(iso).getTime() / 60000);
+  /* Wie lange ein Auftritt WIRKLICH dauert. Die Ersatz-Spielzeit greift nur
+     noch, wo die Quelle keine Endzeit nennt - das sind sieben Auftritte,
+     und die haben ohnehin keine Uhrzeit. Vorher war jeder Kasten gleich
+     hoch, und ein 15-Minuten-Set sah aus wie ein Konzert von einer Stunde. */
+  const laenge = (s) => {
+    if (!s.endIso) return set;
+    const n = mins(s.endIso) - mins(s.startIso);
+    return n > 0 ? n : set;
+  };
   const sorted = [...alle].sort((a, b) => mins(a.startIso) - mins(b.startIso));
   const t0 = mins(sorted[0].startIso);
-  const t1 = Math.max(...sorted.map((s) => mins(s.startIso))) + set;
+  const t1 = Math.max(...sorted.map((s) => mins(s.startIso) + laenge(s)));
   const inPlan = new Map((plan ? plan.stops : [])
     .map((s, i) => [String(s.id), i + 1]));
 
@@ -1610,7 +1653,7 @@ function renderTimeline(plan, items, opts) {
     const a = mins(s.startIso);
     let i = probe.findIndex((end) => end <= a);
     if (i < 0) { i = probe.length; probe.push(0); }
-    probe[i] = a + set;
+    probe[i] = a + laenge(s);
   }
 
   const laneSlots = Array.from({ length: Math.max(1, probe.length) }, () => []);
@@ -1622,10 +1665,23 @@ function renderTimeline(plan, items, opts) {
     rankOf(x) - rankOf(y) || mins(x.startIso) - mins(y.startIso));
   for (const s of byRank) {
     const a = mins(s.startIso);
-    const b = a + set;
+    const b = a + laenge(s);
     let lane = -1;
-    for (let i = laneSlots.length - 1; i >= 0; i--) {
-      if (frei(laneSlots[i], a, b)) { lane = i; break; }
+    /* "Nicht heute" sucht von LINKS, alles andere von rechts. Vorher ergab
+       sich das von selbst: alle Kaesten waren gleich lang, die Rangfolge
+       setzte die Ausgeschlossenen zuletzt, und rechts war dann nichts mehr
+       frei. Seit die Kaesten so lang sind wie ihr Konzert, stimmt das nicht
+       mehr - ein kurzes ausgeschlossenes Set findet rechts eine Luecke und
+       stand dann mitten zwischen dem, was zaehlt. Jetzt steht es links,
+       weil es links hingehoert, und nicht, weil es sich so ergibt. */
+    if (s.skipped) {
+      for (let i = 0; i < laneSlots.length; i++) {
+        if (frei(laneSlots[i], a, b)) { lane = i; break; }
+      }
+    } else {
+      for (let i = laneSlots.length - 1; i >= 0; i--) {
+        if (frei(laneSlots[i], a, b)) { lane = i; break; }
+      }
     }
     if (lane < 0) {
       laneSlots.unshift([]);
@@ -1633,7 +1689,7 @@ function renderTimeline(plan, items, opts) {
       lane = 0;
     }
     laneSlots[lane].push([a, b]);
-    placed.push({ s, a, lane });
+    placed.push({ s, a, lane, dauer: b - a });
   }
 
   /* Was das NICHT leistet: eine perfekte Ordnung. Ein Kasten haelt seine
@@ -1671,7 +1727,7 @@ function renderTimeline(plan, items, opts) {
     title="${drin ? 'Jetzt' : 'Jetzt — außerhalb dieses Abends'}"><span>${
     localHHMM(new Date())}</span></div>`;
 
-  const blocks = placed.map(({ s, a, lane }) => {
+  const blocks = placed.map(({ s, a, lane, dauer }) => {
     const rb = rateBucket(rate[s.actId]);
     const no = inPlan.get(String(s.id));
     const code = venueCode[s.venueIdx] || '';
@@ -1682,12 +1738,15 @@ function renderTimeline(plan, items, opts) {
       no ? ' in-plan' : ''}${s.skipped ? ' skipped' : ''}${
       seenShowAny(s.id) ? ' is-seen' : ''}" data-tlshow="${esc(s.id)}"
       data-top="${(a - t0) * TL_PX_PER_MIN}" data-lane="${lane}"
+      data-dauer="${dauer}"
       title="${esc(s.name)} — ${hhmm(s.startIso)}${
+        s.endIso ? '–' + hhmm(s.endIso) + ` (${dauer} min)` : ''}${
         s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}${
         total > 1 ? `, spielt ${total}× beim Festival` : ''}${
         s.skipped ? ' — heute nicht; tippen holt ihn zurück' : ''}">
       ${no ? `<span class="tl-no">${no}</span>` : ''}
       <span class="tl-time">${hhmm(s.startIso)}${
+        s.endIso ? `<small class="tl-bis">–${hhmm(s.endIso)}</small>` : ''}${
         s.skipped ? '<span class="tl-out" aria-hidden="true">✕</span>' : ''}</span>
       <span class="tl-name">${esc(s.name)}${
         total > 1 ? `<span class="multi">×${total}</span>` : ''}</span>
@@ -1724,13 +1783,22 @@ function renderTimeline(plan, items, opts) {
   for (const m of box.querySelectorAll('.tl-hour, .tl-now')) {
     m.style.top = `${m.dataset.top}px`;
   }
-  const blockH = set * TL_PX_PER_MIN - 3;
   const blockW = lane - 6;
+  /* Jeder Kasten so hoch, wie sein Konzert dauert. Kurze Sets werden dabei
+     eng: 15 Minuten sind 15 * 1.9 = 28 Pixel, und darin steht keine Zeile
+     mehr lesbar. Solche Kaesten bekommen deshalb eine knappe Fassung
+     (.kurz), die die Schrift verkleinert und die Endzeit weglaesst - die
+     Lage am Raster sagt sie ohnehin. Groesser als die eigene Dauer darf
+     kein Kasten werden, sonst ueberdeckt er den naechsten in derselben
+     Spur. */
   for (const b of box.querySelectorAll('.tl-act')) {
+    const h = Math.max(18, (+b.dataset.dauer || set) * TL_PX_PER_MIN - 3);
     b.style.top = `${b.dataset.top}px`;
     b.style.left = `${+b.dataset.lane * lane}px`;
-    b.style.height = `${blockH}px`;
+    b.style.height = `${h}px`;
     b.style.width = `${blockW}px`;
+    b.classList.toggle('kurz', h < 52);
+    b.classList.toggle('winzig', h < 34);
   }
 
   /* Weil das Beste rechts steht, sind zu ruhigen Stunden die linken Spalten
@@ -1751,16 +1819,17 @@ function renderTimeline(plan, items, opts) {
   svg.setAttribute('width', String(width));
   svg.setAttribute('height', String(height));
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  const pos = new Map(placed.map(({ s, a, lane: spur }) =>
+  const pos = new Map(placed.map(({ s, a, lane: spur, dauer }) =>
     [String(s.id), { x: TL_GUTTER + spur * lane + blockW / 2,
-                     y: (a - t0) * TL_PX_PER_MIN }]));
+                     y: (a - t0) * TL_PX_PER_MIN,
+                     h: Math.max(18, dauer * TL_PX_PER_MIN - 3) }]));
   const NS = 'http://www.w3.org/2000/svg';
   const stops = plan ? plan.stops : [];
   for (let i = 1; i < stops.length; i++) {
     const from = pos.get(String(stops[i - 1].id));
     const to = pos.get(String(stops[i].id));
     if (!from || !to) continue;
-    const y1 = from.y + blockH;
+    const y1 = from.y + from.h;
     const line = document.createElementNS(NS, 'line');
     line.setAttribute('class', 'tl-link');
     line.setAttribute('x1', String(from.x)); line.setAttribute('y1', String(y1));
@@ -1885,7 +1954,8 @@ function renderTlMenu() {
   // entscheidet - und wer hier bewertet, deckt ihn im selben Griff auf.
   const teamMark = teamAvgMark(act.id);
   $('#tl-when').innerHTML = esc([
-    dayLabel(sh) + (sh.tbd ? ', Zeit offen' : ' ' + hhmm(sh.t)),
+    dayLabel(sh) + (sh.tbd ? ', Zeit offen' : ' ' + timeSpan(sh)),
+    lenText(sh),
     v ? `${venueCode[sh.v] || ''} ${v.n}`.trim() : 'Spielort offen',
     total > 1 ? `spielt ${total}× beim Festival` : '',
   ].filter(Boolean).join(' · ')) + (teamMark ? ' · Team ' + teamMark : '');
@@ -2189,14 +2259,22 @@ function showRoute() {
       // sonst zeigt der Pfeil auf dieser Breite gut 30 Grad daneben.
       const k = Math.cos(a[0] * Math.PI / 180);
       const deg = Math.atan2((b[1] - a[1]) * k, b[0] - a[0]) * 180 / Math.PI;
-      L.marker(mid, {
+      /* Die Drehung kommt ueber das Objektmodell, NICHT als style="…" im
+         Markup. style-src 'self' verwirft Inline-Stile, und zwar lautlos:
+         die Pfeile standen deshalb alle unverdreht da und zeigten nach
+         rechts statt in die Laufrichtung. Dieselbe Falle wie damals bei der
+         Zeitleiste - und aufgefallen ist sie erst, als eine Pruefung die
+         CSP-Meldung nicht mehr wegfilterte. */
+      const marker = L.marker(mid, {
         interactive: false,
         icon: L.divIcon({
           className: '', iconSize: [16, 16], iconAnchor: [8, 8],
-          html: `<span class="route-arrow" style="transform:rotate(${
-            (90 - deg).toFixed(1)}deg)">➤</span>`,
+          html: '<span class="route-arrow">➤</span>',
         }),
       }).addTo(routeLayer);
+      const el = marker.getElement();
+      const pfeil = el && el.querySelector('.route-arrow');
+      if (pfeil) pfeil.style.transform = `rotate(${(90 - deg).toFixed(1)}deg)`;
     }
 
     pts.forEach((s, i) => {
@@ -2311,7 +2389,9 @@ function openDetail(ai) {
         const hin = seenShow.has(String(s.id));
         const teamHin = pSeenShow(s.id);
         return `<li>
-          <time>${s.tbd ? dayLabel(s) + ', Zeit offen' : dayLabel(s) + ' ' + hhmm(s.t)}</time>
+          <time>${s.tbd ? dayLabel(s) + ', Zeit offen'
+            : dayLabel(s) + ' ' + timeSpan(s)}</time>
+          ${lenText(s) ? `<span class="slot-len">${lenText(s)}</span>` : ''}
           <span>${v ? esc(v.n) : 'Spielort offen'}</span>
           <span class="slot-marks">${
             /* Der Haken des Teams steht NEBEN dem eigenen, nicht in ihm.
