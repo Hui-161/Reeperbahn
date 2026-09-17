@@ -4,7 +4,21 @@ name: lineup-check
 # committen. Der Commit loest das Cloudflare-Pages-Deployment aus.
 on:
   schedule:
+    # Das ganze Jahr einmal taeglich.
     - cron: "30 5 * * *"
+    # Waehrend des Festivals alle 30 Minuten. Dann aendern sich Zeiten,
+    # Absagen und Nachtraege stuendlich, und ein Stand von gestern frueh
+    # taugt nicht mehr zum Planen. Der Lauf dauert 43 Sekunden, das Repo
+    # ist oeffentlich, Actions-Minuten kosten also nichts.
+    #
+    # Krumme Minuten mit Absicht: zur vollen Stunde stehen bei GitHub die
+    # meisten Zeitplaene an, und genau dann sind die Verzoegerungen am
+    # groessten.
+    #
+    # Die Tage stehen fest verdrahtet (16.-20. September), weil das
+    # Festival jedes Jahr an anderen Tagen liegt. Der 20. ist dabei, weil
+    # der Samstagabend bis in den Sonntag hineinreicht.
+    - cron: "7,37 * 16-20 9 *"
   workflow_dispatch:
 
 permissions:
@@ -103,8 +117,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Nur beim taeglichen Lauf und von Hand. Bei 48 Laeufen am Tag waere
+      # ein Issue je Aenderung Laerm statt Hinweis - und was sich geaendert
+      # hat, steht ohnehin in der App unter "Aenderungen am Programm".
       - name: Issue anlegen
-        if: steps.sync.outputs.code == '10'
+        if: steps.sync.outputs.code == '10' && github.event.schedule != '7,37 * 16-20 9 *'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -121,5 +138,10 @@ jobs:
             echo "Nichts zu committen."
           else
             git commit -m "Line-up-Aktualisierung $(date -u +%F)"
+            # Bei halbstuendigen Laeufen ist main zwischendurch weitergezogen
+            # - ein blosses push wird dann abgelehnt. Rebase ist hier sicher:
+            # dieser Lauf aendert nur data/snapshots und web/data, und daran
+            # arbeitet sonst niemand.
+            git pull --rebase origin main
             git push
           fi
