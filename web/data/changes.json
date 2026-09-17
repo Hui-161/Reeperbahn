@@ -1,8 +1,269 @@
 {
-  "generated_from": "2026-09-17T10:09:54",
-  "compared": 19,
-  "total": 371,
+  "generated_from": "2026-09-17T14:15:44",
+  "compared": 20,
+  "total": 400,
   "entries": [
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "added",
+      "act": "badchieff",
+      "show": "14011",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "21:25"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Skepsiz",
+      "show": "11532",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Dylan John Thomas",
+      "show": "11614",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Tinted House",
+      "show": "11737",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Ratte Rosa",
+      "show": "11530",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Hank",
+      "show": "11940",
+      "what": "Spielort",
+      "from": "Uebel & Gefährlich / Turmzimmer",
+      "to": "Turmzimmer"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Pollyfromthedirt",
+      "show": "11642",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Soyhan",
+      "show": "11939",
+      "what": "Spielort",
+      "from": "Uebel & Gefährlich / Turmzimmer",
+      "to": "Turmzimmer"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Clara John",
+      "show": "11536",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Newinfluenzer b2b DJ MELL G (All night long)",
+      "show": "13744",
+      "what": "Spielort",
+      "from": "Uebel & Gefährlich / Turmzimmer",
+      "to": "Turmzimmer"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "RAFTSIDE",
+      "show": "12424",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Bruno Kawelke",
+      "show": "11704",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Jovan",
+      "show": "11703",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "ELLiS·D",
+      "show": "11698",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "LNA",
+      "show": "11748",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "DITTER",
+      "show": "11701",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "ANTONÍ",
+      "show": "11280",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "NINON",
+      "show": "12420",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Culk",
+      "show": "11941",
+      "what": "Spielort",
+      "from": "Uebel & Gefährlich / Turmzimmer",
+      "to": "Turmzimmer"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Rosa Damask",
+      "show": "11619",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "White Flowers",
+      "show": "11700",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Sperling",
+      "show": "11534",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "untitled (halo)",
+      "show": "11677",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "FIRST MOTE",
+      "show": "12426",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "ENGLBRT",
+      "show": "12422",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Deslin Ami Kaba",
+      "show": "11216",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Jamaica Moana",
+      "show": "11705",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "Dry Skin",
+      "show": "11282",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
+    {
+      "at": "2026-09-17T14:15:44",
+      "kind": "moved",
+      "act": "vasil",
+      "show": "11618",
+      "what": "Spielort",
+      "from": "Docks / Prinzenbar",
+      "to": "Prinzenbar"
+    },
     {
       "at": "2026-09-17T10:09:54",
       "kind": "removed",
@@ -42,47 +303,11 @@
     {
       "at": "2026-09-17T10:09:54",
       "kind": "moved",
-      "act": "LoSin",
-      "show": "13696",
+      "act": "yung pepp",
+      "show": "13978",
       "what": "Uhrzeit",
-      "from": "16:30",
-      "to": "17:15"
-    },
-    {
-      "at": "2026-09-17T10:09:54",
-      "kind": "moved",
-      "act": "CECI",
-      "show": "13784",
-      "what": "Uhrzeit",
-      "from": "18:00",
-      "to": "19:00"
-    },
-    {
-      "at": "2026-09-17T10:09:54",
-      "kind": "moved",
-      "act": "Zoltani",
-      "show": "13772",
-      "what": "Uhrzeit",
-      "from": "16:30",
-      "to": "16:00"
-    },
-    {
-      "at": "2026-09-17T10:09:54",
-      "kind": "moved",
-      "act": "Day We Ran",
-      "show": "12551",
-      "what": "Uhrzeit",
-      "from": "21:10",
-      "to": "20:40"
-    },
-    {
-      "at": "2026-09-17T10:09:54",
-      "kind": "moved",
-      "act": "Philine Sonny",
-      "show": "13376",
-      "what": "Uhrzeit",
-      "from": "20:50",
-      "to": "22:00"
+      "from": "stand noch nicht fest",
+      "to": "19:15"
     },
     {
       "at": "2026-09-17T10:09:54",
@@ -105,11 +330,47 @@
     {
       "at": "2026-09-17T10:09:54",
       "kind": "moved",
-      "act": "Carla Ahad",
-      "show": "12552",
+      "act": "MELLER",
+      "show": "13692",
       "what": "Uhrzeit",
-      "from": "21:40",
-      "to": "21:30"
+      "from": "20:45",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "CECI",
+      "show": "13784",
+      "what": "Uhrzeit",
+      "from": "18:00",
+      "to": "19:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "MarkMoon",
+      "show": "13786",
+      "what": "Uhrzeit",
+      "from": "19:15",
+      "to": "20:30"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Philine Sonny",
+      "show": "13376",
+      "what": "Uhrzeit",
+      "from": "20:50",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Zoltani",
+      "show": "13772",
+      "what": "Uhrzeit",
+      "from": "16:30",
+      "to": "16:00"
     },
     {
       "at": "2026-09-17T10:09:54",
@@ -132,15 +393,6 @@
     {
       "at": "2026-09-17T10:09:54",
       "kind": "moved",
-      "act": "yung pepp",
-      "show": "13978",
-      "what": "Uhrzeit",
-      "from": "stand noch nicht fest",
-      "to": "19:15"
-    },
-    {
-      "at": "2026-09-17T10:09:54",
-      "kind": "moved",
       "act": "Ambre Vallet",
       "show": "13778",
       "what": "Uhrzeit",
@@ -150,20 +402,29 @@
     {
       "at": "2026-09-17T10:09:54",
       "kind": "moved",
-      "act": "MELLER",
-      "show": "13692",
+      "act": "LoSin",
+      "show": "13696",
       "what": "Uhrzeit",
-      "from": "20:45",
-      "to": "22:00"
+      "from": "16:30",
+      "to": "17:15"
     },
     {
       "at": "2026-09-17T10:09:54",
       "kind": "moved",
-      "act": "MarkMoon",
-      "show": "13786",
+      "act": "Carla Ahad",
+      "show": "12552",
       "what": "Uhrzeit",
-      "from": "19:15",
-      "to": "20:30"
+      "from": "21:40",
+      "to": "21:30"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Day We Ran",
+      "show": "12551",
+      "what": "Uhrzeit",
+      "from": "21:10",
+      "to": "20:40"
     },
     {
       "at": "2026-09-16T10:07:28",
@@ -258,15 +519,6 @@
     {
       "at": "2026-09-16T10:07:28",
       "kind": "moved",
-      "act": "Philine Sonny",
-      "show": "13376",
-      "what": "Uhrzeit",
-      "from": "20:20",
-      "to": "20:50"
-    },
-    {
-      "at": "2026-09-16T10:07:28",
-      "kind": "moved",
       "act": "They Owe Us",
       "show": "12571",
       "what": "Uhrzeit",
@@ -276,272 +528,20 @@
     {
       "at": "2026-09-16T10:07:28",
       "kind": "moved",
+      "act": "Philine Sonny",
+      "show": "13376",
+      "what": "Uhrzeit",
+      "from": "20:20",
+      "to": "20:50"
+    },
+    {
+      "at": "2026-09-16T10:07:28",
+      "kind": "moved",
       "act": "Adjua",
       "show": "13340",
       "what": "Uhrzeit",
       "from": "18:45",
       "to": "20:15"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "removed",
-      "act": "Donny Benét",
-      "show": "11661",
-      "what": "aus dem Programm genommen",
-      "from": "23:40",
-      "to": ""
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Willy Brand & Balti",
-      "show": "13942",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "22:30"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Veigh Malow",
-      "show": "13959",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:45"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Robine",
-      "show": "13950",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "17:45"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Rayannah",
-      "show": "13953",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "15:50"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Pamela.",
-      "show": "13954",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:45"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Miss Marla",
-      "show": "13943",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:30"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Malou Lovis",
-      "show": "13949",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:55"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Master Peace",
-      "show": "13951",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:10"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "LIOBA",
-      "show": "13952",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "15:15"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Keo",
-      "show": "13944",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:45"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "KARL",
-      "show": "13934",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:40"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Jo The Man The Music",
-      "show": "13946",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:50"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Haqat & Cazal",
-      "show": "13969",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "ESKEI83",
-      "show": "13965",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:20"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Fat Dog",
-      "show": "13948",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:20"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Fiona-Lee",
-      "show": "13945",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:20"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Baumgart",
-      "show": "13963",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "18:10"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "added",
-      "act": "Baumgart",
-      "show": "13956",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "16:00"
-    },
-    {
-      "at": "2026-09-15T10:13:27",
-      "kind": "moved",
-      "act": "almost monday",
-      "show": "13590",
-      "what": "Uhrzeit",
-      "from": "17:40",
-      "to": "16:05"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "removed",
-      "act": "Ramzey & Gianni Suave",
-      "show": "13874",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "removed",
-      "act": "Ramzey & Gianni Suave",
-      "show": "13870",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "removed",
-      "act": "Noé jr",
-      "show": "13806",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "added",
-      "act": "Shingai (The Noisettes)",
-      "show": "13924",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:15"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "added",
-      "act": "Ramzey & Gianni Suave",
-      "show": "13913",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "15:40"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "added",
-      "act": "PATINA RECORDS",
-      "show": "13915",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:40"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "added",
-      "act": "Noé jr",
-      "show": "13912",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "14:15"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "added",
-      "act": "Jan Delay & Delaydies",
-      "show": "13923",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:30"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "moved",
-      "act": "LudoWic",
-      "show": "12558",
-      "what": "Uhrzeit",
-      "from": "14:00",
-      "to": "13:30"
     }
   ]
 }
