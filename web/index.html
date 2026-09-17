@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Reeperbahn 2026</title>
 <meta name="description" content="Eigener Timetable für das Reeperbahn Festival 2026 — Genre-Filter, Favoriten, private Notizen, Karte.">
-<meta name="theme-color" content="#12111c" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#faf8fd" media="(prefers-color-scheme: light)">
+<!-- Die Farbe der Statusleiste. Muss zu --bg-top in style.css passen, sonst
+     geht die Leiste des Telefons nahtlos in die App über und man erkennt
+     Uhrzeit, Empfang und Akku nicht mehr. Diese beiden gelten, bis app.js
+     die gewählte Ansicht kennt; danach setzt applyTheme() sie aus --bg-top. -->
+<meta name="theme-color" content="#1c1a2b" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e0d8f4" media="(prefers-color-scheme: light)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -122,27 +126,30 @@
   <section id="plan" class="plan" hidden aria-label="Abendplan">
     <div class="plan-head">
       <div class="plan-opts">
+        <!-- Voreinstellung: Note bis 3, 30 Minuten Spielzeit, 10 Minuten
+             Überschneidung. So sieht ein Festivalabend tatsächlich aus —
+             man schaut auch mal kurz rein und geht weiter. -->
         <label>Noten bis
           <select id="plan-max">
             <option value="1">1</option>
-            <option value="2" selected>2</option>
-            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
             <option value="4">4</option>
             <option value="5">5</option>
           </select>
         </label>
         <label>Spielzeit
           <select id="plan-set">
-            <option value="30">30 min</option>
-            <option value="40" selected>40 min</option>
+            <option value="30" selected>30 min</option>
+            <option value="40">40 min</option>
             <option value="50">50 min</option>
           </select>
         </label>
         <label title="Wie viele Minuten des laufenden Konzerts darf ein Wechsel kosten?">Überschneidung
           <select id="plan-ovl">
-            <option value="0" selected>aus</option>
+            <option value="0">aus</option>
             <option value="5">≠ 5 min</option>
-            <option value="10">≠ 10 min</option>
+            <option value="10" selected>≠ 10 min</option>
             <option value="15">≠ 15 min</option>
             <option value="20">≠ 20 min</option>
             <option value="30">≠ 30 min</option>
@@ -291,6 +298,8 @@
     <h4 class="tl-h">Im Abendplan</h4>
     <div class="seg" id="tl-plan"></div>
     <p class="menu-note" id="tl-plan-note"></p>
+    <!-- Die anderen Termine desselben Acts, zum Anspringen. -->
+    <div id="tl-more" hidden></div>
   </div>
 </dialog>
 

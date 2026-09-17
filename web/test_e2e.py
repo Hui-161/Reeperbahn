@@ -1989,6 +1989,25 @@ with sync_playwright() as p:
     pg7.click(f'.day[data-day="{day7}"]'); pg7.wait_for_timeout(400)
     pg7.click("#btn-menu"); pg7.wait_for_selector("#menu[open]")
     pg7.click("#m-plan"); pg7.wait_for_timeout(800)
+
+    # Die Voreinstellung, mit der der Abendplan aufgeht. Das ist keine
+    # Kosmetik: sie entscheidet, was jemand sieht, der nichts einstellt.
+    vor = pg7.evaluate("""() => ({
+      note: document.querySelector('#plan-max').value,
+      spielzeit: document.querySelector('#plan-set').value,
+      ueberschneidung: document.querySelector('#plan-ovl').value,
+    })""")
+    check("Der Abendplan geht mit den vereinbarten Werten auf",
+          vor == {"note": "3", "spielzeit": "30", "ueberschneidung": "10"},
+          str(vor))
+    check("Und die Rechnung nimmt sie auch",
+          pg7.locator("#plan .leg.over").count() >= 1,
+          f"{pg7.locator('#plan .leg.over').count()} Etappen mit Überschneidung")
+
+    # Ab hier misst dieser Block die Überschneidung selbst - also erst
+    # ausdrücklich auf "aus", sonst vergleicht er zwei Budgets statt keines
+    # mit einem.
+    pg7.select_option("#plan-ovl", "0"); pg7.wait_for_timeout(700)
     stops7 = pg7.locator("#plan .stop").count()
     check("Mit vielen Noten entsteht ein voller Plan", stops7 >= 4,
           f"{stops7} Stationen")
@@ -2793,6 +2812,278 @@ with sync_playwright() as p:
           f'bei {pg9.locator(".tl-act").count()} Blöcken')
     check("Keine JS-Fehler im Team-Kontext", not err9, str(err9[:2]))
     ctx9.close()
+
+    # --- Gesehen: das einzelne Konzert gegen den ganzen Künstler ---
+    # 62 Acts spielen mehrfach. "Gesehen" am Act allein kann deshalb nicht
+    # sagen, ob man einmal oder zweimal da war - und genau das will man am
+    # Ende wissen. Abgehakt wird jetzt der AUFTRITT; der Künstler gilt als
+    # gesehen, sobald einer seiner Auftritte abgehakt ist.
+    ctx11 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg11 = ctx11.new_page()
+    err11 = []
+    pg11.on("pageerror", lambda e: err11.append(str(e)))
+    pg11.on("console", lambda m: err11.append(m.text)
+            if m.type == "error" and "ERR_" not in m.text else None)
+
+    lineup11 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
+    von_act = {}
+    for s in lineup11["shows"]:
+        if s.get("tbd") or not s.get("t"):
+            continue
+        von_act.setdefault(s["a"], []).append(s)
+    # Ein Act mit genau zwei Terminen - das ist der Fall, um den es geht.
+    zwei = next(ai for ai, ss in sorted(von_act.items()) if len(ss) == 2)
+    act11 = lineup11["acts"][zwei]
+    shows11 = sorted(von_act[zwei], key=lambda s: s["t"])
+
+    pg11.goto(BASE + "/", wait_until="load")
+    pg11.wait_for_selector(".row", timeout=20000)
+    pg11.click('.day[data-day=""]'); pg11.wait_for_timeout(300)
+    pg11.click("#btn-search"); pg11.wait_for_timeout(250)
+    pg11.fill("#q", act11["n"]); pg11.wait_for_timeout(500)
+    zeilen = pg11.locator(f'.row[data-act="{zwei}"]')
+    check("Ein Act mit zwei Terminen hat zwei Zeilen", zeilen.count() == 2,
+          f'{act11["n"]}: {zeilen.count()}')
+    check("Und keine davon ist abgehakt",
+          pg11.locator(f'.row[data-act="{zwei}"].is-seen').count() == 0)
+
+    # Auf der Künstlerkarte steht je Auftritt ein Haken.
+    tap_row(zeilen.first)
+    pg11.wait_for_selector("#detail .slots")
+    check("Die Künstlerkarte hakt je Auftritt einzeln ab",
+          pg11.locator("#detail .slots .slot-seen").count() == 2,
+          f'{pg11.locator("#detail .slots .slot-seen").count()} Haken')
+    pg11.locator(f'#detail [data-seenshow="{shows11[0]["id"]}"]').click()
+    pg11.wait_for_timeout(500)
+    if pg11.locator("#quick[open]").count():
+        check("Abhaken ruft auch hier die Skala auf", True)
+        pg11.keyboard.press("Escape"); pg11.wait_for_timeout(300)
+    check("Der abgehakte Auftritt ist markiert",
+          "on" in (pg11.locator(
+              f'#detail [data-seenshow="{shows11[0]["id"]}"]')
+              .get_attribute("class") or ""))
+    check("Der andere Auftritt bleibt offen",
+          "on" not in (pg11.locator(
+              f'#detail [data-seenshow="{shows11[1]["id"]}"]')
+              .get_attribute("class") or ""))
+    pg11.keyboard.press("Escape"); pg11.wait_for_timeout(400)
+
+    # In der Liste heisst das: EINE Zeile schraffiert, die andere nicht.
+    marked = pg11.evaluate(f"""() => [...document.querySelectorAll(
+      '.row[data-act="{zwei}"]')].map(r => [r.dataset.show,
+      r.classList.contains('is-seen')])""")
+    check("In der Liste ist nur der besuchte Termin schraffiert",
+          sorted(marked) == sorted([[str(shows11[0]["id"]), True],
+                                    [str(shows11[1]["id"]), False]]),
+          str(marked))
+    # Der Künstler gilt trotzdem als gesehen - das ist die andere Ebene.
+    check("Der Künstler gilt damit als gesehen", pg11.evaluate(
+        f"""() => (JSON.parse(localStorage.getItem('rbf26.seen')) || [])
+                  .includes({act11["id"]})"""))
+
+    # Zweiter Termin dazu: jetzt steht die Zahl da, um die es geht.
+    tap_row(zeilen.first)
+    pg11.wait_for_selector("#detail .slots")
+    pg11.locator(f'#detail [data-seenshow="{shows11[1]["id"]}"]').click()
+    pg11.wait_for_timeout(500)
+    if pg11.locator("#quick[open]").count():
+        pg11.keyboard.press("Escape"); pg11.wait_for_timeout(300)
+    kopf = pg11.locator("#detail .d-section h3").filter(has_text="Auftritte")
+    check("Zweimal gesehen steht als Zahl an den Auftritten",
+          "2×" in kopf.first.inner_text(), kopf.first.inner_text())
+    pg11.keyboard.press("Escape"); pg11.wait_for_timeout(400)
+    check("Und beide Zeilen sind jetzt schraffiert",
+          pg11.locator(f'.row[data-act="{zwei}"].is-seen').count() == 2)
+    pg11.click("#btn-menu"); pg11.wait_for_selector("#menu[open]")
+    check("Das Menü zählt Künstler UND Konzerte",
+          "1 gesehen (2 Konzerte)" in pg11.locator("#m-stats").inner_text(),
+          pg11.locator("#m-stats").inner_text()[:80])
+    pg11.keyboard.press("Escape"); pg11.wait_for_timeout(300)
+
+    # Zurücknehmen: ist der letzte Termin weg, ist auch der Künstler wieder
+    # offen. Ein Haken, den man nicht mehr wegbekommt, wäre schlimmer.
+    tap_row(zeilen.first)
+    pg11.wait_for_selector("#detail .slots")
+    for sh11 in shows11:
+        pg11.locator(f'#detail [data-seenshow="{sh11["id"]}"]').click()
+        pg11.wait_for_timeout(400)
+        if pg11.locator("#quick[open]").count():
+            pg11.keyboard.press("Escape"); pg11.wait_for_timeout(250)
+    pg11.keyboard.press("Escape"); pg11.wait_for_timeout(400)
+    check("Ohne abgehakten Termin ist auch der Künstler wieder offen",
+          pg11.evaluate(
+              f"""() => (JSON.parse(localStorage.getItem('rbf26.seen')) || [])
+                        .includes({act11["id"]})""") is False
+          and pg11.locator(f'.row[data-act="{zwei}"].is-seen').count() == 0)
+
+    # Altbestand: ein Haken am Act ohne benannten Termin. Der darf nicht
+    # rückwirkend verschwinden - er gilt dann für alle Zeilen des Acts.
+    pg11.evaluate(f"""() => {{
+      localStorage.setItem('rbf26.seen', JSON.stringify([{act11["id"]}]));
+      localStorage.setItem('rbf26.seenshow', '[]');
+    }}""")
+    pg11.reload(wait_until="load")
+    pg11.wait_for_selector(".row", timeout=20000)
+    pg11.click('.day[data-day=""]'); pg11.wait_for_timeout(300)
+    pg11.click("#btn-search"); pg11.wait_for_timeout(250)
+    pg11.fill("#q", act11["n"]); pg11.wait_for_timeout(500)
+    alt11 = pg11.locator(f'.row[data-act="{zwei}"].is-seen').count()
+    check("Ein alter Haken ohne Termin gilt weiter für alle Zeilen",
+          alt11 == 2, f"{alt11} von 2")
+    check("Keine JS-Fehler im Gesehen-Kontext", not err11, str(err11[:2]))
+    ctx11.close()
+
+    # --- Griffe: die anderen Termine desselben Acts, zum Anspringen ---
+    ctx12 = b.new_context(viewport={"width": 420, "height": 900}, locale="de-DE")
+    pg12 = ctx12.new_page()
+    err12 = []
+    pg12.on("pageerror", lambda e: err12.append(str(e)))
+    pg12.on("console", lambda m: err12.append(m.text)
+            if m.type == "error" and "ERR_" not in m.text else None)
+    day12 = lineup11["days"][1]
+    ids12 = list(dict.fromkeys(
+        [lineup11["acts"][s["a"]]["id"] for s in lineup11["shows"]
+         if s["d"] == day12 and not s["tbd"]]))[:80]
+    pg12.goto(BASE + "/", wait_until="load")
+    pg12.wait_for_selector(".row", timeout=20000)
+    pg12.evaluate("""(ids) => {
+      const r = {};
+      ids.forEach((id, i) => { r[id] = (i % 3) + 1; });
+      localStorage.setItem('rbf26.rate', JSON.stringify(r));
+    }""", ids12)
+    pg12.reload(wait_until="load")
+    pg12.wait_for_selector(".row", timeout=20000)
+    pg12.click(f'.day[data-day="{day12}"]'); pg12.wait_for_timeout(400)
+    pg12.click("#btn-plan"); pg12.wait_for_timeout(700)
+    pg12.click("#plan-timeline"); pg12.wait_for_timeout(800)
+    # Ein Block, dessen Act mehrfach spielt - den erkennt man am ×N.
+    mehrfach = pg12.locator(".tl-act").filter(has=pg12.locator(".multi")).first
+    check("In der Zeitleiste stehen Acts, die mehrfach spielen",
+          mehrfach.count() == 1)
+    name12 = mehrfach.locator(".tl-name").evaluate(
+        "e => e.childNodes[0].textContent.trim()")
+    mehrfach.evaluate("e => e.click()")
+    pg12.wait_for_timeout(600)
+    more = pg12.locator("#tl-more")
+    check("Die Griffe zählen die anderen Termine auf", not more.is_hidden())
+    alts = pg12.locator("#tl-more .tl-alt")
+    check("Mit Tag, Uhrzeit und Spielort", alts.count() >= 1
+          and re.search(r"\d\d:\d\d", alts.first.inner_text()),
+          alts.first.inner_text().replace("\n", " ")[:60])
+    check("Und dem Kürzel des Spielorts davor",
+          alts.first.locator(".tl-alt-where b").count() == 1,
+          alts.first.locator(".tl-alt-where").inner_text()[:40])
+    # Anspringen: derselbe Act, anderer Termin.
+    vorher12 = pg12.locator("#tl-when").inner_text()
+    ziel12 = alts.first.get_attribute("data-tljump")
+    alts.first.click(); pg12.wait_for_timeout(800)
+    check("Ein Tipper springt zu diesem Auftritt",
+          pg12.evaluate("() => document.querySelector('#tlmenu').dataset.show")
+          == ziel12, ziel12)
+    check("Derselbe Künstler, andere Zeit",
+          pg12.locator("#tl-name").inner_text() == name12
+          and pg12.locator("#tl-when").inner_text() != vorher12,
+          f'{vorher12[:28]} -> {pg12.locator("#tl-when").inner_text()[:28]}')
+    # Liegt der Termin an einem anderen Abend, geht die Leiste dahinter mit.
+    tag12 = pg12.evaluate("""(id) => {
+      const d = document.querySelector('.day[aria-selected="true"]');
+      return d ? d.dataset.day : null;
+    }""", ziel12)
+    soll12 = next((s.get("d") for s in lineup11["shows"]
+                   if str(s["id"]) == str(ziel12)), None)
+    check("Und der gewählte Tag geht mit", tag12 == soll12,
+          f"{tag12} gegen {soll12}")
+    check("Keine JS-Fehler im Sprung-Kontext", not err12, str(err12[:2]))
+    ctx12.close()
+
+    # --- Schmales Telefon ---
+    # Gemessen war hier der Fehler: Titel und sechs Symbole zusammen waren
+    # breiter als der Bildschirm, und weil nichts nachgab, wurde die ganze
+    # SEITE breiter - dann verrutscht alles waagerecht.
+    for breite in (360, 320):
+        ctx13 = b.new_context(viewport={"width": breite, "height": 740},
+                              locale="de-DE")
+        pg13 = ctx13.new_page()
+        err13 = []
+        pg13.on("pageerror", lambda e: err13.append(str(e)))
+        pg13.goto(BASE + "/", wait_until="load")
+        pg13.wait_for_selector(".row", timeout=20000)
+        # Ohne Noten bliebe der Abendplan leer - dann prüfte der Block
+        # unten eine Zeitleiste ohne Blöcke, also nichts.
+        pg13.evaluate("""(ids) => {
+          const r = {};
+          ids.forEach((id, i) => { r[id] = (i % 3) + 1; });
+          localStorage.setItem('rbf26.rate', JSON.stringify(r));
+        }""", ids12)
+        pg13.reload(wait_until="load")
+        pg13.wait_for_selector(".row", timeout=20000)
+        UEBER = ("() => document.documentElement.scrollWidth"
+                 " - document.documentElement.clientWidth")
+        check(f"Bei {breite} px schiebt die Liste die Seite nicht breiter",
+              pg13.evaluate(UEBER) <= 0, f"{pg13.evaluate(UEBER)} px zu viel")
+        pg13.click(f'.day[data-day="{day12}"]'); pg13.wait_for_timeout(300)
+        pg13.click("#btn-plan"); pg13.wait_for_timeout(700)
+        check(f"Bei {breite} px auch der Abendplan nicht",
+              pg13.evaluate(UEBER) <= 0, f"{pg13.evaluate(UEBER)} px zu viel")
+        pg13.click("#plan-timeline"); pg13.wait_for_timeout(700)
+        check(f"Bei {breite} px auch die Zeitleiste nicht",
+              pg13.evaluate(UEBER) <= 0, f"{pg13.evaluate(UEBER)} px zu viel")
+        if breite == 360:
+            # Auf dem häufigsten schmalen Android steht der Titel ganz da.
+            check("Bei 360 px steht der Titel vollständig",
+                  pg13.evaluate("""() => {
+                    const h = document.querySelector('h1');
+                    return h.scrollWidth <= h.clientWidth + 1;
+                  }"""))
+            # Und die Zeitleiste zeigt mehr als zwei Spalten nebeneinander.
+            spalten = pg13.evaluate("""() => {
+              const sc = document.querySelector('#plan-time .tl-scroll');
+              const b = document.querySelector('.tl-act');
+              return b ? Math.floor(sc.clientWidth / b.offsetWidth) : 0;
+            }""")
+            check("Und mindestens drei Spalten passen nebeneinander",
+                  spalten >= 3, f"{spalten} Spalten")
+            # Nichts wird dabei abgeschnitten: der Fuss eines Blocks trägt
+            # Note, Team-Schnitt und Kürzel - die müssen hineinpassen.
+            eng = pg13.evaluate("""() => [...document.querySelectorAll(
+              '.tl-act .tl-foot')].filter(e => e.scrollWidth > e.clientWidth + 1
+              ).length""")
+            fuesse = pg13.locator(".tl-act .tl-foot").count()
+            check("Und in den Blöcken wird nichts abgeschnitten",
+                  eng == 0 and fuesse >= 10,
+                  f"{eng} zu enge von {fuesse} Fußzeilen")
+        check(f"Keine JS-Fehler bei {breite} px", not err13, str(err13[:2]))
+        ctx13.close()
+
+    # --- Statusleiste: die Farbe des Telefons kommt aus EINER Quelle ---
+    # Beschwerde von einem kleineren Gerät: "ich erkenne meine Statusleiste
+    # oben nicht mehr". Sie übernimmt in der installierten App die
+    # theme-color - und die war fast dasselbe Weiß wie der Rahmen der App.
+    ctx14 = b.new_context(viewport={"width": 360, "height": 740}, locale="de-DE")
+    pg14 = ctx14.new_page()
+    pg14.goto(BASE + "/", wait_until="load")
+    pg14.wait_for_selector(".row", timeout=20000)
+    farben = pg14.evaluate("""() => {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      const cs = getComputedStyle(document.querySelector('.top'));
+      return {
+        meta: (meta && meta.content || '').trim().toLowerCase(),
+        band: getComputedStyle(document.documentElement)
+                .getPropertyValue('--bg-top').trim().toLowerCase(),
+        kopf: cs.backgroundColor,
+        seite: getComputedStyle(document.body).backgroundColor,
+      };
+    }""")
+    check("Die Statusleiste trägt dieselbe Farbe wie die Kopfleiste",
+          farben["meta"] == farben["band"] and farben["band"] != "",
+          f'{farben["meta"]} gegen {farben["band"]}')
+    check("Und die hebt sich vom Rest der Seite ab",
+          farben["kopf"] != farben["seite"],
+          f'{farben["kopf"]} gegen {farben["seite"]}')
+    check("Die Kopfleiste ist deckend, nicht durchscheinend",
+          "rgba" not in farben["kopf"] or farben["kopf"].endswith(", 1)"),
+          farben["kopf"])
+    ctx14.close()
 
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e

@@ -38,7 +38,25 @@ const store = {
 };
 
 const fav = new Set(store.get('fav', []));
+/* Zwei Ebenen von "gesehen", und der Unterschied ist der Punkt:
+
+   seen      - der KUENSTLER wurde gesehen. Das ist die Frage "kennen wir
+               die schon?" und die Antwort auf "wen haben wir dieses Jahr
+               alles gesehen?".
+   seenShow  - dieser eine AUFTRITT wurde gesehen. Daraus wird "wir haben
+               sie zweimal gesehen" - und genau das will man am Ende sehen.
+
+   Die Mengen haengen zusammen, aber nicht andersherum: einen Auftritt
+   abhaken heisst immer auch, den Kuenstler gesehen zu haben, also wandert
+   der Act mit in seen. Den letzten abgehakten Auftritt zurueckziehen nimmt
+   den Act wieder heraus. Umgekehrt gilt es nicht: ein Act darf in seen
+   stehen, ohne dass ein Auftritt benannt ist - so sehen alle Haken aus, die
+   vor dieser Unterscheidung gesetzt wurden, und so sieht auch der Haken auf
+   der Kuenstlerkarte aus ("irgendwann mal gesehen"). Das bleibt eine
+   ehrliche Aussage und wird nicht heimlich einem Termin zugeordnet. */
 const seen = new Set(store.get('seen', []));
+const seenShow = new Set((store.get('seenshow', []) || []).map(String));
+const saveSeenShow = () => store.set('seenshow', [...seenShow]);
 /* Acts, bei denen die Team-Meinung bewusst aufgedeckt wurde, obwohl man
    selbst noch nicht bewertet hat - siehe teamRowMark(). */
 const revealed = new Set(store.get('revealed', []));
@@ -106,13 +124,20 @@ function applyTheme() {
   for (const b of document.querySelectorAll('[data-theme-set]')) {
     b.setAttribute('aria-pressed', String(b.dataset.themeSet === theme));
   }
-  // Die Browserleiste soll mitziehen.
+  /* Die Browser- und in der installierten App die STATUSLEISTE ziehen mit.
+     Die Farbe wird nicht noch einmal hingeschrieben, sondern aus --bg-top
+     gelesen - das ist derselbe Wert, den die Kopfleiste traegt. Zwei
+     getrennte Stellen waren genau das Problem: die Statusleiste stand auf
+     fast demselben Weiss wie die App, und man sah nicht mehr, wo das
+     Telefon aufhoert. Eine Quelle kann nicht auseinanderlaufen. */
   const dark = theme === 'dark' || (theme === 'system'
     && matchMedia('(prefers-color-scheme: dark)').matches);
+  const band = getComputedStyle(document.documentElement)
+    .getPropertyValue('--bg-top').trim();
   for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.remove();
   const meta = document.createElement('meta');
   meta.name = 'theme-color';
-  meta.content = dark ? '#12111c' : '#faf8fd';
+  meta.content = band || (dark ? '#1c1a2b' : '#e0d8f4');
   document.head.appendChild(meta);
 }
 
@@ -212,6 +237,35 @@ const pSeen = (id) => !!(partner && partner.seen && partner.seen.includes(id));
    Zusammenfassung der Noten (dort gewinnt die beste), und sie soll sich
    nicht wiederholen. Geteilt ist also die ANSICHT, nicht der Speicher. */
 const seenAny = (id) => seen.has(id) || pSeen(id);
+
+/* Dieselbe Regel eine Ebene tiefer, fuer den einzelnen Auftritt. */
+const pSeenShow = (sid) =>
+  !!(partner && partner.seenShow && partner.seenShow.includes(String(sid)));
+const seenShowAny = (sid) => seenShow.has(String(sid)) || pSeenShow(sid);
+
+/* Welche Auftritte dieses Acts sind abgehakt - eigene und die des Teams
+   zusammen, weil "wir" die Frage ist. Nach Zeit geordnet, damit "der erste"
+   auch der erste ist. */
+function seenShowsOf(actId) {
+  if (!S.data) return [];
+  return S.data.shows.filter((s) =>
+    S.data.acts[s.a].id === actId && seenShowAny(s.id))
+    .sort((a, b) => String(a.t || '').localeCompare(String(b.t || '')));
+}
+/* Wie oft gesehen. 0 heisst auch dann 0, wenn der Act in seen steht - dann
+   ist er gesehen, aber ohne benannten Termin, und das ist keine Zahl. */
+const seenTimes = (actId) => seenShowsOf(actId).length;
+
+/* Traegt diese ZEILE eine Gesehen-Marke? Der abgehakte Auftritt auf jeden
+   Fall. Ein Act, der nur pauschal als gesehen gilt (Altbestand oder der
+   Haken auf der Kuenstlerkarte), traegt sie auf allen seinen Zeilen - sonst
+   verschwaende die Unterscheidung rueckwirkend Haken, die jemand gesetzt
+   hat. Sobald aber EIN Termin benannt ist, tragen nur noch die benannten
+   die Marke: dann weiss die App es genauer. */
+function seenHere(sh, actId) {
+  if (seenShowAny(sh.id)) return true;
+  return seenAny(actId) && seenTimes(actId) === 0;
+}
 /* Acts, nicht Auftritte: wer zweimal spielt, zaehlt einmal. Ohne Tagesfilter
    ueber das ganze Festival. */
 function seenActCount(day = S.day) {
@@ -225,10 +279,35 @@ function seenActCount(day = S.day) {
   return ids.size;
 }
 function seenWhoTitle(id) {
-  if (seen.has(id)) {
-    return pSeen(id) ? `Gesehen — von dir und ${partnerName()}` : 'Gesehen';
-  }
-  return `Gesehen von ${partnerName()}`;
+  const wer = seen.has(id)
+    ? (pSeen(id) ? `Gesehen — von dir und ${partnerName()}` : 'Gesehen')
+    : `Gesehen von ${partnerName()}`;
+  const n = seenTimes(id);
+  if (n > 1) return `${wer} — ${n}× beim Festival`;
+  return wer;
+}
+
+/* Einen AUFTRITT abhaken. Der Act geht dabei mit in die Kuenstlerliste; wird
+   der letzte benannte Auftritt zurueckgezogen, geht er wieder heraus - auch
+   dann, wenn vorher einmal der pauschale Haken auf der Kuenstlerkarte
+   gesetzt war. Die letzte Aussage gilt; ein Haken, den man nicht mehr
+   wegbekommt, waere schlimmer als einer, der zu viel verschwindet. */
+function toggleSeenShow(sid, actId) {
+  const key = String(sid);
+  const war = seenShow.has(key);
+  if (war) seenShow.delete(key); else seenShow.add(key);
+  if (!war) seen.add(actId);
+  else if (!mineSeenShows(actId).length) seen.delete(actId);
+  saveSeenShow(); saveSeen();
+  return !war;
+}
+/* Nur die EIGENEN abgehakten Auftritte - fuer die Frage, ob der eigene Haken
+   am Act noch getragen wird. Die des Teams duerfen ihn nicht halten, sonst
+   kaeme ein zurueckgezogener Haken beim naechsten Abgleich zurueck. */
+function mineSeenShows(actId) {
+  if (!S.data) return [];
+  return S.data.shows.filter((s) =>
+    S.data.acts[s.a].id === actId && seenShow.has(String(s.id)));
 }
 /* "Beide": ein Act, den beide als Favorit haben oder beide mit 1-2 bewerten.
    Das ist die Frage, die ein Team wirklich hat - wo wollen wir zusammen hin.
@@ -998,13 +1077,17 @@ function row(sh, act) {
   const multi = total > 1
     ? `<span class="multi" title="Spielt ${total}× beim Festival — das hier ist Auftritt ${nth}">×${total}</span>`
     : '';
+  /* Die Marke haengt an DIESEM Auftritt, nicht mehr am Act: wer zweimal
+     spielt und einmal gesehen wurde, hat eine abgehakte und eine offene
+     Zeile - sonst sieht der zweite Termin aus wie erledigt. */
+  const gesehen = seenHere(sh, act.id);
   return `<button class="row${rb ? ' rated-' + rb : ''}${
-    seenAny(act.id) ? ' is-seen' : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
+    gesehen ? ' is-seen' : ''}" data-show="${esc(sh.id)}" data-act="${sh.a}">
     <span class="row-time${sh.tbd ? ' tbd' : ''}">${sh.tbd ? 'Zeit<br>offen' : hhmm(sh.t)}${changeMark}</span>
     <span class="row-main">
       <span class="row-name${note[act.id] ? ' has-note' : ''}${
-        seenAny(act.id) ? ' seen-mark' : ''}"${
-        seenAny(act.id) ? ` title="${esc(seenWhoTitle(act.id))}"` : ''
+        gesehen ? ' seen-mark' : ''}"${
+        gesehen ? ` title="${esc(seenWhoTitle(act.id))}"` : ''
         }>${esc(act.n)}${multi}${
         rb ? `<span class="grade grade-${rb}${Number.isInteger(+r) ? '' : ' grade-half'}"
               title="Meine Note: ${rateText(r)}">${rateText(r)}</span>`
@@ -1174,10 +1257,14 @@ function savePlanChoice() {
   store.set('planskip', [...planSkip]);
 }
 
+/* Die Ersatzwerte gelten nur, wenn die Auswahlfelder (noch) nicht da sind -
+   die sichtbare Voreinstellung steht im HTML und ist dieselbe: Note bis 3,
+   30 Minuten, 10 Minuten Ueberschneidung. Beim Ueberschneiden bleibt die
+   Null stehen: "aus" ist eine gueltige Wahl, und +"0" || 10 waere 10. */
 function planOptions() {
   return {
-    maxNote: +($('#plan-max') || {}).value || 2,
-    setMinutes: +($('#plan-set') || {}).value || 40,
+    maxNote: +($('#plan-max') || {}).value || 3,
+    setMinutes: +($('#plan-set') || {}).value || 30,
     overlapMinutes: +($('#plan-ovl') || {}).value || 0,
     withFav: !!($('#plan-fav') || {}).checked,
     teamBonus: !!($('#plan-team') || {}).checked && !!partner,
@@ -1419,7 +1506,16 @@ function planSwap(stopId, dir) {
    Gefaerbt wird nach der eigenen Note, gerahmt, was im Plan steht. */
 const TL_PX_PER_MIN = 1.9;
 const TL_LANE = 126;   // Note, Team-Schnitt, ×N und Kuerzel muessen nebeneinander
+const TL_LANE_SCHMAL = 104;
 const TL_GUTTER = 48;   // Platz fuer die Uhrzeiten links, siehe .tl-acts
+
+/* Auf schmalen Telefonen eine schmalere Spur. Bei 360 Pixeln Bildschirm
+   bleiben nach der Uhrzeitenspalte 312 uebrig - das sind mit 126 gerade
+   zwei Spalten, und ausgerechnet das Nebeneinander ist der Sinn dieser
+   Ansicht. Mit 104 sind es drei. Die Schrift geht in derselben Breite mit
+   (siehe die Medienabfrage in style.css); dass dabei nichts abgeschnitten
+   wird, prueft test_e2e.py dauerhaft nach. */
+const tlLane = () => (innerWidth <= 416 ? TL_LANE_SCHMAL : TL_LANE);
 
 function renderTimeline(plan, items, opts) {
   const box = $('#plan-time');
@@ -1545,8 +1641,11 @@ function renderTimeline(plan, items, opts) {
     const no = inPlan.get(String(s.id));
     const code = venueCode[s.venueIdx] || '';
     const total = actShowCount(s.actIdx);
+    // Schraffiert, was schon abgehakt ist - waehrend des Abends die
+    // schnellste Auskunft darueber, wo man schon war.
     return `<button type="button" class="tl-act${rb ? ' rated-' + rb : ''}${
-      no ? ' in-plan' : ''}${s.skipped ? ' skipped' : ''}" data-tlshow="${esc(s.id)}"
+      no ? ' in-plan' : ''}${s.skipped ? ' skipped' : ''}${
+      seenShowAny(s.id) ? ' is-seen' : ''}" data-tlshow="${esc(s.id)}"
       data-top="${(a - t0) * TL_PX_PER_MIN}" data-lane="${lane}"
       title="${esc(s.name)} — ${hhmm(s.startIso)}${
         s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}${
@@ -1582,18 +1681,19 @@ function renderTimeline(plan, items, opts) {
      beim ersten Versuch passiert. Ueber element.style greift die Regel
      nicht, das ist kein Inline-Stil im Sinne der CSP. */
   const canvas = box.querySelector('.tl-canvas');
+  const lane = tlLane();
   const height = (t1 - t0) * TL_PX_PER_MIN + 16;
-  const width = lanes * TL_LANE + TL_GUTTER;
+  const width = lanes * lane + TL_GUTTER;
   canvas.style.height = `${height}px`;
   canvas.style.width = `${width}px`;
   for (const m of box.querySelectorAll('.tl-hour, .tl-now')) {
     m.style.top = `${m.dataset.top}px`;
   }
   const blockH = set * TL_PX_PER_MIN - 3;
-  const blockW = TL_LANE - 6;
+  const blockW = lane - 6;
   for (const b of box.querySelectorAll('.tl-act')) {
     b.style.top = `${b.dataset.top}px`;
-    b.style.left = `${+b.dataset.lane * TL_LANE}px`;
+    b.style.left = `${+b.dataset.lane * lane}px`;
     b.style.height = `${blockH}px`;
     b.style.width = `${blockW}px`;
   }
@@ -1616,8 +1716,8 @@ function renderTimeline(plan, items, opts) {
   svg.setAttribute('width', String(width));
   svg.setAttribute('height', String(height));
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  const pos = new Map(placed.map(({ s, a, lane }) =>
-    [String(s.id), { x: TL_GUTTER + lane * TL_LANE + blockW / 2,
+  const pos = new Map(placed.map(({ s, a, lane: spur }) =>
+    [String(s.id), { x: TL_GUTTER + spur * lane + blockW / 2,
                      y: (a - t0) * TL_PX_PER_MIN }]));
   const NS = 'http://www.w3.org/2000/svg';
   const stops = plan ? plan.stops : [];
@@ -1761,9 +1861,11 @@ function renderTlMenu() {
       : `<a class="chip" href="${esc(spotifySearch(act.n))}" target="_blank"
         rel="noopener noreferrer">Bei Spotify suchen</a>`}
     <button type="button" class="chip" id="tl-seen"
-      aria-pressed="${seen.has(act.id)}"
-      title="${seen.has(act.id) ? 'Von dir abgehakt' : 'Noch nicht von dir abgehakt'}${
-        pSeen(act.id) ? ` — ${esc(partnerName())} war da` : ''}">✓ Gesehen</button>
+      aria-pressed="${seenShow.has(tlShow)}"
+      title="${seenShow.has(tlShow) ? 'Diesen Auftritt hast du abgehakt'
+        : 'Diesen Auftritt noch nicht abgehakt'}${
+        pSeenShow(tlShow) ? ` — ${esc(partnerName())} war da` : ''}"
+      >✓ Gesehen</button>
     <button type="button" class="chip" id="tl-fav"
       aria-pressed="${fav.has(act.id)}"><span class="heart"
       aria-hidden="true">♥</span> Favorit</button>
@@ -1791,6 +1893,59 @@ function renderTlMenu() {
     auto: 'Die Rechnung entscheidet — nach Note, Fußweg und Überschneidung.',
     raus: 'Bleibt heute draußen. Ein anderer Termin desselben Acts darf rein.',
   }[mode];
+
+  /* Die anderen Termine desselben Acts - mit Spielort, und zwar zum
+     Anspringen. "Spielt 2×" allein nuetzt nichts, wenn man dann sucht, wo
+     der zweite Termin steckt; und oft ist genau der die bessere Wahl, weil
+     er woanders oder zu einer freieren Stunde liegt. */
+  const others = S.data.shows
+    .filter((s) => s.a === sh.a && String(s.id) !== tlShow)
+    .sort((a, b) => String(a.t || '').localeCompare(String(b.t || '')));
+  const box = $('#tl-more');
+  box.hidden = !others.length;
+  box.innerHTML = !others.length ? '' : `<h4 class="tl-h">Spielt außerdem</h4>
+    <div class="tl-alts">${others.map((o) => {
+      const ov = o.v != null ? S.data.venues[o.v] : null;
+      const hin = seenShowAny(o.id);
+      return `<button type="button" class="tl-alt" data-tljump="${esc(o.id)}"
+        title="Zu diesem Auftritt springen">
+        <span class="tl-alt-when">${esc(dayLabel(o))}${
+          o.tbd ? ', Zeit offen' : ' ' + hhmm(o.t)}</span>
+        <span class="tl-alt-where">${ov
+          ? `<b>${esc(venueCode[o.v] || '')}</b> ${esc(ov.n)}`
+          : 'Spielort offen'}</span>
+        ${hin ? '<span class="tl-alt-seen" title="Diesen Auftritt habt ihr gesehen">✓</span>' : ''}
+        <span class="tl-alt-go" aria-hidden="true">→</span>
+      </button>`;
+    }).join('')}</div>`;
+}
+
+/* Zum anderen Auftritt desselben Acts springen. Liegt er an einem anderen
+   Abend, muss auch die Zeitleiste dahinter mitgehen - sonst stuende der
+   Dialog vor einem Abend, zu dem er nicht gehoert. */
+function tlJump(sid) {
+  const ziel = showMap().get(String(sid));
+  if (!ziel) return;
+  if ((ziel.d || null) !== S.day) {
+    S.day = ziel.d || null;
+    renderDays();
+    render();
+  }
+  // Der Blick in der Leiste soll bei dem neuen Auftritt landen, nicht dort
+  // stehenbleiben, wo der alte war. Steht der Auftritt gar nicht in der
+  // Leiste (zu schlecht bewertet fuer die Vorauswahl), bleibt der Blick, wo
+  // er ist - der Dialog zeigt ja alles Noetige.
+  const blk = $(`#plan-time .tl-act[data-tlshow="${CSS.escape(String(sid))}"]`);
+  if (blk) {
+    blk.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    // NACH scrollIntoView: das verschiebt die Leiste sonst selbst noch.
+    const sc = $('#plan-time .tl-scroll');
+    if (sc) {
+      sc.scrollLeft = Math.max(0, blk.offsetLeft - (sc.clientWidth - blk.offsetWidth) / 2);
+      tlScrollLeft = sc.scrollLeft;
+    }
+  }
+  openTlMenu(String(sid));
 }
 
 function setTlPlan(mode) {
@@ -1829,12 +1984,15 @@ el.tlmenu.addEventListener('click', (e) => {
     return;
   }
   if (e.target.closest('#tl-seen')) {
-    const war = seen.has(act.id);
-    war ? seen.delete(act.id) : seen.add(act.id);
-    saveSeen(); scheduleSync(); refreshAct(sh.a); renderPlan(); renderTlMenu();
-    if (!war) openQuick(sh.a, true);
+    // Abgehakt wird DIESER Auftritt. Wer denselben Act zweimal sieht, hakt
+    // zweimal ab - und genau daraus entsteht spaeter das "2×".
+    const jetzt = toggleSeenShow(tlShow, act.id);
+    scheduleSync(); refreshAct(sh.a); renderPlan(); renderTlMenu();
+    if (jetzt) openQuick(sh.a, true);
     return;
   }
+  const jump = e.target.closest('[data-tljump]');
+  if (jump) { tlJump(jump.dataset.tljump); return; }
   if (e.target.closest('#tl-fav')) {
     fav.has(act.id) ? fav.delete(act.id) : fav.add(act.id);
     saveFav(); scheduleSync(); refreshAct(sh.a); renderPlan(); renderTlMenu();
@@ -2108,12 +2266,23 @@ function openDetail(ai) {
     </div>
 
     <div class="d-section">
-      <h3>Auftritte</h3>
+      <h3>Auftritte${seenTimes(act.id) > 1
+        ? ` <span class="tag">${seenTimes(act.id)}× gesehen</span>` : ''}</h3>
+      <!-- Abgehakt wird hier je AUFTRITT. Wer denselben Act zweimal sieht,
+           hakt zweimal ab; daraus entsteht das "2× gesehen" oben und die
+           Zeile je Konzert in der Mitschrift. -->
       <ul class="slots">${slots.map((s) => {
         const v = s.v != null ? S.data.venues[s.v] : null;
+        const hin = seenShow.has(String(s.id));
+        const teamHin = pSeenShow(s.id);
         return `<li>
           <time>${s.tbd ? dayLabel(s) + ', Zeit offen' : dayLabel(s) + ' ' + hhmm(s.t)}</time>
           <span>${v ? esc(v.n) : 'Spielort offen'}</span>
+          <button class="slot-seen${hin || teamHin ? ' on' : ''}"
+            data-seenshow="${esc(s.id)}" aria-pressed="${hin}"
+            title="${hin ? 'Diesen Auftritt hast du abgehakt'
+              : teamHin ? `Abgehakt von ${esc(partnerName())}`
+              : 'Diesen Auftritt als gesehen abhaken'}">✓</button>
           ${v && v.lat ? `<button data-venue="${s.v}">Karte</button>` : ''}
         </li>`;
       }).join('')}</ul>
@@ -2150,7 +2319,10 @@ function openDetail(ai) {
           <span class="heart">${fav.has(act.id) ? '♥' : '♡'}</span>
           ${fav.has(act.id) ? 'Favorit' : 'Als Favorit merken'}
         </button>
-        <button class="chip" data-seen="${act.id}" aria-pressed="${seen.has(act.id)}">
+        <!-- Gilt dem KUENSTLER, nicht einem Konzert: "kennen wir schon".
+             Einzelne Abende hakt man oben bei den Auftritten ab. -->
+        <button class="chip" data-seen="${act.id}" aria-pressed="${seen.has(act.id)}"
+          title="Gilt dem Künstler. Einzelne Konzerte hakst du oben bei den Auftritten ab.">
           ${seen.has(act.id) ? '✓ Gesehen' : 'Als gesehen markieren'}
         </button>
       </div>
@@ -2861,11 +3033,36 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  /* Einen einzelnen AUFTRITT abhaken - in der Auftrittsliste der
+     Kuenstlerkarte. Das ist der Ort, an dem "zweimal gesehen" entsteht. */
+  const slotBtn = t.closest('[data-seenshow]');
+  if (slotBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const ai = +el.detail.dataset.ai;
+    const id = +el.detail.dataset.act;
+    const jetzt = toggleSeenShow(slotBtn.dataset.seenshow, id);
+    scheduleSync();
+    refreshAct(ai);
+    openDetail(ai);            // Zaehler und Haken neu zeichnen
+    if (jetzt) openQuick(ai, true);
+    return;
+  }
+
   const seenBtn = t.closest('[data-seen]');
   if (seenBtn) {
     e.preventDefault(); e.stopPropagation();
     const id = +seenBtn.dataset.seen;
-    seen.has(id) ? seen.delete(id) : seen.add(id);
+    const war = seen.has(id);
+    if (war) {
+      /* Den Haken am KUENSTLER zurueckziehen nimmt auch die abgehakten
+         Auftritte mit. Sonst bliebe "nicht gesehen" neben "am Donnerstag
+         gesehen" stehen, und niemand koennte sagen, was nun gilt. */
+      seen.delete(id);
+      for (const s of mineSeenShows(id)) seenShow.delete(String(s.id));
+      saveSeenShow();
+    } else {
+      seen.add(id);
+    }
     saveSeen();
     scheduleSync();
     const on = seen.has(id);
@@ -2875,6 +3072,7 @@ document.addEventListener('click', (e) => {
     }
     const ai = +el.detail.dataset.ai;
     refreshAct(ai);
+    if (el.detail.open) openDetail(ai);     // die Haken an den Auftritten
     // Abhaken und benoten gehoeren zusammen: wer gerade herauskommt, hat
     // eine Meinung. Nur beim Setzen, nicht beim Zuruecknehmen.
     if (on) openQuick(ai, true);
@@ -3223,8 +3421,8 @@ function download(name, text, type) {
 function exportChoice() {
   const c = team && team.config;
   download('reeperbahn-auswahl.json', JSON.stringify({
-    kind: 'rbf26-auswahl', version: 4,
-    fav: [...fav], seen: [...seen], note, rate, hint,
+    kind: 'rbf26-auswahl', version: 5,
+    fav: [...fav], seen: [...seen], seenShow: [...seenShow], note, rate, hint,
     revealed: [...revealed],
     filters: savedFilters,
     planPin: [...planPin], planSkip: [...planSkip],
@@ -3264,28 +3462,37 @@ function restoreTeam(t) {
 /* Gesehen-Liste als CSV: das ist die Mitschrift des Festivals, also mit Tag,
    Zeit, Spielort, eigener Note und Notiz - nicht nur Namen. */
 function exportSeen() {
-  if (!seen.size) { alert('Noch nichts als gesehen markiert.'); return; }
+  if (!seen.size && !seenShow.size) {
+    alert('Noch nichts als gesehen markiert.'); return;
+  }
   const rows = [];
+  /* Eine Zeile je abgehaktem KONZERT. Wer denselben Act zweimal gesehen hat,
+     steht zweimal drin - das ist der Punkt der Mitschrift, und die Spalte
+     "Wie oft" sagt es noch einmal in einer Zahl. */
   for (const sh of S.data.shows) {
     const act = S.data.acts[sh.a];
-    if (!seen.has(act.id)) continue;
+    if (!seenShow.has(String(sh.id))) continue;
     rows.push([
       sh.d || '', sh.tbd ? '' : hhmm(sh.t), act.n,
       sh.v != null ? S.data.venues[sh.v].n : '',
       (act.g || []).map((i) => S.data.genres[i]).join('; '),
-      act.c || '', rate[act.id] || '', (note[act.id] || '').replace(/\s+/g, ' '),
+      act.c || '', rate[act.id] || '', mineSeenShows(act.id).length,
+      (note[act.id] || '').replace(/\s+/g, ' '),
     ]);
   }
-  // Acts ohne Auftritt in den Daten trotzdem auffuehren, damit nichts fehlt.
-  const listed = new Set(rows.map((r) => r[2]));
+  /* Acts, die als gesehen gelten, ohne dass ein Termin benannt ist - der
+     Haken auf der Kuenstlerkarte und alles, was vor der Unterscheidung
+     gesetzt wurde. Die gehoeren in die Mitschrift, nur eben ohne Tag und
+     Uhrzeit: behaupten wuerde die App sonst etwas, das niemand gesagt hat. */
   for (const act of S.data.acts) {
-    if (seen.has(act.id) && !listed.has(act.n)) {
-      rows.push(['', '', act.n, '', '', act.c || '', rate[act.id] || '',
+    if (seen.has(act.id) && !mineSeenShows(act.id).length) {
+      rows.push(['', '', act.n, '', '', act.c || '', rate[act.id] || '', '',
                  (note[act.id] || '').replace(/\s+/g, ' ')]);
     }
   }
   rows.sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]) || a[2].localeCompare(b[2]));
-  const head = ['Tag', 'Zeit', 'Act', 'Spielort', 'Genres', 'Land', 'Note', 'Notiz'];
+  const head = ['Tag', 'Zeit', 'Act', 'Spielort', 'Genres', 'Land', 'Note',
+                'Wie oft', 'Notiz'];
   const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const csv = '\uFEFF' + [head, ...rows].map((r) => r.map(q).join(';')).join('\r\n');
   download('reeperbahn-gesehen.csv', csv, 'text/csv;charset=utf-8');
@@ -3302,11 +3509,13 @@ el.file.addEventListener('change', async () => {
   if (data.kind === 'rbf26-auswahl') {
     (data.fav || []).forEach((id) => fav.add(+id));
     (data.seen || []).forEach((id) => seen.add(+id));
+    // Ab Version 5: welche EINZELNEN Auftritte abgehakt sind.
+    (data.seenShow || []).forEach((id) => seenShow.add(String(id)));
     (data.revealed || []).forEach((id) => revealed.add(+id));
     Object.assign(note, data.note || {});
     Object.assign(rate, data.rate || {});
     Object.assign(hint, data.hint || {});
-    saveFav(); saveSeen(); saveRevealed();
+    saveFav(); saveSeen(); saveSeenShow(); saveRevealed();
     store.set('note', note); store.set('rate', rate); store.set('hint', hint);
 
     // Ab Version 4 (siehe exportChoice): Filter und Handauswahl im Abendplan.
@@ -3382,8 +3591,11 @@ document.addEventListener('click', (e) => {
 $('#btn-menu').addEventListener('click', () => {
   const rated = Object.keys(rate).length;
   $('#m-stats').textContent =
-    `${fav.size} Favoriten · ${rated} bewertet · ${seen.size} gesehen · `
-    + `${Object.keys(note).length} Notizen`;
+    /* Kuenstler UND Konzerte, sobald sie auseinandergehen - der Unterschied
+       ist die Antwort auf "wen haben wir doppelt gesehen". */
+    `${fav.size} Favoriten · ${rated} bewertet · ${seen.size} gesehen`
+    + (seenShow.size > seen.size ? ` (${seenShow.size} Konzerte)` : '')
+    + ` · ${Object.keys(note).length} Notizen`;
   applyTheme();
   partnerInfo();
   teamInfo();
@@ -3452,8 +3664,8 @@ function relTime(iso) {
    Die Suche ist absichtlich nicht Teil eines gespeicherten Filters (siehe
    savedFilters), hier geht also nichts Persoenliches mit. */
 function myTeamDoc() {
-  return { fav: [...fav], seen: [...seen], rate, filters: savedFilters,
-           at: new Date().toISOString() };
+  return { fav: [...fav], seen: [...seen], seenShow: [...seenShow],
+           rate, filters: savedFilters, at: new Date().toISOString() };
 }
 
 /* Mehrere Mitglieder werden zu EINER Partneransicht zusammengefasst: fuer zwei
@@ -3462,10 +3674,12 @@ function adoptOthers(others) {
   const usable = others.filter((o) => !o.undecryptable);
   if (!usable.length) return 0;
   const merged = { name: usable.map((o) => o.name || 'Team').join(', '),
-                   fav: [], seen: [], rate: {}, members: [] };
+                   fav: [], seen: [], seenShow: [], rate: {}, members: [] };
   for (const o of usable) {
     for (const id of (o.fav || [])) merged.fav.push(+id);
     for (const id of (o.seen || [])) merged.seen.push(+id);
+    // Auftritts-Haken ebenso: "wir waren da" ist eine Team-Aussage.
+    for (const id of (o.seenShow || [])) merged.seenShow.push(String(id));
     for (const [id, v] of Object.entries(o.rate || {})) {
       // Bei mehreren Personen gewinnt die bessere Note.
       if (!merged.rate[id] || +v < +merged.rate[id]) merged.rate[id] = +v;
@@ -3498,7 +3712,8 @@ function partnerSignature() {
                          Object.keys(partner.rate || {}).length,
                          (partner.members || []).map(
                            (m) => Object.keys(m.rate || {}).length),
-                         (partner.seen || []).length]);
+                         (partner.seen || []).length,
+                         (partner.seenShow || []).length]);
 }
 
 /* Automatischer Abgleich nach eigenen Aenderungen. Ohne das muesste man
@@ -3592,7 +3807,11 @@ async function runSync(quiet, pullOnly) {
     // filters gehoert mit hinein, seit sie im Dokument stehen: sonst
     // entscheidet die Signatur "nichts Neues" und ein frisch gespeicherter
     // Filter wird nie hochgeladen - die Pebble-App saehe ihn nie.
-    const sig = JSON.stringify([doc.fav, doc.seen, doc.rate, doc.filters]);
+    // seenShow gehoert dazu: den ZWEITEN Auftritt eines Acts abzuhaken
+    // aendert an doc.seen nichts - der Act stand schon drin -, und ohne
+    // diesen Eintrag ginge die Aenderung nie hoch.
+    const sig = JSON.stringify([doc.fav, doc.seen, doc.seenShow,
+                                doc.rate, doc.filters]);
     const needPush = !pullOnly && sig !== pushedSignature;
     /* Nach neuen Mitgliedern SUCHEN kostet eine Verzeichnis-Abfrage, und davon
        gibt es nur 1.000 am Tag. Also nur, wenn es einen Grund gibt: wir kennen
@@ -3999,6 +4218,7 @@ el.filePartner.addEventListener('change', async () => {
     name,
     fav: (data.fav || []).map(Number),
     seen: (data.seen || []).map(Number),
+    seenShow: (data.seenShow || []).map(String),
     rate: data.rate || {},
     // Auch eine einzelne Person ist ein Mitglied - sonst haette der
     // Durchschnitt in der Zeitleiste ausgerechnet im haeufigsten Fall
@@ -4114,8 +4334,10 @@ function swipePaint(dx) {
 }
 
 function swipeStart(row, touch) {
-  sw = { row, ai: +row.dataset.act, x0: touch.clientX, y0: touch.clientY,
-         dx: 0, active: false };
+  // Die Zeile IST ein Auftritt - fuer "gesehen" ist genau das die Aussage,
+  // nicht "diesen Kuenstler irgendwann".
+  sw = { row, ai: +row.dataset.act, sid: row.dataset.show,
+         x0: touch.clientX, y0: touch.clientY, dx: 0, active: false };
 }
 
 function swipeCancel() {
@@ -4137,7 +4359,7 @@ function swipeCancel() {
 
 function swipeFinish() {
   if (!sw) return;
-  const { dx, ai } = sw;
+  const { dx, ai, sid } = sw;
   const far = Math.abs(dx) >= swipeCfg.dist;
   const active = sw.active;
   swipeCancel();
@@ -4146,10 +4368,10 @@ function swipeFinish() {
   // Millisekunden. 500 ms hatten auch einen echten Tipper danach
   // verschluckt.
   suppressClickUntil = Date.now() + 350;
-  if (far) runSwipeAction(dx > 0 ? swipeCfg.right : swipeCfg.left, ai);
+  if (far) runSwipeAction(dx > 0 ? swipeCfg.right : swipeCfg.left, ai, sid);
 }
 
-function runSwipeAction(key, ai) {
+function runSwipeAction(key, ai, sid) {
   const act = S.data.acts[ai];
   if (!act || key === 'off') return;
   const id = act.id;
@@ -4164,12 +4386,21 @@ function runSwipeAction(key, ai) {
     return;
   }
   if (key === 'seen') {
-    const was = seen.has(id);
-    was ? seen.delete(id) : seen.add(id);
-    saveSeen(); scheduleSync(); refreshAct(ai);
-    toast(`${act.n}: ${was ? 'nicht mehr als gesehen' : 'als gesehen markiert'}`, 3200,
-          () => { was ? seen.add(id) : seen.delete(id);
-                  saveSeen(); scheduleSync(); refreshAct(ai); });
+    // Abgehakt wird dieser Auftritt. Ohne Kennung (sollte nicht vorkommen)
+    // bleibt der alte Weg ueber den Act.
+    if (!sid) {
+      const was = seen.has(id);
+      was ? seen.delete(id) : seen.add(id);
+      saveSeen(); scheduleSync(); refreshAct(ai);
+      return;
+    }
+    const jetzt = toggleSeenShow(sid, id);
+    scheduleSync(); refreshAct(ai);
+    const sh = showMap().get(String(sid));
+    const wann = sh ? ` (${dayLabel(sh)}${sh.tbd ? '' : ' ' + hhmm(sh.t)})` : '';
+    toast(`${act.n}${wann}: ${jetzt ? 'als gesehen markiert' : 'nicht mehr als gesehen'}`,
+          3200,
+          () => { toggleSeenShow(sid, id); scheduleSync(); refreshAct(ai); });
     return;
   }
   const want = key === 'rate1' ? 1 : 5;

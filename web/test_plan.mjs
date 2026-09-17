@@ -203,5 +203,68 @@ ok('Derselbe Act ist keine Alternative zu sich selbst',
    !par.some((x) => x.id === 'p4'));
 ok('Das Wertvollste steht vorn', par[0] && par[0].id === 'p1');
 
+/* ---------- Das Budget gilt fuer JEDE Etappe ----------
+
+   Aufgefallen, als die Voreinstellung von 40 auf 30 Minuten Spielzeit ging:
+   der Abendplan wies eine Etappe mit 26 Minuten Ueberschneidung aus, obwohl
+   20 eingestellt waren. Der Fehler lag in der Rechnung, nicht in der
+   Voreinstellung - die hat ihn nur ans Licht geholt.
+
+   Die klassische gewichtete Intervallauswahl sucht zu jedem Auftritt den
+   LETZTEN vertraeglichen Vorgaenger und rechnet mit dem besten Plan bis
+   dorthin weiter. Das setzt voraus: ist ein Vorgaenger vertraeglich, sind
+   alle frueheren es auch. Bei reinen Zeitintervallen stimmt das. Mit
+   Fusswegen nicht - ein FRUEHERER Auftritt am anderen Ende der Stadt kann
+   unvertraeglich sein, waehrend der spaetere nebenan passt. Genau der
+   fruehere stand dann im "besten Plan bis dorthin" und landete ungeprueft
+   neben dem naechsten.
+
+   Der Fall unten ist von Hand gerechnet: zwischen Fern (20:00, weit weg)
+   und Ziel (20:45, nebenan) liegen rund 27 Minuten, erlaubt sind 10. */
+const OrtA = { lat: 53.5500, lng: 9.9600, name: 'A' };
+const Weit = { lat: 53.5700, lng: 9.9900, name: 'Weit' };
+const luecke = buildPlan([
+  { id: 'f', actId: 1, name: 'Fern', startIso: '2026-09-18T20:00:00+02:00',
+    venue: Weit, value: 10 },
+  { id: 'n', actId: 2, name: 'Nah', startIso: '2026-09-18T20:20:00+02:00',
+    venue: OrtA, value: 1 },
+  { id: 'z', actId: 3, name: 'Ziel', startIso: '2026-09-18T20:45:00+02:00',
+    venue: OrtA, value: 10 },
+], { setMinutes: 30, overlapMinutes: 10 });
+const schlimmste = Math.max(0, ...luecke.stops.map((s) => s.overlapBefore || 0));
+ok('Keine Etappe im Plan ueberzieht das Ueberschneidungsbudget',
+   schlimmste <= 10,
+   `hoechstens ${schlimmste} min bei 10 erlaubt — `
+   + luecke.stops.map((s) => `${s.name}(${s.overlapBefore})`).join(' '));
+
+/* Und dasselbe in der Breite, damit es nicht am einen Fall haengt: viele
+   Auftritte an drei weit auseinanderliegenden Orten, alle Budgets und
+   Spielzeiten durchprobiert. */
+const orte = [OrtA, Weit, { lat: 53.5600, lng: 9.9450, name: 'Dritt' }];
+const viele = [];
+for (let i = 0; i < 40; i++) {
+  const h = 18 + Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  viele.push({
+    id: `v${i}`, actId: i, name: `V${i}`,
+    startIso: `2026-09-18T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00+02:00`,
+    venue: orte[i % 3], value: ((i * 7) % 5) + 1,
+  });
+}
+const ueberzogen = [];
+for (const budget of [0, 5, 10, 15, 20, 30]) {
+  for (const set of [30, 40, 50]) {
+    const p = buildPlan(viele, { setMinutes: set, overlapMinutes: budget });
+    for (const s of p.stops) {
+      const grenze = budget > 0 ? budget : 0;
+      if ((s.overlapBefore || 0) > grenze) {
+        ueberzogen.push(`${set}/${budget}: ${s.name} ${s.overlapBefore}`);
+      }
+    }
+  }
+}
+ok('Auch ueber alle Budgets und Spielzeiten hinweg', ueberzogen.length === 0,
+   ueberzogen.slice(0, 3).join(' | ') || '18 Kombinationen geprueft');
+
 console.log(fails ? `\nFEHLGESCHLAGEN: ${fails}` : '\nPLAN-ALGORITHMUS: ALLE PRUEFUNGEN BESTANDEN');
 process.exit(fails ? 1 : 0);

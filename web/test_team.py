@@ -240,6 +240,31 @@ with sync_playwright() as p:
     check("Und zwar im schnellen Takt, nicht im gedrosselten",
           arrived is not None and arrived < 45, f"{arrived} s")
 
+    # ---------- Ein abgehakter AUFTRITT geht denselben Weg ----------
+    # Er steht in einem eigenen Feld (seenShow), weil "gesehen" am Act nicht
+    # sagen kann, ob man einmal oder zweimal da war. Diese Pruefung faellt
+    # durch, wenn das Feld aus dem Dokument oder aus dem Vergleich faellt,
+    # der ueber das Hochladen entscheidet: an der Liste der gesehenen ACTS
+    # aendert der zweite Termin desselben Acts naemlich nichts.
+    sid = A.locator(".row").first.get_attribute("data-show")
+    A.locator(".row").first.locator(".row-time").click()
+    A.wait_for_selector("#detail .slots")
+    A.locator(f'#detail [data-seenshow="{sid}"]').click()
+    A.wait_for_timeout(400)
+    if A.locator("#quick[open]").count():
+        A.keyboard.press("Escape"); A.wait_for_timeout(250)
+    A.keyboard.press("Escape"); A.wait_for_timeout(250)
+    t1 = _t.time(); kam = None
+    while _t.time() - t1 < 60:
+        drin = B.evaluate("""(sid) => {
+          const p = JSON.parse(localStorage.getItem('rbf26.partner') || 'null');
+          return !!(p && (p.seenShow || []).includes(String(sid)));
+        }""", sid)
+        if drin: kam = int(_t.time() - t1); break
+        _t.sleep(2)
+    check("Der abgehakte Auftritt kommt bei der Gegenseite an", kam is not None,
+          f"nach {kam} s" if kam is not None else f"nie (Auftritt {sid})")
+
     # Sichtbarer Zustand: laeuft der Abgleich, muss man das sehen koennen -
     # vorher stand nur Prosa im Menue und man konnte nicht erkennen, dass
     # ueberhaupt nichts eingerichtet war.

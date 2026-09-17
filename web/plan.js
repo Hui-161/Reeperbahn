@@ -150,41 +150,51 @@ function solvePlan(items, o) {
   if (!shows.length) return { stops: [], dropped: [], totalValue: 0, walkTotal: 0 };
 
   const n = shows.length;
-  const best = new Array(n + 1).fill(0);
-  const choice = new Array(n + 1).fill(null);   // {take:boolean, prev:index}
 
-  for (let i = 1; i <= n; i++) {
-    const cur = shows[i - 1];
-    // (a) diesen Auftritt weglassen
-    let bestValue = best[i - 1];
-    let bestChoice = { take: false, prev: i - 1 };
+  /* Bester Abend, der MIT diesem Auftritt endet - und der Vorgaenger, ueber
+     den er dorthin kam.
 
-    // (b) diesen Auftritt nehmen: letzten vertraeglichen Vorgaenger suchen
-    let prev = 0;
-    for (let j = i - 1; j >= 1; j--) {
-      const cand = shows[j - 1];
-      if (slackBetween(cand, cur, o) >= minSlack(o)) {
-        prev = j;
-        break;
-      }
+     Frueher stand hier die Lehrbuchfassung: bester Abend BIS zu diesem
+     Auftritt, und dazu der letzte vertraegliche Vorgaenger, ab dem alles
+     davor als erlaubt gilt. Das stimmt fuer reine Zeitintervalle - ist ein
+     Vorgaenger vertraeglich, sind alle frueheren es erst recht.
+     Hier stimmt es nicht: zwischen zwei Auftritten liegt ein FUSSWEG, und
+     der haengt am Ort, nicht an der Uhrzeit. Ein frueherer Auftritt am
+     anderen Ende der Stadt kann unvertraeglich sein, waehrend der spaetere
+     nebenan passt. Der fruehere steckte dann im "besten Abend bis dorthin"
+     und stand hinterher ungeprueft neben dem naechsten - gemessen 34
+     Minuten Ueberschneidung bei 10 erlaubten, und 22 Minuten sogar bei
+     abgeschaltetem Budget.
+
+     Jetzt wird jeder Vorgaenger einzeln geprueft. Damit ist jedes Paar, das
+     im Plan nebeneinander steht, auch wirklich geprueft worden. Das kostet
+     n² statt n log n - bei hoechstens ein paar hundert Auftritten je Abend
+     ist das nicht messbar, und richtig zu rechnen ist es wert. */
+  const bestEnd = new Array(n).fill(0);
+  const from = new Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    const cur = shows[i];
+    let bestPrev = 0;
+    let bestJ = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (slackBetween(shows[j], cur, o) < minSlack(o)) continue;
+      if (bestEnd[j] > bestPrev) { bestPrev = bestEnd[j]; bestJ = j; }
     }
-    const withCur = cur.value + best[prev];
-    if (withCur > bestValue) {
-      bestValue = withCur;
-      bestChoice = { take: true, prev };
-    }
-    best[i] = bestValue;
-    choice[i] = bestChoice;
+    bestEnd[i] = cur.value + bestPrev;
+    from[i] = bestJ;
+  }
+
+  // Wo endet der beste Abend? Bei Gleichstand der fruehere - er laesst mehr
+  // Abend uebrig, dieselbe Regel wie beim Streichen doppelter Acts.
+  let last = -1;
+  let bestValue = 0;
+  for (let i = 0; i < n; i++) {
+    if (bestEnd[i] > bestValue) { bestValue = bestEnd[i]; last = i; }
   }
 
   // Rueckwaerts auflesen, welche Auftritte im Plan stehen.
   const picked = [];
-  let i = n;
-  while (i > 0) {
-    const c = choice[i];
-    if (c.take) picked.push(shows[i - 1]);
-    i = c.prev;
-  }
+  for (let i = last; i >= 0; i = from[i]) picked.push(shows[i]);
   picked.reverse();
 
   const chosen = new Set(picked.map((s) => s.id));
@@ -219,7 +229,7 @@ function solvePlan(items, o) {
   return {
     stops,
     dropped,
-    totalValue: best[n],
+    totalValue: bestValue,
     walkTotal: stops.reduce((sum, s) => sum + s.walkFromPrev, 0),
   };
 }
