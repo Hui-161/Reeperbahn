@@ -1589,6 +1589,31 @@ const tlLane = () => (innerWidth <= 416 ? TL_LANE_SCHMAL : TL_LANE);
 function renderTimeline(plan, items, opts) {
   const box = $('#plan-time');
   if (!box) return;
+
+  /* ---------- Der Blick bleibt, wo er ist ----------
+
+     Diese Ansicht wird bei jeder Kleinigkeit neu gebaut - eine Prioritaet
+     umgestellt, eine Note vergeben, ein Auftritt abgehakt. Dabei wird
+     box.innerHTML ersetzt, und fuer einen Augenblick ist die Leiste weg:
+     das Dokument schrumpft unter die Scrollposition, und der Browser klemmt
+     sie. Gemessen auf Telefongroesse (360x740): vor dem Umstellen stand die
+     Seite bei 1123 Pixeln, nach dem ersten Tipper bei 0 - und bei jedem
+     weiteren wieder. Man landet also immer am Anfang der Leiste.
+
+     Gemerkt wird deshalb nicht der Scrollwert, sondern die UHRZEIT am
+     oberen Bildrand. Danach wird hinterher wieder ausgerichtet. Das haelt
+     auch dann, wenn sich der Anfang der Leiste verschiebt, weil ein
+     frueherer Auftritt dazukommt oder wegfaellt - eine Zahl waere dann
+     falsch, die Uhrzeit stimmt weiter. */
+  const vorher = (() => {
+    const sc = box.querySelector('.tl-scroll');
+    if (!sc || box.hidden || sc.offsetParent === null) return null;
+    const oben = sc.getBoundingClientRect().top + scrollY;   // im Dokument
+    // Nur wenn die Leiste ueberhaupt angeschnitten ist - sonst gehoert der
+    // Blick woanders hin und darf nicht angefasst werden.
+    if (scrollY <= oben) return null;
+    return { minute: tlT0 + (scrollY - oben) / TL_PX_PER_MIN };
+  })();
   /* Die Leiste zeigt MEHR als die Rechnung kennt: auch die von Hand
      ausgeschlossenen Termine. Die Liste laesst sie zu Recht weg - sie
      stehen nicht im Plan -, aber hier sollen sie grau stehenbleiben, damit
@@ -1810,6 +1835,14 @@ function renderTimeline(plan, items, opts) {
   sc.addEventListener('scroll',
     () => { tlScrollLeft = sc.scrollLeft; }, { passive: true });
   tlPlaceScroll(sc);
+
+  // Und wieder auf dieselbe Uhrzeit ausrichten (siehe oben). Nach dem
+  // Setzen der Leinwandhoehe, sonst ist das Dokument noch zu kurz dafuer.
+  if (vorher) {
+    const oben = sc.getBoundingClientRect().top + scrollY;
+    const ziel = oben + (vorher.minute - t0) * TL_PX_PER_MIN;
+    if (Math.abs(ziel - scrollY) > 1) scrollTo({ top: Math.max(0, ziel), behavior: 'instant' });
+  }
 
   /* Die Verbindung von Station zu Station mit der Laufzeit daran. Als SVG,
      weil eine schraege duenne Linie mit gedrehten Kaesten nur haesslich

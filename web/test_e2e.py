@@ -2969,6 +2969,66 @@ with sync_playwright() as p:
           f'{pg15.locator(".tl-act .tl-bis").count()} von {tl15["bloecke"]}')
     check("Keine JS-Fehler im Spielzeit-Kontext", not err15, str(err15[:2]))
     ctx15.close()
+    # --- Der Blick bleibt beim Umstellen der Priorität stehen ---
+    # Gemeldet: "In Timeline Priorität ändern. Springe ich immer wieder an
+    # den Anfang der Timeline." Ursache war nicht die Leiste selbst, sondern
+    # das Neuzeichnen: box.innerHTML wird ersetzt, das Dokument ist einen
+    # Augenblick kürzer als die Scrollposition, und der Browser klemmt sie
+    # auf 0. Gemessen auf Telefongröße - auf einem breiten Fenster passiert
+    # es nicht, deshalb läuft diese Prüfung ausdrücklich bei 360x740.
+    ctx16 = b.new_context(viewport={"width": 360, "height": 740}, locale="de-DE",
+                          has_touch=True, is_mobile=True)
+    pg16 = ctx16.new_page()
+    err16 = []
+    pg16.on("pageerror", lambda e: err16.append(str(e)))
+    lineup16 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
+    day16 = lineup16["days"][1]
+    ids16 = list(dict.fromkeys(
+        [lineup16["acts"][s["a"]]["id"] for s in lineup16["shows"]
+         if s["d"] == day16 and not s["tbd"]]))[:70]
+    pg16.goto(BASE + "/", wait_until="load")
+    pg16.wait_for_selector(".row", timeout=20000)
+    pg16.evaluate("""(ids) => {
+      const r = {};
+      ids.forEach((id, i) => { r[id] = (i % 3) + 1; });
+      localStorage.setItem('rbf26.rate', JSON.stringify(r));
+    }""", ids16)
+    pg16.reload(wait_until="load")
+    pg16.wait_for_selector(".row", timeout=20000)
+    pg16.click(f'.day[data-day="{day16}"]'); pg16.wait_for_timeout(400)
+    pg16.click("#btn-plan"); pg16.wait_for_timeout(700)
+    pg16.click("#plan-timeline"); pg16.wait_for_timeout(800)
+    # Weit in die Leiste hinein - erst dort greift das Klemmen.
+    pg16.evaluate("""() => scrollTo(0, Math.round(document.body.scrollHeight * 0.55))""")
+    pg16.wait_for_timeout(500)
+    y_vor = pg16.evaluate("() => Math.round(scrollY)")
+    check("Für die Prüfung wirklich weit gescrollt", y_vor > 400, f"{y_vor} px")
+    ref16 = pg16.evaluate("""() => {
+      const e = [...document.querySelectorAll('.tl-act')].find(x => {
+        const r = x.getBoundingClientRect();
+        return r.top > 120 && r.bottom < innerHeight - 60;
+      });
+      return e ? e.dataset.tlshow : null;
+    }""")
+    pg16.locator(f'.tl-act[data-tlshow="{ref16}"]').click()
+    pg16.wait_for_selector("#tlmenu[open]")
+    y_offen = pg16.evaluate("() => Math.round(scrollY)")
+    check("Das Öffnen der Griffe verschiebt die Seite nicht",
+          abs(y_offen - y_vor) <= 2, f"{y_vor} -> {y_offen}")
+    # Fünfmal umstellen - gemeldet war "immer wieder".
+    verlauf = []
+    for modus in ("fest", "raus", "auto", "fest", "raus"):
+        pg16.locator(f'#tl-plan button[data-tlplan="{modus}"]').click()
+        pg16.wait_for_timeout(700)
+        verlauf.append(pg16.evaluate("() => Math.round(scrollY)"))
+    check("Und das Umstellen der Priorität auch nicht",
+          all(abs(y - y_vor) <= 2 for y in verlauf), f"{y_vor} -> {verlauf}")
+    pg16.keyboard.press("Escape"); pg16.wait_for_timeout(500)
+    check("Nach dem Schließen steht man immer noch dort",
+          abs(pg16.evaluate("() => Math.round(scrollY)") - y_vor) <= 2,
+          f'{y_vor} -> {pg16.evaluate("() => Math.round(scrollY)")}')
+    check("Keine JS-Fehler im Verankerungs-Kontext", not err16, str(err16[:2]))
+    ctx16.close()
     # --- Gesehen: das einzelne Konzert gegen den ganzen Künstler ---
     # 62 Acts spielen mehrfach. "Gesehen" am Act allein kann deshalb nicht
     # sagen, ob man einmal oder zweimal da war - und genau das will man am
