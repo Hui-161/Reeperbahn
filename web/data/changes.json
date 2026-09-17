@@ -1,8 +1,170 @@
 {
-  "generated_from": "2026-09-16T10:07:28",
-  "compared": 18,
-  "total": 353,
+  "generated_from": "2026-09-17T10:09:54",
+  "compared": 19,
+  "total": 371,
   "entries": [
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "removed",
+      "act": "pinkpool",
+      "show": "13814",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "removed",
+      "act": "Malummí",
+      "show": "13732",
+      "what": "aus dem Programm genommen",
+      "from": "20:10",
+      "to": ""
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "removed",
+      "act": "BELLA REED",
+      "show": "13832",
+      "what": "aus dem Programm genommen",
+      "from": "06:00",
+      "to": ""
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "added",
+      "act": "yung pepp",
+      "show": "14001",
+      "what": "neu im Programm",
+      "from": "",
+      "to": "18:30"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "LoSin",
+      "show": "13696",
+      "what": "Uhrzeit",
+      "from": "16:30",
+      "to": "17:15"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "CECI",
+      "show": "13784",
+      "what": "Uhrzeit",
+      "from": "18:00",
+      "to": "19:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Zoltani",
+      "show": "13772",
+      "what": "Uhrzeit",
+      "from": "16:30",
+      "to": "16:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Day We Ran",
+      "show": "12551",
+      "what": "Uhrzeit",
+      "from": "21:10",
+      "to": "20:40"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Philine Sonny",
+      "show": "13376",
+      "what": "Uhrzeit",
+      "from": "20:50",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "FREDRIK",
+      "show": "13698",
+      "what": "Uhrzeit",
+      "from": "18:00",
+      "to": "18:45"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Sharaktah",
+      "show": "13776",
+      "what": "Uhrzeit",
+      "from": "19:30",
+      "to": "20:15"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Carla Ahad",
+      "show": "12552",
+      "what": "Uhrzeit",
+      "from": "21:40",
+      "to": "21:30"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "The Sukis",
+      "show": "13459",
+      "what": "Uhrzeit",
+      "from": "21:00",
+      "to": "22:10"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Robine",
+      "show": "13774",
+      "what": "Uhrzeit",
+      "from": "18:00",
+      "to": "17:30"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "yung pepp",
+      "show": "13978",
+      "what": "Uhrzeit",
+      "from": "stand noch nicht fest",
+      "to": "19:15"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "Ambre Vallet",
+      "show": "13778",
+      "what": "Uhrzeit",
+      "from": "16:30",
+      "to": "17:15"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "MELLER",
+      "show": "13692",
+      "what": "Uhrzeit",
+      "from": "20:45",
+      "to": "22:00"
+    },
+    {
+      "at": "2026-09-17T10:09:54",
+      "kind": "moved",
+      "act": "MarkMoon",
+      "show": "13786",
+      "what": "Uhrzeit",
+      "from": "19:15",
+      "to": "20:30"
+    },
     {
       "at": "2026-09-16T10:07:28",
       "kind": "removed",
@@ -105,20 +267,20 @@
     {
       "at": "2026-09-16T10:07:28",
       "kind": "moved",
-      "act": "Adjua",
-      "show": "13340",
-      "what": "Uhrzeit",
-      "from": "18:45",
-      "to": "20:15"
-    },
-    {
-      "at": "2026-09-16T10:07:28",
-      "kind": "moved",
       "act": "They Owe Us",
       "show": "12571",
       "what": "Uhrzeit",
       "from": "stand noch nicht fest",
       "to": "20:10"
+    },
+    {
+      "at": "2026-09-16T10:07:28",
+      "kind": "moved",
+      "act": "Adjua",
+      "show": "13340",
+      "what": "Uhrzeit",
+      "from": "18:45",
+      "to": "20:15"
     },
     {
       "at": "2026-09-15T10:13:27",
@@ -375,173 +537,11 @@
     {
       "at": "2026-09-14T10:49:31",
       "kind": "moved",
-      "act": "LIONSTORM",
-      "show": "12525",
-      "what": "Uhrzeit",
-      "from": "15:30",
-      "to": "16:30"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "moved",
-      "act": "The Homesick",
-      "show": "12524",
-      "what": "Uhrzeit",
-      "from": "13:30",
-      "to": "14:30"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "moved",
       "act": "LudoWic",
       "show": "12558",
       "what": "Uhrzeit",
       "from": "14:00",
       "to": "13:30"
-    },
-    {
-      "at": "2026-09-14T10:49:31",
-      "kind": "moved",
-      "act": "néomí",
-      "show": "12559",
-      "what": "Uhrzeit",
-      "from": "14:30",
-      "to": "15:30"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "removed",
-      "act": "Nothing But Thieves",
-      "show": "12900",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "removed",
-      "act": "Karen Dió",
-      "show": "12924",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "removed",
-      "act": "Avralize",
-      "show": "12801",
-      "what": "aus dem Programm genommen",
-      "from": "06:00",
-      "to": ""
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "tosha",
-      "show": "13856",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:20"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "SOUZA SIX",
-      "show": "13855",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:05"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Skrt Cobain",
-      "show": "13853",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Ramzey & Gianni Suave",
-      "show": "13874",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Ramzey & Gianni Suave",
-      "show": "13870",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "06:00"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Queen Mahoro",
-      "show": "13845",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "16:15"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Rosc",
-      "show": "13852",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "20:40"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Paul Holland",
-      "show": "13821",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:15"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Nothing But Thieves",
-      "show": "13841",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:00"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Luna Simao",
-      "show": "13825",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "16:00"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "Karen Dió",
-      "show": "13840",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "21:50"
-    },
-    {
-      "at": "2026-09-12T09:28:30",
-      "kind": "added",
-      "act": "goldie 333",
-      "show": "13854",
-      "what": "neu im Programm",
-      "from": "",
-      "to": "19:45"
     }
   ]
 }
