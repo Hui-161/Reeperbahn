@@ -1106,6 +1106,8 @@ function closePlayer() {
   document.body.classList.remove('has-player');
   // Auch hier nur die Symbole: sonst springt die Liste beim Schliessen.
   refreshPlayIcons();
+  // Kam man aus den Griffen der Zeitleiste, geht es dorthin zurueck.
+  tlComeBack();
 }
 
 /* ---------- Scrollposition halten (Wunsch 2) ---------- */
@@ -1808,7 +1810,9 @@ el.tlmenu.addEventListener('click', (e) => {
   const play = e.target.closest('[data-tlplay]');
   if (play) {
     // Der Player sitzt unten am Bildschirm - hinter dem Dialog waere er
-    // nicht zu bedienen, also macht der Griff den Dialog zu.
+    // nicht zu bedienen, also macht der Griff den Dialog zu. Beim
+    // Schliessen der Leiste geht es hierher zurueck.
+    tlReturn = tlShow;
     el.tlmenu.close();
     openPlayer(play.dataset.tlplay, act.n, act.id, sh.a);
     return;
@@ -1819,6 +1823,7 @@ el.tlmenu.addEventListener('click', (e) => {
      uebereinander waeren eine Ebene zu viel zum Zurueckgehen, also macht
      dieser Griff seinen eigenen zu. */
   if (e.target.closest('#tl-detail')) {
+    tlReturn = tlShow;
     el.tlmenu.close();
     openDetail(sh.a);
     return;
@@ -1837,6 +1842,36 @@ el.tlmenu.addEventListener('click', (e) => {
   }
   const planBtn = e.target.closest('[data-tlplan]');
   if (planBtn) { setTlPlan(planBtn.dataset.tlplan); return; }
+});
+
+/* ---------- Der Rueckweg in die Griffe ----------
+
+   Von den Griffen fuehren zwei Abstecher weg: die ausfuehrliche
+   Kuenstlerkarte und die Anspielleiste. Beide machen die Griffe zu - zwei
+   modale Dialoge uebereinander waeren eine Ebene zu viel, und die Leiste
+   sitzt unten am Bildschirm, hinter einem Dialog waere sie nicht zu
+   bedienen.
+
+   Wer von dort zurueckkommt, will aber nicht draussen in der Zeitleiste
+   stehen, sondern wieder bei dem Auftritt, bei dem er war. Also merken,
+   wohin zurueck - und nur dann zurueck, wenn man ueberhaupt noch in der
+   Zeitleiste ist. Wer von der Kuenstlerkarte aus auf die Karte springt,
+   soll dort bleiben. */
+let tlReturn = null;
+
+function tlComeBack() {
+  const ziel = tlReturn;
+  tlReturn = null;
+  if (!ziel || !S.planOn || S.mapOn || S.newsOn || $('#plan-time').hidden) return;
+  if (el.detail.open || !el.player.hidden) return;   // noch mitten im Abstecher
+  openTlMenu(ziel);
+}
+
+el.detail.addEventListener('close', () => {
+  syncDialogCount();
+  // Verzoegert: schliesst der Spieler-Knopf gerade die Karte, damit die
+  // Leiste aufgeht, soll nicht sofort der Dialog darueberklappen.
+  setTimeout(tlComeBack, 0);
 });
 
 el.tlmenu.addEventListener('close', () => { tlShow = null; syncDialogCount(); });

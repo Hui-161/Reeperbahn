@@ -2405,8 +2405,28 @@ with sync_playwright() as p:
           <= {t.strip().title() for t in
               pg7.locator("#detail .d-section h3").all_inner_texts()},
           str(pg7.locator("#detail .d-section h3").all_inner_texts()[:5]))
-    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(400)
-    check("Ein Zurück reicht von dort in die Zeitleiste",
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(600)
+    # Und man landet wieder bei dem Auftritt, bei dem man war - nicht
+    # draußen in der Leiste. Der Abstecher hat die Griffe nur geparkt.
+    check("Zurück aus der Künstlerkarte führt in die Griffe",
+          pg7.locator("#tlmenu[open]").count() == 1
+          and pg7.locator("#detail[open]").count() == 0
+          and pg7.locator("#tl-name").inner_text() == tl_titel,
+          f'{pg7.locator("#tl-name").inner_text()} gegen {tl_titel}')
+    # Dasselbe über die Anspielleiste, wenn dieser Act bei Spotify ist.
+    if pg7.locator("#tl-top [data-tlplay]").count():
+        pg7.locator("#tl-top [data-tlplay]").click(); pg7.wait_for_timeout(900)
+        check("Die Anspielleiste parkt die Griffe ebenso",
+              not pg7.locator("#player").is_hidden()
+              and pg7.locator("#tlmenu[open]").count() == 0)
+        pg7.click("#player-close"); pg7.wait_for_timeout(700)
+        check("Und ihr Schließen führt genauso zurück",
+              pg7.locator("#tlmenu[open]").count() == 1
+              and pg7.locator("#tl-name").inner_text() == tl_titel,
+              pg7.locator("#tl-name").inner_text())
+    # Erst das nächste Zurück verlässt die Griffe wirklich.
+    pg7.keyboard.press("Escape"); pg7.wait_for_timeout(600)
+    check("Ein weiteres Zurück verlässt die Griffe in die Zeitleiste",
           pg7.locator("dialog[open]").count() == 0
           and pg7.locator("#plan-time").is_visible())
     # Fuer die letzte Pruefung die Griffe wieder oeffnen - irgendeinen
