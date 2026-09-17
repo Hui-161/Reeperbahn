@@ -196,7 +196,22 @@ with sync_playwright() as p:
     # Aenderung an einem bestehenden Eintrag nach 1 Sekunde abrufbar - die
     # App hat nur zu selten nachgefragt. Diese Pruefung faellt durch, wenn
     # der Takt wieder hochgesetzt wird.
+    #
+    # Vorher muss B allerdings frisch aufgeschlagen werden, sonst misst diese
+    # Pruefung nicht den Takt, sondern die Vorgeschichte des Tests. Gemessen an
+    # einer Seite mit Team ueber vier Minuten: Anfragen bei Sekunde 1, 21, 41,
+    # 61, 81, 101, 121 - und dann erst wieder bei 211. Nach zwei Minuten ohne
+    # Neuigkeit drosselt startPulling() von 20 auf 90 Sekunden; das ist
+    # gewollt und haelt den Tagesdeckel des Speichers ein. Bis hierher ist B
+    # aber laengst ueber diesen Punkt hinaus, und ob im Fenster unten noch ein
+    # Takt liegt, entscheidet dann der Zufall: lokal ging es durch, auf dem
+    # geteilten Rechner der CI nicht (Lauf 57). Neu laden setzt den Takt auf
+    # den schnellen zurueck - genau das passiert auch, wenn man die App auf
+    # dem Telefon oeffnet - und gemessen wird wieder der Takt.
     A.keyboard.press("Escape"); A.wait_for_timeout(200)
+    B.reload(wait_until="load")
+    B.wait_for_selector(".row", timeout=20000)
+    B.wait_for_timeout(2500)          # der Abgleich beim Laden zuerst
     before = B.evaluate("""() => {
       const p = JSON.parse(localStorage.getItem('rbf26.partner') || 'null');
       return p ? Object.keys(p.rate || {}).length : 0;
@@ -209,9 +224,11 @@ with sync_playwright() as p:
     A.locator(".rate button[data-r='4']").click()
     A.keyboard.press("Escape")
     t0 = _t.time(); arrived = None
-    # Grosszuegig bemessen, damit ein langsamer Rechner den Test nicht
-    # rot macht - aber weit unter den 90 Sekunden von vorher.
-    while _t.time() - t0 < 45:
+    # Grosszuegig bemessen, damit ein langsamer Rechner den Test nicht rot
+    # macht - aber weit unter den 90 Sekunden des gedrosselten Takts. Im
+    # schnellen Takt dauert es hoechstens 4 s Verzoegerung beim Hochladen plus
+    # 20 s bis zur naechsten Frage; gemessen waren es 8 s.
+    while _t.time() - t0 < 60:
         now = B.evaluate("""() => {
           const p = JSON.parse(localStorage.getItem('rbf26.partner') || 'null');
           return p ? Object.keys(p.rate || {}).length : 0;
@@ -219,9 +236,9 @@ with sync_playwright() as p:
         if now > before: arrived = int(_t.time() - t0); break
         _t.sleep(2)
     check("Aenderung kommt ohne Knopfdruck an", arrived is not None,
-          f"nach {arrived} s" if arrived is not None else "nie (Grenze 45 s)")
-    check("Und zwar deutlich schneller als die alten 90 s",
-          arrived is not None and arrived < 40, f"{arrived} s")
+          f"nach {arrived} s" if arrived is not None else "nie (Grenze 60 s)")
+    check("Und zwar im schnellen Takt, nicht im gedrosselten",
+          arrived is not None and arrived < 45, f"{arrived} s")
 
     # Sichtbarer Zustand: laeuft der Abgleich, muss man das sehen koennen -
     # vorher stand nur Prosa im Menue und man konnte nicht erkennen, dass

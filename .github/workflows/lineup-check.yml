@@ -1,24 +1,33 @@
 name: lineup-check
 
-# Taeglicher Abruf. Bei Aenderungen: Issue anlegen, Snapshot und Web-Daten
-# committen. Der Commit loest das Cloudflare-Pages-Deployment aus.
+# Taeglicher Abruf, waehrend des Festivals stuendlich. Bei Aenderungen:
+# Issue anlegen, Snapshot und Web-Daten committen. Der Commit loest den
+# Cloudflare-Build aus (Workers Builds, siehe DEPLOY.md Weg A) - deshalb
+# kostet nicht der Lauf etwas, sondern die Aenderung.
 on:
   schedule:
     # Das ganze Jahr einmal taeglich.
     - cron: "30 5 * * *"
-    # Waehrend des Festivals alle 30 Minuten. Dann aendern sich Zeiten,
-    # Absagen und Nachtraege stuendlich, und ein Stand von gestern frueh
-    # taugt nicht mehr zum Planen. Der Lauf dauert 43 Sekunden, das Repo
-    # ist oeffentlich, Actions-Minuten kosten also nichts.
+    # Waehrend des Festivals stuendlich. Dann aendern sich Zeiten, Absagen
+    # und Nachtraege laufend, und ein Stand von gestern frueh taugt nicht
+    # mehr zum Planen. Der Lauf dauert 43 Sekunden, das Repo ist
+    # oeffentlich, Actions-Minuten kosten also nichts.
     #
-    # Krumme Minuten mit Absicht: zur vollen Stunde stehen bei GitHub die
+    # Halbstuendlich war es kurz - zurueckgedreht, weil nicht der Lauf das
+    # knappe Gut ist, sondern das, was er ausloest: jeder Commit mit neuen
+    # Daten startet einen Cloudflare-Build (siehe DEPLOY.md). Stuendlich
+    # heisst hoechstens 24 statt 48 Builds am Tag und halbiert zugleich die
+    # Last bei der Quelle: rund 550 statt 1.100 Anfragen an fuenf Tagen.
+    # Eine Stunde alt reicht zum Planen eines Abends allemal.
+    #
+    # Krumme Minute mit Absicht: zur vollen Stunde stehen bei GitHub die
     # meisten Zeitplaene an, und genau dann sind die Verzoegerungen am
     # groessten.
     #
     # Die Tage stehen fest verdrahtet (16.-20. September), weil das
     # Festival jedes Jahr an anderen Tagen liegt. Der 20. ist dabei, weil
     # der Samstagabend bis in den Sonntag hineinreicht.
-    - cron: "7,37 * 16-20 9 *"
+    - cron: "7 * 16-20 9 *"
   workflow_dispatch:
 
 permissions:
@@ -117,11 +126,19 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Nur beim taeglichen Lauf und von Hand. Bei 48 Laeufen am Tag waere
+      # Nur beim taeglichen Lauf und von Hand. Bei stuendlichen Laeufen waere
       # ein Issue je Aenderung Laerm statt Hinweis - und was sich geaendert
       # hat, steht ohnehin in der App unter "Aenderungen am Programm".
+      #
+      # Bewusst positiv formuliert: aufgezaehlt wird, WANN ein Issue entsteht,
+      # nicht wann nicht. Stimmt die Zeichenkette nach einer Aenderung am
+      # Zeitplan oben nicht mehr, bleibt es dann still - statt bei jedem
+      # stuendlichen Lauf ein Issue anzulegen.
       - name: Issue anlegen
-        if: steps.sync.outputs.code == '10' && github.event.schedule != '7,37 * 16-20 9 *'
+        if: >-
+          steps.sync.outputs.code == '10' &&
+          (github.event_name == 'workflow_dispatch' ||
+           github.event.schedule == '30 5 * * *')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
