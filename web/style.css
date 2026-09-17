@@ -1758,13 +1758,37 @@ dialog:not([open])::backdrop { background: transparent; }
   color: var(--ink-faint);
   font-size: .9rem;
 }
-/* Nur der Haken darf nach rechts schieben - stehen zwei Knoepfe da, soll
-   die Luecke vor dem ersten sein, nicht zwischen beiden. */
-.slots .slot-seen ~ button { margin-left: .35rem; }
+/* Nur die Haken duerfen nach rechts schieben - steht "Karte" daneben, soll
+   die Luecke vor den Haken sein, nicht zwischen ihnen. */
+.slot-marks {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+.slots .slot-marks ~ button { margin-left: .35rem; }
+/* .slots button schiebt sonst auch INNERHALB der Marken nach rechts und
+   reisst eine Luecke zwischen den beiden Haken auf. */
+.slots .slot-marks button { margin-left: 0; }
 .slots .slot-seen.on {
   background: var(--gruen);
   border-color: var(--gruen);
   color: #fff;
+}
+/* Der Haken des Teams: umrandet statt gefuellt, wie Note und Favorit der
+   anderen. Kein Knopf - was jemand anders abgehakt hat, nimmt auch nur
+   diese Person zurueck. */
+.slot-seen-p {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--gruen);
+  border-radius: 999px;
+  color: var(--gruen);
+  font-size: .9rem;
+  font-weight: 700;
 }
 
 /* ---------- Fuss ---------- */

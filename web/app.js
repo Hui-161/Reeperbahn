@@ -2313,11 +2313,22 @@ function openDetail(ai) {
         return `<li>
           <time>${s.tbd ? dayLabel(s) + ', Zeit offen' : dayLabel(s) + ' ' + hhmm(s.t)}</time>
           <span>${v ? esc(v.n) : 'Spielort offen'}</span>
-          <button class="slot-seen${hin || teamHin ? ' on' : ''}"
-            data-seenshow="${esc(s.id)}" aria-pressed="${hin}"
-            title="${hin ? 'Diesen Auftritt hast du abgehakt'
-              : teamHin ? `Abgehakt von ${esc(partnerName())}`
-              : 'Diesen Auftritt als gesehen abhaken'}">✓</button>
+          <span class="slot-marks">${
+            /* Der Haken des Teams steht NEBEN dem eigenen, nicht in ihm.
+               Vorher trug der Knopf beide - er sah dann abgehakt aus,
+               liess sich aber nur fuer einen von beiden umschalten. Wer
+               darauf tippte, sah nichts passieren und musste glauben, der
+               Haken lasse sich nicht mehr entfernen. Umrandet statt
+               gefuellt ist dieselbe Sprache wie bei Note und Favorit des
+               Teams. */
+            teamHin ? `<span class="slot-seen-p"
+              title="Abgehakt von ${esc(partnerName())} — das kannst nur ${
+                esc(partnerName())} zurücknehmen">✓</span>` : ''}
+            <button class="slot-seen${hin ? ' on' : ''}"
+              data-seenshow="${esc(s.id)}" aria-pressed="${hin}"
+              title="${hin ? 'Von dir abgehakt — tippen nimmt es zurück'
+                : 'Diesen Auftritt als gesehen abhaken'}">✓</button>
+          </span>
           ${v && v.lat ? `<button data-venue="${s.v}">Karte</button>` : ''}
         </li>`;
       }).join('')}</ul>

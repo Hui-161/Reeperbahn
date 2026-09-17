@@ -2966,6 +2966,54 @@ with sync_playwright() as p:
     alt11 = pg11.locator(f'.row[data-act="{zwei}"].is-seen').count()
     check("Ein alter Haken ohne Termin gilt weiter für alle Zeilen",
           alt11 == 2, f"{alt11} von 2")
+
+    # Der Haken des TEAMS steht neben dem eigenen, nicht in ihm. Vorher trug
+    # ein Knopf beide - er sah abgehakt aus, ließ sich aber nur für einen von
+    # beiden umschalten. Wer darauf tippte, sah nichts passieren und musste
+    # glauben, der Haken lasse sich nicht mehr entfernen. Genau das war
+    # gemeldet.
+    pg11.evaluate(f"""() => {{
+      localStorage.setItem('rbf26.seen', '[]');
+      localStorage.setItem('rbf26.seenshow', '[]');
+      localStorage.setItem('rbf26.partner', JSON.stringify({{
+        name: 'Linda', fav: [], seen: [], seenShow: ['{shows11[0]["id"]}'],
+        rate: {{}}, members: [{{ name: 'Linda', rate: {{}} }}],
+      }}));
+    }}""")
+    pg11.reload(wait_until="load")
+    pg11.wait_for_selector(".row", timeout=20000)
+    pg11.click('.day[data-day=""]'); pg11.wait_for_timeout(300)
+    pg11.click("#btn-search"); pg11.wait_for_timeout(250)
+    pg11.fill("#q", act11["n"]); pg11.wait_for_timeout(500)
+    tap_row(pg11.locator(f'.row[data-act="{zwei}"]').first)
+    pg11.wait_for_selector("#detail .slots")
+    eigen11 = pg11.locator(f'#detail [data-seenshow="{shows11[0]["id"]}"]')
+    check("Der Haken des Teams steht als eigene Marke daneben",
+          pg11.locator("#detail .slot-seen-p").count() == 1,
+          f'{pg11.locator("#detail .slot-seen-p").count()} Team-Marken')
+    check("Und sagt, von wem er ist",
+          "Linda" in (pg11.locator("#detail .slot-seen-p").get_attribute("title") or ""),
+          pg11.locator("#detail .slot-seen-p").get_attribute("title"))
+    check("Mein eigener Knopf steht dabei auf offen",
+          "on" not in (eigen11.get_attribute("class") or ""),
+          eigen11.get_attribute("class"))
+    # Und er folgt weiterhin NUR mir - hin und wieder zurück.
+    eigen11.click(); pg11.wait_for_timeout(450)
+    if pg11.locator("#quick[open]").count():
+        pg11.keyboard.press("Escape"); pg11.wait_for_timeout(300)
+    an11 = "on" in (pg11.locator(
+        f'#detail [data-seenshow="{shows11[0]["id"]}"]').get_attribute("class") or "")
+    pg11.locator(f'#detail [data-seenshow="{shows11[0]["id"]}"]').click()
+    pg11.wait_for_timeout(450)
+    if pg11.locator("#quick[open]").count():
+        pg11.keyboard.press("Escape"); pg11.wait_for_timeout(300)
+    aus11 = "on" in (pg11.locator(
+        f'#detail [data-seenshow="{shows11[0]["id"]}"]').get_attribute("class") or "")
+    check("Trotz Team-Haken lässt sich der eigene setzen und wieder entfernen",
+          an11 and not aus11, f"an={an11} aus={aus11}")
+    check("Und die Marke des Teams bleibt dabei stehen",
+          pg11.locator("#detail .slot-seen-p").count() == 1)
+    pg11.keyboard.press("Escape"); pg11.wait_for_timeout(300)
     check("Keine JS-Fehler im Gesehen-Kontext", not err11, str(err11[:2]))
     ctx11.close()
 
