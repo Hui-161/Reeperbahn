@@ -2247,16 +2247,28 @@ with sync_playwright() as p:
       return x > b.left - 2 && x < b.right + 2 && Math.abs(y - b.top) < 3;
     }"""))
 
-    # Der rote Strich steht IMMER da - auch an einem Tag, der nicht heute
-    # ist. Dann klebt er an der Kante und sagt das im Titel; die Uhrzeit
-    # vom Telefon stimmt in jedem Fall.
+    # Der rote Strich steht IMMER da - egal, welcher Tag gewählt ist und
+    # ob "jetzt" hineinfällt. Die Uhrzeit stammt vom Telefon.
+    #
+    # Dieser Block läuft mit der ECHTEN Uhr. Ob der Strich als "außerhalb"
+    # gekennzeichnet ist, hängt damit am Kalender: day7 ist der zweite
+    # Festivaltag, und sobald der wirklich läuft, liegt "jetzt" mitten
+    # darin. Genau daran ist diese Prüfung am 17.9. um 12:35 gescheitert,
+    # nachdem sie um 11:55 noch durchging. Die Kennzeichnung wird deshalb
+    # dort geprüft, wo die Uhr gestellt ist (Kontext 8, "Er klebt dann an
+    # der Kante und sagt das"); hier bleibt, was unabhängig vom Datum gilt.
     strich7 = pg7.locator(".tl-now")
-    check("Ein Strich für jetzt steht auch an einem anderen Tag",
+    check("Ein Strich für jetzt steht in jedem Fall",
           strich7.count() == 1, f'{strich7.count()} Striche für {day7}')
-    check("Und ist als 'außerhalb' gekennzeichnet",
-          strich7.evaluate("e => e.classList.contains('off')")
-          and "außerhalb" in (strich7.get_attribute("title") or ""),
-          f'{strich7.get_attribute("class")} | {strich7.get_attribute("title")}')
+    check("Mit der Uhrzeit vom Telefon daran",
+          re.fullmatch(r"\d\d:\d\d", strich7.inner_text().strip()),
+          strich7.inner_text().strip())
+    check("Und innerhalb der Leiste, nicht darüber hinaus", pg7.evaluate("""() => {
+      const n = document.querySelector('.tl-now');
+      const h = parseFloat(document.querySelector('.tl-canvas').style.height);
+      const top = parseFloat(n.style.top);
+      return top >= 0 && top <= h;
+    }"""))
 
     # --- Die Griffe zu einem Auftritt ---
     # Aus der Zeitleiste geht bewusst NICHT die Detailkarte auf.
@@ -2881,6 +2893,19 @@ with sync_playwright() as p:
         f"""() => (JSON.parse(localStorage.getItem('rbf26.seen')) || [])
                   .includes({act11["id"]})"""))
 
+    # Und der Filter fragt ebenfalls den AUFTRITT. Vorher fragte er den Act
+    # und zeigte deshalb beide Zeilen - eine schraffiert, eine nicht.
+    pg11.click("#f-seen"); pg11.wait_for_timeout(600)
+    gefiltert = pg11.evaluate(
+        "() => [...document.querySelectorAll('.row')].map(r => r.dataset.show)")
+    check("Der Gesehen-Filter zeigt nur den besuchten Termin",
+          gefiltert == [str(shows11[0]["id"])], str(gefiltert))
+    # Die Zahl am Chip zählt weiterhin ACTS - das ist eine andere Frage als
+    # die Zahl der Zeilen, und der Titel sagt welche.
+    check("Der Chip zählt weiter Acts", "(1)" in pg11.locator("#f-seen").inner_text(),
+          pg11.locator("#f-seen").inner_text())
+    pg11.click("#f-seen"); pg11.wait_for_timeout(400)
+
     # Zweiter Termin dazu: jetzt steht die Zahl da, um die es geht.
     tap_row(zeilen.first)
     pg11.wait_for_selector("#detail .slots")
@@ -2894,6 +2919,17 @@ with sync_playwright() as p:
     pg11.keyboard.press("Escape"); pg11.wait_for_timeout(400)
     check("Und beide Zeilen sind jetzt schraffiert",
           pg11.locator(f'.row[data-act="{zwei}"].is-seen').count() == 2)
+    # Und der Filter zeigt jetzt beide Konzerte - die Zahl am Chip bleibt
+    # bei einem Act, der Titel erklärt den Unterschied.
+    pg11.click("#f-seen"); pg11.wait_for_timeout(600)
+    beide = pg11.evaluate(
+        "() => [...document.querySelectorAll('.row')].map(r => r.dataset.show)")
+    check("Nach dem zweiten Termin zeigt der Filter beide Konzerte",
+          sorted(beide) == sorted([str(s["id"]) for s in shows11]), str(beide))
+    check("Der Chip unterscheidet Acts und Konzerte im Titel",
+          pg11.locator("#f-seen").get_attribute("title") == "1 Acts, in 2 Konzerten gesehen",
+          pg11.locator("#f-seen").get_attribute("title"))
+    pg11.click("#f-seen"); pg11.wait_for_timeout(400)
     pg11.click("#btn-menu"); pg11.wait_for_selector("#menu[open]")
     check("Das Menü zählt Künstler UND Konzerte",
           "1 gesehen (2 Konzerte)" in pg11.locator("#m-stats").inner_text(),

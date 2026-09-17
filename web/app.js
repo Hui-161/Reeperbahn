@@ -278,6 +278,18 @@ function seenActCount(day = S.day) {
   }
   return ids.size;
 }
+/* Und dieselbe Zaehlung eine Ebene tiefer: wie viele KONZERTE an diesem Tag
+   abgehakt sind. Das ist die Zahl der Zeilen, die der Filter zeigt. */
+function seenShowCount(day = S.day) {
+  if (!S.data) return 0;
+  let n = 0;
+  for (const sh of S.data.shows) {
+    if (day && sh.d !== day) continue;
+    if (seenHere(sh, S.data.acts[sh.a].id)) n++;
+  }
+  return n;
+}
+
 function seenWhoTitle(id) {
   const wer = seen.has(id)
     ? (pSeen(id) ? `Gesehen — von dir und ${partnerName()}` : 'Gesehen')
@@ -871,6 +883,17 @@ function visibleShows() {
     // sichtbar - sonst verschwindet er beim Bewerten unter der Hand.
     if (!matchesUserFilters(act.id) && !filterKeep.has(act.id)) continue;
 
+    /* "Gesehen" fragt den AUFTRITT, nicht den Act - alles andere fragt den
+       Act. Der Unterschied faellt nur bei den 62 mehrfach spielenden Acts
+       auf, und genau dort faellt er auf: wer einen von zwei Terminen
+       besucht hat, bekam beide Zeilen, eine schraffiert und eine nicht.
+       Der Filter heisst aber "gesehen" und nicht "von diesen Kuenstlern
+       schon mal etwas gesehen".
+
+       seenHere() nimmt den Altbestand mit: ein Haken am Act ohne benannten
+       Termin gilt weiter fuer alle seine Zeilen. */
+    if (S.seenOnly && !seenHere(sh, act.id) && !filterKeep.has(act.id)) continue;
+
     if (S.venues.size && (sh.v == null || !S.venues.has(sh.v))) continue;
 
     if (S.genres.size) {
@@ -997,6 +1020,18 @@ function render() {
      - genau das ist der Unterschied, den die Zahl behauptet. */
   $('#f-seen').textContent = S.seenOnly
     ? `✓ Gesehen (${seenActCount()})` : '✓ Gesehen';
+  /* Die Zeilen darunter sind KONZERTE, die Zahl am Chip zaehlt ACTS. Bei
+     einem doppelt gesehenen Act gehen beide auseinander - dann sagt der
+     Titel, welche Zahl was ist, statt dass man Zeilen nachzaehlt. */
+  if (S.seenOnly) {
+    const acts = seenActCount();
+    const konzerte = seenShowCount();
+    $('#f-seen').title = konzerte > acts
+      ? `${acts} Acts, in ${konzerte} Konzerten gesehen`
+      : 'Zeigt die besuchten Konzerte';
+  } else {
+    $('#f-seen').removeAttribute('title');
+  }
   $('#f-genre').classList.toggle('on', S.genres.size > 0);
   $('#f-genre').textContent = S.genres.size ? `Genres (${S.genres.size})` : 'Genres';
   $('#f-rate').classList.toggle('on', S.rates.size > 0);
