@@ -13,6 +13,9 @@
   /* Die Kopfleiste - und damit die Statusleiste des Telefons, die ihre Farbe
      uebernimmt. Siehe die Erklaerung beim hellen Gegenstueck. */
   --d-bg-top: #1c1a2b;
+  /* Kachel eines Acts, den man an einem ANDEREN Termin schon gesehen hat.
+     Siehe das helle Gegenstueck. */
+  --d-bg-seen-else: #18263e;
   --d-bg-raised: #1c1a2b;
   --d-bg-sunken: #171524;
   --d-ink: #f2f0f5;
@@ -48,6 +51,15 @@
      Band gegen den Rahmen 1.22, also sichtbar, ohne sich vorzudraengen.
      Dunkel dasselbe mit --d-bg-top: 15.1 / 8.2 / 4.9 / 7.1 bei 1.10. */
   --bg-top: #e0d8f4;
+  /* Kachel eines Acts, den man an einem ANDEREN Termin schon gesehen hat.
+     Blau, weil die uebrige Leiste lila ist und die Schraffur "hier war ich"
+     schon belegt - so sind es zwei verschiedene Aussagen und nicht zwei
+     Abstufungen derselben. Nachgerechnet gegen diesen Grund: ink 12.3,
+     ink-soft 6.9, ink-faint 4.5, Akzent 5.1 - alle ueber der Grenze; gegen
+     die gewoehnliche Kachel 1.22, also auch ohne Farbsehen ein Unterschied
+     in der Helligkeit, nicht nur im Ton. Dunkel dasselbe mit
+     --d-bg-seen-else: 13.4 / 7.3 / 4.4 / 6.3 bei 1.19. */
+  --bg-seen-else: #b8d4f5;
   --bg-raised: #ffffff;
   --bg-sunken: #e9e3f8;
   --ink: #12111a;
@@ -76,6 +88,7 @@
   :root:not([data-theme="light"]) {
     --bg: var(--d-bg);
     --bg-top: var(--d-bg-top);
+    --bg-seen-else: var(--d-bg-seen-else);
     --bg-raised: var(--d-bg-raised);
     --bg-sunken: var(--d-bg-sunken);
     --ink: var(--d-ink);
@@ -98,6 +111,7 @@
 :root[data-theme="dark"] {
   --bg: var(--d-bg);
   --bg-top: var(--d-bg-top);
+  --bg-seen-else: var(--d-bg-seen-else);
   --bg-raised: var(--d-bg-raised);
   --bg-sunken: var(--d-bg-sunken);
   --ink: var(--d-ink);
@@ -961,6 +975,13 @@ main { min-height: 60vh; }
   background-image: repeating-linear-gradient(135deg,
     transparent 0 7px, var(--line) 7px 8px);
 }
+/* Schon gesehen, nur an einem anderen Termin: die ganze Kachel bekommt
+   einen blauen Grund. Das ist die Auskunft, die man im Vorbeiscrollen
+   braucht - ein Zeichen am Namen sieht man erst beim Lesen. Nur die FARBE,
+   damit die Schraffur von .is-seen daneben bestehen kann, und nach
+   .in-plan, damit der Ton auch bei eingeplanten Kaesten steht. */
+.tl-act.seen-else { background-color: var(--bg-seen-else); }
+
 .tl-act.rated-1 { border-left: 4px solid var(--r1); }
 .tl-act.rated-2 { border-left: 4px solid var(--r2); }
 .tl-act.rated-3 { border-left: 4px solid var(--r3); }
@@ -1052,23 +1073,14 @@ main { min-height: 60vh; }
 }
 .tl-act .multi { margin: 0; font-size: .6rem; }
 
-/* "Den habe ich schon gesehen - nur an einem anderen Termin." Bewusst NICHT
-   dieselbe Schraffur wie ein abgehaktes Konzert: das hier ist eine andere
-   Aussage. Gruen und klein am Namen, mit dem Termin im Titel. */
-.seen-o {
-  display: inline-block;
-  margin-right: .25rem;
-  padding: 0 .22rem;
-  border: 1px solid var(--gruen);
-  border-radius: 4px;
-  color: var(--gruen);
-  font-size: .6rem;
-  font-weight: 800;
-  line-height: 1.3;
-  vertical-align: .05em;
-}
-/* Kein zweiter Rand am Kasten: der linke traegt schon die Note, und die ist
-   beim Aussuchen die wichtigere Auskunft. Das Zeichen am Namen reicht. */
+/* "Den habe ich schon gesehen - nur an einem anderen Termin." In der Leiste
+   sagt das der blaue Grund der Kachel (siehe .tl-act.seen-else); in den
+   Griffen steht es ausgeschrieben.
+
+   Erst stand dafuer ein gruenes Haekchen vor dem Namen. Das war einmal
+   richtig und einmal falsch: gelesen hat man es, aber es kostete Breite,
+   die dem Namen fehlte - "Boutique" und "Hana Lili" waren danach
+   angeschnitten. Eine Farbe kostet keine Buchstaben. */
 .seen-o-text { color: var(--gruen); font-weight: 650; }
 
 .tl-time { font-variant-numeric: tabular-nums; color: var(--ink-faint); }
@@ -1099,16 +1111,25 @@ main { min-height: 60vh; }
   font-size: .56rem;
 }
 .tl-act.kurz .vcode { font-size: .56rem; }
-/* Noch kuerzer: Name und Bewertung teilen sich eine Zeile. */
-.tl-act.winzig { flex-direction: row; align-items: center; gap: .25rem; }
-.tl-act.winzig .tl-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tl-act.winzig .tl-foot { margin-left: auto; flex: none; }
+/* Die kuerzesten Sets: 15 Minuten sind 26 Pixel hoch.
+
+   Hier standen Name und Note NEBENEINANDER. Das sah aufgeraeumt aus und war
+   der Fehler: der Fuss nahm 44 der 98 Pixel Breite, fuer den Namen blieben
+   35 - "goldie 333" braucht 61. Der Name war damit das Einzige, was man
+   nicht mehr lesen konnte, und er ist das Wichtigste am Kasten.
+
+   Also wieder untereinander, und dafuer faellt das Spielort-Kuerzel weg:
+   der Name bekommt die volle Breite, und die beiden Zeilen (11 + 10 Pixel
+   plus Polster) passen in die 26. Wo der Auftritt ist, steht im Titel des
+   Kastens und in den Griffen. */
+/* Kein senkrechtes Polster mehr: 26 Pixel minus Rahmen lassen genau die
+   beiden Zeilen zu (11 fuer den Namen, 10 fuer die Note). Mit Polster wurde
+   der Name wieder gequetscht - gemessen an "goldie 333" und "Shingai (The
+   Noisettes)". */
+.tl-act.winzig { padding: 0 .3rem; }
+.tl-act.winzig .vcode { display: none; }
 .tl-act.winzig .multi { display: none; }
+
 .tl-name {
   font-weight: 600;
   color: var(--ink);

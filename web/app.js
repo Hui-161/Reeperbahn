@@ -1799,14 +1799,7 @@ function renderTimeline(plan, items, opts) {
       <span class="tl-time">${hhmm(s.startIso)}${
         s.endIso ? `<small class="tl-bis">–${hhmm(s.endIso)}</small>` : ''}${
         s.skipped ? '<span class="tl-out" aria-hidden="true">✕</span>' : ''}</span>
-      <span class="tl-name">${
-        /* Das Zeichen steht VOR dem Namen. Hinten stand es auf der dritten
-           Zeile und damit ausserhalb des Kastens - gemessen: die Namenszeile
-           braucht 40 Pixel und bekommt 15. Vorn ist es immer zu sehen, und
-           eine Spalte von Haken laesst sich im Vorbeiscrollen lesen. */
-        andere.length ? `<span class="seen-o"
-          title="${esc(seenOtherTitle(andere))}">✓</span>` : ''}${
-        esc(s.name)}${
+      <span class="tl-name">${esc(s.name)}${
         total > 1 ? `<span class="multi">×${total}</span>` : ''}</span>
       <span class="tl-foot">${
         rb ? `<span class="grade grade-${rb}">${rateText(rate[s.actId])}</span>` : ''}${

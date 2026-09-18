@@ -16,6 +16,16 @@ BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8898")
 # stellt die App von sich aus auf diesen Tag statt auf "Alle Tage".
 FEST_DAYS = ("2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19")
 
+# Wie viel Breite bekommt die Namenszeile eines Kastens? Alles, was mehr als
+# 22 Pixel an den Rand abgibt, hat sie an etwas anderes verloren.
+BREITE_JS = """() => [...document.querySelectorAll('.tl-act')]
+  .map((e) => ({ d: +e.dataset.dauer,
+                 name: e.querySelector('.tl-name').textContent.trim(),
+                 hat: Math.round(e.querySelector('.tl-name')
+                      .getBoundingClientRect().width),
+                 kasten: Math.round(e.getBoundingClientRect().width) }))
+  .filter((x) => x.hat < x.kasten - 22)"""
+
 FAILS=[]
 def check(name, cond, extra=""):
     print(("  OK   " if cond else "  FAIL ") + name + (f"  {extra}" if extra else ""))
@@ -2999,6 +3009,13 @@ with sync_playwright() as p:
           tl15["gequetscht"] == 0, f'{tl15["gequetscht"]} gequetschte Namen')
     check("Kurze Sets bekommen die knappe Fassung", tl15["kurz"] >= 1,
           f'{tl15["kurz"]} knappe Kästen')
+    # Der Name ist das Wichtigste am Kasten - auch im kürzesten. In den
+    # 15-Minuten-Kacheln standen Name und Note einmal NEBENeinander; der Fuß
+    # nahm 44 der 98 Pixel, dem Namen blieben 35, und "goldie 333" braucht
+    # 61. Geprüft wird deshalb die Breite, die der Name wirklich bekommt.
+    schmal15 = pg15.evaluate(BREITE_JS)
+    check("Auch im kürzesten Kasten bekommt der Name die volle Breite",
+          not schmal15, str(schmal15[:3]))
     check("Die Blöcke nennen Beginn und Ende",
           pg15.locator(".tl-act .tl-bis").count() >= tl15["bloecke"] - 7,
           f'{pg15.locator(".tl-act .tl-bis").count()} von {tl15["bloecke"]}')
@@ -3114,28 +3131,33 @@ with sync_playwright() as p:
     blk17 = pg17.locator(f'.tl-act[data-tlshow="{heute17["id"]}"]')
     check("Der heutige Auftritt steht in der Leiste", blk17.count() == 1,
           f'{lineup17["acts"][ai17]["n"]}, Auftritt {heute17["id"]}')
-    check("Er trägt die Marke 'schon gesehen'",
-          blk17.locator(".seen-o").count() == 1)
-    check("Und sie nennt Tag, Uhrzeit und Spielort des anderen Termins",
+    check("Die Kachel ist als 'schon gesehen' gekennzeichnet",
+          "seen-else" in (blk17.get_attribute("class") or ""),
+          blk17.get_attribute("class"))
+    # Die Auskunft ist ein FARBIGER GRUND, kein Zeichen: ein Zeichen kostet
+    # Breite, die dem Namen fehlt. Also den Grund messen, nicht ein Element.
+    grund17 = blk17.evaluate("(e) => getComputedStyle(e).backgroundColor")
+    normal17 = pg17.evaluate("""() => {
+      const e = [...document.querySelectorAll('.tl-act')]
+        .find(x => !x.classList.contains('seen-else')
+                   && !x.classList.contains('in-plan'));
+      return e ? getComputedStyle(e).backgroundColor : null;
+    }""")
+    check("Und zwar durch einen eigenen Grund, nicht durch die übliche Farbe",
+          grund17 != normal17 and grund17 not in (None, "rgba(0, 0, 0, 0)"),
+          f"{grund17} gegen {normal17}")
+    check("Der Titel nennt Tag, Uhrzeit und Spielort des anderen Termins",
           re.search(r"Schon gesehen: (Mi|Do|Fr|Sa) \d\d:\d\d · .",
-                    blk17.locator(".seen-o").get_attribute("title") or ""),
-          blk17.locator(".seen-o").get_attribute("title"))
+                    blk17.get_attribute("title") or ""),
+          (blk17.get_attribute("title") or "")[-70:])
     # Nicht mit "hier gewesen" verwechseln: dieser Auftritt ist NICHT abgehakt.
     check("Der Block selbst ist nicht als besucht schraffiert",
           "is-seen" not in (blk17.get_attribute("class") or ""),
           blk17.get_attribute("class"))
-    # Und die Marke muss auch wirklich im Kasten stehen. Am Ende der
-    # Namenszeile landete sie auf der dritten Zeile und damit ausserhalb
-    # (gemessen: Namenszeile braucht 40 px, bekommt 15).
-    check("Die Marke steht sichtbar im Kasten", blk17.evaluate("""(e) => {
-      const m = e.querySelector('.seen-o');
-      const r = m.getBoundingClientRect(), k = e.getBoundingClientRect();
-      return r.height > 0 && r.top >= k.top - 1 && r.bottom <= k.bottom + 1;
-    }"""))
-    # Ein Act ohne zweiten gesehenen Termin darf sie NICHT tragen.
-    check("Andere Blöcke tragen sie nicht",
-          pg17.locator(".tl-act .seen-o").count() == 1,
-          f'{pg17.locator(".tl-act .seen-o").count()} Marken')
+    # Ein Act ohne zweiten gesehenen Termin darf den Grund NICHT tragen.
+    check("Andere Blöcke tragen ihn nicht",
+          pg17.locator(".tl-act.seen-else").count() == 1,
+          f'{pg17.locator(".tl-act.seen-else").count()} Kacheln')
 
     # In den Griffen ausgeschrieben - dort wird entschieden.
     blk17.evaluate("e => e.click()")
@@ -3149,9 +3171,9 @@ with sync_playwright() as p:
         pg17.keyboard.press("Escape"); pg17.wait_for_timeout(300)
     pg17.keyboard.press("Escape"); pg17.wait_for_timeout(500)
     nach17 = pg17.locator(f'.tl-act[data-tlshow="{heute17["id"]}"]')
-    check("Abgehakt wird daraus die Schraffur, nicht die Marke",
+    check("Abgehakt wird daraus die Schraffur, nicht der blaue Grund",
           "is-seen" in (nach17.get_attribute("class") or "")
-          and nach17.locator(".seen-o").count() == 0,
+          and "seen-else" not in (nach17.get_attribute("class") or ""),
           nach17.get_attribute("class"))
     check("Keine JS-Fehler im Anderswo-Kontext", not err17, str(err17[:2]))
     ctx17.close()
