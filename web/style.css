@@ -1051,6 +1051,26 @@ main { min-height: 60vh; }
   padding: 0 .25rem;
 }
 .tl-act .multi { margin: 0; font-size: .6rem; }
+
+/* "Den habe ich schon gesehen - nur an einem anderen Termin." Bewusst NICHT
+   dieselbe Schraffur wie ein abgehaktes Konzert: das hier ist eine andere
+   Aussage. Gruen und klein am Namen, mit dem Termin im Titel. */
+.seen-o {
+  display: inline-block;
+  margin-right: .25rem;
+  padding: 0 .22rem;
+  border: 1px solid var(--gruen);
+  border-radius: 4px;
+  color: var(--gruen);
+  font-size: .6rem;
+  font-weight: 800;
+  line-height: 1.3;
+  vertical-align: .05em;
+}
+/* Kein zweiter Rand am Kasten: der linke traegt schon die Note, und die ist
+   beim Aussuchen die wichtigere Auskunft. Das Zeichen am Namen reicht. */
+.seen-o-text { color: var(--gruen); font-weight: 650; }
+
 .tl-time { font-variant-numeric: tabular-nums; color: var(--ink-faint); }
 .tl-bis { font-size: .9em; opacity: .85; }
 

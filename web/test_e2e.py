@@ -37,6 +37,18 @@ def tap_row(row):
     """
     row.locator(".row-time").click()
 
+def zeitleiste(pg, ms=800):
+    """Sorgt dafuer, dass die Zeitleiste steht.
+
+    Der Abendplan geht seit dem 18.9. GLEICH mit der Zeitleiste auf. Ein
+    Tipper auf "Zeitleiste" schaltet danach also ZURUECK zur Liste - genau
+    daran sind hier mehrere Bloecke gescheitert, und zwar still: .tl-act
+    bleibt im Dokument stehen, auch wenn #plan-time verborgen ist, also
+    zaehlten die Pruefungen weiter und massen nur nichts mehr. Diese
+    Helferin fragt, statt zu tippen."""
+    if pg.locator("#plan-time").is_hidden():
+        pg.click("#plan-timeline")
+        pg.wait_for_timeout(ms)
 with sync_playwright() as p:
     # In CI liegt Chromium am Standardpfad; lokal kann er per Umgebungs-
     # variable gesetzt werden: PW_CHROMIUM=/pfad/zu/chrome
@@ -1487,15 +1499,21 @@ with sync_playwright() as p:
           pg5.locator("#list .grade").first.inner_text())
 
     seen0 = pg5.locator("#list .seen-mark").count()
-    # Wieder: die Marke haengt am Act. Spielt der zweimal, kommen ZWEI Marken
-    # dazu - richtig so, also wird die Zeilenzahl dieses Acts erwartet.
+    # Abgehakt wird der AUFTRITT, nicht der Act: es kommt genau EINE Marke
+    # dazu, auch wenn derselbe Act noch zweimal spielt. (Hier stand einmal
+    # die Zeilenzahl des Acts - das war aus der Zeit, als "gesehen" nur den
+    # Kuenstler kannte, und ging nur durch, solange der zufaellig gewaehlte
+    # Act einmal spielte. Beim Stand vom 18.9. spielt er dreimal.)
     swipe_act = pg5.locator(".row").nth(1).get_attribute("data-act")
     swipe_rows = pg5.locator(f'.row[data-act="{swipe_act}"]').count()
+    swipe_show = pg5.locator(".row").nth(1).get_attribute("data-show")
     pg5.evaluate(SWIPE, [1, -120, 8]); pg5.wait_for_timeout(500)
     check("Wisch nach links markiert als gesehen",
-          pg5.locator("#list .seen-mark").count() == seen0 + swipe_rows,
+          pg5.locator("#list .seen-mark").count() == seen0 + 1,
           f"{seen0} -> {pg5.locator('#list .seen-mark').count()}, "
           f"der Act steht {swipe_rows}x in der Liste")
+    check("Und zwar genau diesen Auftritt",
+          pg5.locator(f'.row[data-show="{swipe_show}"] .seen-mark').count() == 1)
     check("Mit Ruecknahme-Knopf", pg5.locator("#toast .toast-undo").count() == 1,
           pg5.inner_text("#toast"))
     pg5.locator("#toast .toast-undo").click(); pg5.wait_for_timeout(400)
@@ -2005,6 +2023,19 @@ with sync_playwright() as p:
     pg7.click("#btn-menu"); pg7.wait_for_selector("#menu[open]")
     pg7.click("#m-plan"); pg7.wait_for_timeout(800)
 
+    # Der Abendplan geht mit der ZEITLEISTE auf, nicht mit der Liste.
+    check("Der Abendplan geht gleich mit der Zeitleiste auf",
+          not pg7.locator("#plan-time").is_hidden()
+          and pg7.locator("#plan-body").is_hidden()
+          and pg7.locator("#plan-timeline").get_attribute("aria-pressed") == "true",
+          f'Leiste verborgen: {pg7.locator("#plan-time").is_hidden()}')
+    # Was hier gleich geprüft wird, steht in der LISTE - also einmal
+    # umschalten. Der Knopf tut beides.
+    pg7.click("#plan-timeline"); pg7.wait_for_timeout(500)
+    check("Und der Knopf schaltet zurück auf die Liste",
+          pg7.locator("#plan-time").is_hidden()
+          and not pg7.locator("#plan-body").is_hidden())
+
     # Die Voreinstellung, mit der der Abendplan aufgeht. Das ist keine
     # Kosmetik: sie entscheidet, was jemand sieht, der nichts einstellt.
     vor = pg7.evaluate("""() => ({
@@ -2278,12 +2309,16 @@ with sync_playwright() as p:
     check("Mit der Uhrzeit vom Telefon daran",
           re.fullmatch(r"\d\d:\d\d", strich7.inner_text().strip()),
           strich7.inner_text().strip())
-    check("Und innerhalb der Leiste, nicht darüber hinaus", pg7.evaluate("""() => {
+    lage7 = pg7.evaluate("""() => {
       const n = document.querySelector('.tl-now');
-      const h = parseFloat(document.querySelector('.tl-canvas').style.height);
-      const top = parseFloat(n.style.top);
-      return top >= 0 && top <= h;
-    }"""))
+      const c = document.querySelector('.tl-canvas');
+      return { top: n ? parseFloat(n.style.top) : null,
+               hoehe: c ? parseFloat(c.style.height) : null,
+               klasse: n ? n.className : null };
+    }""")
+    check("Und innerhalb der Leiste, nicht darüber hinaus",
+          lage7["top"] is not None and lage7["hoehe"] is not None
+          and 0 <= lage7["top"] <= lage7["hoehe"], str(lage7))
 
     # --- Die Griffe zu einem Auftritt ---
     # Aus der Zeitleiste geht bewusst NICHT die Detailkarte auf.
@@ -2542,7 +2577,7 @@ with sync_playwright() as p:
             return d ? d.dataset.day : null;
           }""") == day7, day7)
     pg8.click("#btn-plan"); pg8.wait_for_timeout(700)
-    pg8.click("#plan-timeline"); pg8.wait_for_timeout(800)
+    zeitleiste(pg8, 800)
     now8 = pg8.locator(".tl-now")
     check("Läuft der Abend, steht ein Strich für jetzt da", now8.count() == 1,
           f"{now8.count()} Striche")
@@ -2701,7 +2736,7 @@ with sync_playwright() as p:
     pg9.click("#f-seen"); pg9.wait_for_timeout(400)
 
     pg9.click("#btn-plan"); pg9.wait_for_timeout(700)
-    pg9.click("#plan-timeline"); pg9.wait_for_timeout(800)
+    zeitleiste(pg9, 800)
 
     avg9 = pg9.locator(".tl-act .grade-p:not(.team-hidden)")
     check("Die Zeitleiste zeigt den Team-Schnitt", avg9.count() >= 1,
@@ -2833,7 +2868,7 @@ with sync_playwright() as p:
     pg9.reload(wait_until="load")
     pg9.wait_for_selector(".row", timeout=20000)
     pg9.click("#btn-plan"); pg9.wait_for_timeout(700)
-    pg9.click("#plan-timeline"); pg9.wait_for_timeout(800)
+    zeitleiste(pg9, 800)
     check("Alte Partnerdaten ohne Einzelnoten zeigen keinen Schnitt",
           pg9.locator(".tl-act .grade-p:not(.team-hidden)").count() == 0
           and pg9.locator(".tl-act").count() >= 1,
@@ -2921,7 +2956,7 @@ with sync_playwright() as p:
 
     # In der Zeitleiste: Kästen so hoch, wie ihr Konzert dauert.
     pg15.click("#btn-plan"); pg15.wait_for_timeout(700)
-    pg15.click("#plan-timeline"); pg15.wait_for_timeout(800)
+    zeitleiste(pg15, 800)
     tl15 = pg15.evaluate("""() => {
       const a = [...document.querySelectorAll('.tl-act')];
       const paare = a.map(e => [+e.dataset.dauer,
@@ -2997,7 +3032,7 @@ with sync_playwright() as p:
     pg16.wait_for_selector(".row", timeout=20000)
     pg16.click(f'.day[data-day="{day16}"]'); pg16.wait_for_timeout(400)
     pg16.click("#btn-plan"); pg16.wait_for_timeout(700)
-    pg16.click("#plan-timeline"); pg16.wait_for_timeout(800)
+    zeitleiste(pg16, 800)
     # Weit in die Leiste hinein - erst dort greift das Klemmen.
     pg16.evaluate("""() => scrollTo(0, Math.round(document.body.scrollHeight * 0.55))""")
     pg16.wait_for_timeout(500)
@@ -3029,6 +3064,97 @@ with sync_playwright() as p:
           f'{y_vor} -> {pg16.evaluate("() => Math.round(scrollY)")}')
     check("Keine JS-Fehler im Verankerungs-Kontext", not err16, str(err16[:2]))
     ctx16.close()
+    # --- "Den habe ich schon gesehen - an einem anderen Termin" ---
+    # 62 Acts spielen mehrfach. Wer einen davon am Mittwoch gesehen hat, will
+    # das am Donnerstag wissen, BEVOR er sich wieder hinstellt. Das ist eine
+    # andere Aussage als "bei diesem Konzert war ich" - also eine eigene
+    # Marke und nicht dieselbe Schraffur.
+    ctx17 = b.new_context(viewport={"width": 390, "height": 840}, locale="de-DE")
+    pg17 = ctx17.new_page()
+    err17 = []
+    pg17.on("pageerror", lambda e: err17.append(str(e)))
+    pg17.on("console", lambda m: err17.append(m.text)
+            if m.type == "error" and "ERR_" not in m.text else None)
+    lineup17 = _json.load(open("web/data/lineup.json", encoding="utf-8"))
+    day17 = lineup17["days"][1]
+    ids17 = list(dict.fromkeys(
+        [lineup17["acts"][s["a"]]["id"] for s in lineup17["shows"]
+         if s["d"] == day17 and not s["tbd"]]))[:70]
+    # Ein bewerteter Act mit zwei Terminen, einer davon an diesem Tag.
+    von17 = {}
+    for s in lineup17["shows"]:
+        if s.get("tbd") or not s.get("t"):
+            continue
+        von17.setdefault(s["a"], []).append(s)
+    kandidat = next((ai, sorted(ss, key=lambda x: x["t"]))
+                    for ai, ss in von17.items()
+                    if len(ss) >= 2 and any(x["d"] == day17 for x in ss)
+                    and lineup17["acts"][ai]["id"] in set(ids17))
+    ai17, shows17 = kandidat
+    heute17 = next(x for x in shows17 if x["d"] == day17)
+    anders17 = next(x for x in shows17 if x["id"] != heute17["id"])
+
+    pg17.goto(BASE + "/", wait_until="load")
+    pg17.wait_for_selector(".row", timeout=20000)
+    pg17.evaluate("""([ids, sid]) => {
+      const r = {};
+      ids.forEach((id, i) => { r[String(id)] = (i % 3) + 1; });
+      localStorage.setItem('rbf26.rate', JSON.stringify(r));
+      localStorage.setItem('rbf26.seenshow', JSON.stringify([String(sid)]));
+    }""", [ids17, anders17["id"]])
+    pg17.reload(wait_until="load")
+    pg17.wait_for_selector(".row", timeout=20000)
+    pg17.click(f'.day[data-day="{day17}"]'); pg17.wait_for_timeout(400)
+    pg17.click("#btn-plan"); pg17.wait_for_timeout(900)
+
+    # Nebenbei bestätigt: der Plan geht mit der Leiste auf, auch hier.
+    check("Auch über den Kopfknopf geht der Plan mit der Leiste auf",
+          not pg17.locator("#plan-time").is_hidden())
+
+    blk17 = pg17.locator(f'.tl-act[data-tlshow="{heute17["id"]}"]')
+    check("Der heutige Auftritt steht in der Leiste", blk17.count() == 1,
+          f'{lineup17["acts"][ai17]["n"]}, Auftritt {heute17["id"]}')
+    check("Er trägt die Marke 'schon gesehen'",
+          blk17.locator(".seen-o").count() == 1)
+    check("Und sie nennt Tag, Uhrzeit und Spielort des anderen Termins",
+          re.search(r"Schon gesehen: (Mi|Do|Fr|Sa) \d\d:\d\d · .",
+                    blk17.locator(".seen-o").get_attribute("title") or ""),
+          blk17.locator(".seen-o").get_attribute("title"))
+    # Nicht mit "hier gewesen" verwechseln: dieser Auftritt ist NICHT abgehakt.
+    check("Der Block selbst ist nicht als besucht schraffiert",
+          "is-seen" not in (blk17.get_attribute("class") or ""),
+          blk17.get_attribute("class"))
+    # Und die Marke muss auch wirklich im Kasten stehen. Am Ende der
+    # Namenszeile landete sie auf der dritten Zeile und damit ausserhalb
+    # (gemessen: Namenszeile braucht 40 px, bekommt 15).
+    check("Die Marke steht sichtbar im Kasten", blk17.evaluate("""(e) => {
+      const m = e.querySelector('.seen-o');
+      const r = m.getBoundingClientRect(), k = e.getBoundingClientRect();
+      return r.height > 0 && r.top >= k.top - 1 && r.bottom <= k.bottom + 1;
+    }"""))
+    # Ein Act ohne zweiten gesehenen Termin darf sie NICHT tragen.
+    check("Andere Blöcke tragen sie nicht",
+          pg17.locator(".tl-act .seen-o").count() == 1,
+          f'{pg17.locator(".tl-act .seen-o").count()} Marken')
+
+    # In den Griffen ausgeschrieben - dort wird entschieden.
+    blk17.evaluate("e => e.click()")
+    pg17.wait_for_selector("#tlmenu[open]")
+    check("Die Griffe schreiben es aus",
+          "Schon gesehen" in pg17.locator("#tl-when").inner_text(),
+          pg17.locator("#tl-when").inner_text()[:110])
+    # Wird dieser Auftritt abgehakt, ist es kein "anderer Termin" mehr.
+    pg17.locator("#tl-seen").click(); pg17.wait_for_timeout(600)
+    if pg17.locator("#quick[open]").count():
+        pg17.keyboard.press("Escape"); pg17.wait_for_timeout(300)
+    pg17.keyboard.press("Escape"); pg17.wait_for_timeout(500)
+    nach17 = pg17.locator(f'.tl-act[data-tlshow="{heute17["id"]}"]')
+    check("Abgehakt wird daraus die Schraffur, nicht die Marke",
+          "is-seen" in (nach17.get_attribute("class") or "")
+          and nach17.locator(".seen-o").count() == 0,
+          nach17.get_attribute("class"))
+    check("Keine JS-Fehler im Anderswo-Kontext", not err17, str(err17[:2]))
+    ctx17.close()
     # --- Gesehen: das einzelne Konzert gegen den ganzen Künstler ---
     # 62 Acts spielen mehrfach. "Gesehen" am Act allein kann deshalb nicht
     # sagen, ob man einmal oder zweimal da war - und genau das will man am
@@ -3243,7 +3369,7 @@ with sync_playwright() as p:
     pg12.wait_for_selector(".row", timeout=20000)
     pg12.click(f'.day[data-day="{day12}"]'); pg12.wait_for_timeout(400)
     pg12.click("#btn-plan"); pg12.wait_for_timeout(700)
-    pg12.click("#plan-timeline"); pg12.wait_for_timeout(800)
+    zeitleiste(pg12, 800)
     # Ein Block, dessen Act mehrfach spielt - den erkennt man am ×N.
     mehrfach = pg12.locator(".tl-act").filter(has=pg12.locator(".multi")).first
     check("In der Zeitleiste stehen Acts, die mehrfach spielen",
@@ -3313,7 +3439,7 @@ with sync_playwright() as p:
         pg13.click("#btn-plan"); pg13.wait_for_timeout(700)
         check(f"Bei {breite} px auch der Abendplan nicht",
               pg13.evaluate(UEBER) <= 0, f"{pg13.evaluate(UEBER)} px zu viel")
-        pg13.click("#plan-timeline"); pg13.wait_for_timeout(700)
+        zeitleiste(pg13, 700)
         check(f"Bei {breite} px auch die Zeitleiste nicht",
               pg13.evaluate(UEBER) <= 0, f"{pg13.evaluate(UEBER)} px zu viel")
         if breite == 360:

@@ -277,6 +277,23 @@ function seenShowsOf(actId) {
    ist er gesehen, aber ohne benannten Termin, und das ist keine Zahl. */
 const seenTimes = (actId) => seenShowsOf(actId).length;
 
+/* Denselben Kuenstler schon gesehen - nur eben nicht HIER, sondern zu einer
+   anderen Zeit. 62 Acts spielen mehrfach; wer einen davon am Mittwoch
+   gesehen hat, will das am Freitag wissen, bevor er sich wieder hinstellt.
+   Die Frage ist eine andere als "war ich bei DIESEM Konzert" - deshalb eine
+   eigene Marke und nicht dieselbe Schraffur. */
+function seenOther(showId, actId) {
+  return seenShowsOf(actId).filter((x) => String(x.id) !== String(showId));
+}
+/* Kurzfassung fuers Draufzeigen: "Do 15:15 · FF". */
+function seenOtherTitle(andere) {
+  return 'Schon gesehen: ' + andere.map((x) => {
+    const v = x.v != null ? S.data.venues[x.v] : null;
+    return dayLabel(x) + (x.tbd ? '' : ' ' + hhmm(x.t))
+      + (v ? ' · ' + v.n : '');
+  }).join(', ');
+}
+
 /* Traegt diese ZEILE eine Gesehen-Marke? Der abgehakte Auftritt auf jeden
    Fall. Ein Act, der nur pauschal als gesehen gilt (Altbestand oder der
    Haken auf der Kuenstlerkarte), traegt sie auf allen seinen Zeilen - sonst
@@ -1757,23 +1774,39 @@ function renderTimeline(plan, items, opts) {
     const no = inPlan.get(String(s.id));
     const code = venueCode[s.venueIdx] || '';
     const total = actShowCount(s.actIdx);
-    // Schraffiert, was schon abgehakt ist - waehrend des Abends die
-    // schnellste Auskunft darueber, wo man schon war.
+    /* Schraffiert, was schon abgehakt ist - waehrend des Abends die
+       schnellste Auskunft darueber, wo man schon war. Gefragt wird ueber
+       seenHere, also mit derselben Regel wie in der Liste: ein alter Haken
+       am Act ohne benannten Termin zaehlt fuer alle seine Auftritte.
+
+       Und wenn NICHT hier, aber anderswo: eine eigene Marke am Namen. */
+    const shObj = showMap().get(String(s.id));
+    const hier = shObj ? seenHere(shObj, s.actId) : seenShowAny(s.id);
+    const andere = hier ? [] : seenOther(s.id, s.actId);
     return `<button type="button" class="tl-act${rb ? ' rated-' + rb : ''}${
       no ? ' in-plan' : ''}${s.skipped ? ' skipped' : ''}${
-      seenShowAny(s.id) ? ' is-seen' : ''}" data-tlshow="${esc(s.id)}"
+      hier ? ' is-seen' : ''}${andere.length ? ' seen-else' : ''}"
+      data-tlshow="${esc(s.id)}"
       data-top="${(a - t0) * TL_PX_PER_MIN}" data-lane="${lane}"
       data-dauer="${dauer}"
       title="${esc(s.name)} — ${hhmm(s.startIso)}${
         s.endIso ? '–' + hhmm(s.endIso) + ` (${dauer} min)` : ''}${
         s.venue && s.venue.name ? ', ' + esc(s.venue.name) : ''}${
         total > 1 ? `, spielt ${total}× beim Festival` : ''}${
+        andere.length ? ' — ' + esc(seenOtherTitle(andere)) : ''}${
         s.skipped ? ' — heute nicht; tippen holt ihn zurück' : ''}">
       ${no ? `<span class="tl-no">${no}</span>` : ''}
       <span class="tl-time">${hhmm(s.startIso)}${
         s.endIso ? `<small class="tl-bis">–${hhmm(s.endIso)}</small>` : ''}${
         s.skipped ? '<span class="tl-out" aria-hidden="true">✕</span>' : ''}</span>
-      <span class="tl-name">${esc(s.name)}${
+      <span class="tl-name">${
+        /* Das Zeichen steht VOR dem Namen. Hinten stand es auf der dritten
+           Zeile und damit ausserhalb des Kastens - gemessen: die Namenszeile
+           braucht 40 Pixel und bekommt 15. Vorn ist es immer zu sehen, und
+           eine Spalte von Haken laesst sich im Vorbeiscrollen lesen. */
+        andere.length ? `<span class="seen-o"
+          title="${esc(seenOtherTitle(andere))}">✓</span>` : ''}${
+        esc(s.name)}${
         total > 1 ? `<span class="multi">×${total}</span>` : ''}</span>
       <span class="tl-foot">${
         rb ? `<span class="grade grade-${rb}">${rateText(rate[s.actId])}</span>` : ''}${
@@ -1986,12 +2019,18 @@ function renderTlMenu() {
   // Der Team-Schnitt gehoert auch hierhin: das ist der Ort, an dem man
   // entscheidet - und wer hier bewertet, deckt ihn im selben Griff auf.
   const teamMark = teamAvgMark(act.id);
+  // Denselben Act schon gesehen, nur zu einer anderen Zeit? Das gehoert in
+  // die Zeile, in der man entscheidet.
+  const sonst = seenHere(sh, act.id) ? [] : seenOther(tlShow, act.id);
   $('#tl-when').innerHTML = esc([
     dayLabel(sh) + (sh.tbd ? ', Zeit offen' : ' ' + timeSpan(sh)),
     lenText(sh),
     v ? `${venueCode[sh.v] || ''} ${v.n}`.trim() : 'Spielort offen',
     total > 1 ? `spielt ${total}× beim Festival` : '',
-  ].filter(Boolean).join(' · ')) + (teamMark ? ' · Team ' + teamMark : '');
+  ].filter(Boolean).join(' · ')) + (teamMark ? ' · Team ' + teamMark : '')
+    + (sonst.length
+       ? ` · <span class="seen-o-text">${esc(seenOtherTitle(sonst))}</span>`
+       : '');
 
   $('#tl-top').innerHTML = `
     ${emb ? `<button type="button" class="chip" data-tlplay="${esc(emb)}"
@@ -2226,6 +2265,14 @@ function showPlan(on) {
   if (on) { S.newsOn = false; mapOffQuiet(); }
   openBox(null);
   render();
+  /* Der Abendplan geht mit der ZEITLEISTE auf, nicht mit der Liste. Die
+     Liste sagt, was die Rechnung ausgewaehlt hat; die Leiste zeigt daneben,
+     was sonst noch liefe, und genau das ist die Frage, mit der man den Plan
+     oeffnet. Der Knopf "Zeitleiste" schaltet weiter hin und her.
+
+     Nach render(), nicht davor: erst dann steht die Leiste ueberhaupt da,
+     und showTimeline richtet ihren Blick aus. */
+  if (on) showTimeline(true);
   scrollTo({ top: 0, behavior: 'instant' });
 }
 
