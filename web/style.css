@@ -2046,3 +2046,232 @@ dialog:not([open])::backdrop { background: transparent; }
   .tl-act { font-size: .68rem; }
   .tl-alt { font-size: .76rem; }
 }
+
+/* ---------- Archiv ---------- */
+
+/* Im Archiv verliert die Kopfzeile alles, was auf den laufenden Abend zielt:
+   Tage, Filter, Suche, Karte, Plan, Filterspeicher. Ansicht und Menue
+   bleiben - ueber das Menue kommt man auch wieder heraus. */
+body.archive .days:not(#arch-tabs),
+body.archive .filters,
+body.archive #btn-search, body.archive #btn-map,
+body.archive #btn-plan, body.archive #btn-filters { display: none !important; }
+
+.top-badge {
+  flex: none;
+  padding: .1rem .5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.archive { padding-bottom: 4rem; }
+.arch-tools { margin-top: 1rem; }
+.arch-lead { margin: 0 0 .5rem; font-size: .9rem; color: var(--ink-soft); }
+.arch-lead b { color: var(--ink); }
+
+/* Kacheln: die grosse Zahl zuerst, die Bezeichnung klein darunter. Vier
+   nebeneinander auf dem Rechner, zwei auf dem Telefon. */
+.arch-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: .5rem;
+}
+.tile {
+  padding: .7rem .6rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  text-align: center;
+}
+.tile b {
+  display: block;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.tile b small { font-size: .85rem; color: var(--ink-faint); font-weight: 600; }
+.tile-text b { font-size: 1.15rem; padding-top: .2rem; }
+.tile span { font-size: .72rem; color: var(--ink-soft); }
+
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: .6rem;
+  margin-top: .6rem;
+}
+.arch-box {
+  padding: .7rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+.arch-h {
+  margin: 0 0 .5rem;
+  font-size: .75rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.arch-names { margin: 0; display: flex; flex-wrap: wrap; gap: .3rem .35rem; align-items: center; font-size: .9rem; }
+.arch-names .tag b { color: var(--ink); margin-left: .15rem; }
+/* Ein Act-Name, der die Kuenstlerkarte oeffnet - Textknopf, keine Pille. */
+.arch-act {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.arch-act:hover { color: var(--accent); }
+
+/* Balken: Beschriftung, Balken, Zahl. Der Balken ist ein SVG, dessen
+   Rechteck seine Breite als Attribut traegt - siehe bar() in app.js. */
+.bar {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) 1fr 2rem;
+  align-items: center;
+  gap: .5rem;
+  font-size: .82rem;
+  margin: .2rem 0;
+}
+.bar-l { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-n { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar-svg { display: block; width: 100%; height: .6rem; border-radius: 3px; background: var(--bg-sunken); }
+.bar-svg rect { fill: var(--accent); }
+.bar-svg.r1 rect { fill: var(--r1); }
+.bar-svg.r2 rect { fill: var(--r2); }
+.bar-svg.r3 rect { fill: var(--r3); }
+.bar-svg.r4 rect { fill: var(--r4); }
+.bar-svg.r5 rect { fill: var(--r5); }
+
+/* Nachbewertung: eine Karte je Act. Fertige bekommen einen gruenen Rand,
+   damit man beim Durchscrollen sieht, wo man noch nicht war. */
+.nach-list { display: grid; gap: .5rem; margin-top: .6rem; }
+.nach {
+  padding: .65rem .75rem .7rem;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: var(--r);
+  background: var(--bg-raised);
+}
+.nach.done { border-left-color: var(--r1); }
+.nach-head { display: grid; gap: .1rem; }
+.nach-name { display: flex; align-items: center; gap: .2rem; flex-wrap: wrap; font-size: 1rem; }
+.nach-name .arch-act { text-decoration: none; font-weight: 700; }
+.nach-heart { color: var(--accent); font-size: .9rem; }
+.nach-sub { font-size: .8rem; color: var(--ink-soft); }
+.nach-when { font-size: .8rem; color: var(--ink-faint); }
+.nach-opts { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; }
+/* Ein Haken als Pille: echte Checkbox darin, damit Tastatur und
+   Bildschirmleser sie als das erkennen, was sie ist. */
+.ck {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-height: 36px;
+  padding: 0 .7rem 0 .5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--ink-soft);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.ck input { width: 1.05rem; height: 1.05rem; margin: 0; accent-color: var(--accent); }
+.ck:has(input:checked) { border-color: var(--accent); color: var(--ink); background: var(--bg-raised); }
+.nach-price { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-top: .5rem; }
+.nach-price-l { font-size: .8rem; color: var(--ink-soft); margin-right: .15rem; }
+.chip-price { min-height: 32px; padding: 0 .6rem; font-size: .8rem; }
+.tag-c { background: var(--bg-sunken); color: var(--ink); border: 1px solid var(--line); }
+.tag-p { border-color: var(--accent); color: var(--accent); }
+
+/* Der Bericht: ein Blatt, auf dem Bildschirm mit Rand und Schatten, im
+   Druck ohne beides. Schrift bewusst etwas kleiner als in der App - das
+   ist ein Dokument, keine Bedienoberflaeche. */
+.report {
+  margin-top: .75rem;
+  padding: 1.2rem 1.1rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  font-size: .88rem;
+}
+.rep-head { border-bottom: 2px solid var(--accent); padding-bottom: .6rem; margin-bottom: .8rem; }
+.rep-kicker { margin: 0; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.rep-head h2 { margin: .1rem 0 .2rem; font-size: 1.45rem; line-height: 1.15; }
+.rep-sub { margin: 0; color: var(--ink-soft); }
+.rep-sec { margin-top: 1rem; break-inside: avoid; }
+.rep-sec h3 {
+  margin: 0 0 .4rem;
+  font-size: .78rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: .2rem;
+}
+.rep-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+.rep-top, .rep-list { margin: 0; padding-left: 1.6rem; }
+.rep-top li, .rep-list li { margin: 0 0 .45rem; break-inside: avoid; }
+.rep-top li::marker { font-weight: 700; color: var(--accent); }
+.rep-name { font-weight: 700; }
+.rep-name small { font-weight: 400; color: var(--ink-faint); }
+.rep-grade { margin-left: .15rem; }
+.rep-grade .grade { vertical-align: -.1em; }
+.grade-0 { background: var(--bg-sunken); color: var(--ink-faint); }
+.rep-meta { display: block; color: var(--ink-soft); font-size: .8rem; }
+.rep-two .rep-meta, .rep-list .rep-meta { display: inline; margin-left: .3rem; }
+.rep-commit { display: inline-flex; flex-wrap: wrap; gap: .25rem; margin-top: .15rem; vertical-align: middle; }
+.rep-note { display: block; font-size: .8rem; color: var(--ink-soft); font-style: italic; margin-top: .1rem; }
+.rep-names { margin: 0; display: flex; flex-wrap: wrap; gap: .3rem .7rem; }
+.rep-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.rep-table th { text-align: left; font-weight: 700; color: var(--ink-faint); padding: .2rem .35rem; border-bottom: 1px solid var(--line); }
+.rep-table td { padding: .25rem .35rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.rep-table tr { break-inside: avoid; }
+.rep-foot { margin-top: 1rem; font-size: .72rem; color: var(--ink-faint); border-top: 1px solid var(--line); padding-top: .4rem; }
+
+/* ---------- Druck ----------
+   Nur der Bericht kommt aufs Papier. Die Farben werden HELL erzwungen, egal
+   wie die App gerade aussieht: Browser drucken Hintergruende nicht, und
+   helle Schrift der dunklen Ansicht stuende sonst unsichtbar auf Weiss.
+   Steht am Ende der Datei, damit es die Umschaltbloecke oben ueberstimmt. */
+@media print {
+  @page { size: A4; margin: 14mm 13mm; }
+  /* Drei Selektoren, weil die Dunkel-Umschaltung oben drei Wege hat: die
+     Systemvorgabe greift ueber :root:not([data-theme="light"]) - zwei
+     Stufen Spezifitaet -, und ein blosses :root verloere dagegen. Beim
+     ersten Versuch stand genau deshalb dunkler Text auf dunklem Blatt. */
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+    --bg: #fff; --bg-top: #fff; --bg-raised: #fff; --bg-sunken: #eee;
+    --ink: #111; --ink-soft: #333; --ink-faint: #555; --line: #bbb;
+    --accent: #5730ce; --accent-ink: #fff;
+    --r1: #237032; --r2: #4b7a0a; --r3: #94560a; --r4: #b53d0c; --r5: #b02525;
+    --on-scale: #fff; --shadow: none;
+  }
+  html, body { background: #fff !important; color: #111; }
+  body { padding: 0; font-size: 11pt; }
+  .top, .foot, .toast, .player, .swipe, .swap-peek, dialog, .stale, .status,
+  #list, #map, #mapbar, #news, #plan, .arch-tools, #arch-tabs { display: none !important; }
+  main { min-height: 0; }
+  body.archive #archive { display: block !important; padding: 0; }
+  body.archive #arch-ueberblick, body.archive #arch-nach { display: none !important; }
+  body.archive #arch-bericht { display: block !important; }
+  .report { margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; font-size: 10.5pt; }
+  .grade, .bar-svg, .bar-svg rect, .tag { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .arch-act { text-decoration: none; color: inherit; }
+  a { color: inherit; text-decoration: none; }
+}

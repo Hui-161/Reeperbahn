@@ -24,6 +24,9 @@
 <header class="top">
   <div class="top-row">
     <h1>Reeperbahn <span>2026</span></h1>
+    <!-- Steht nur im Archiv-Modus da: die Kopfzeile verliert dann Tage und
+         Filter, und irgendetwas muss sagen, warum. -->
+    <span id="top-archive" class="top-badge" hidden>Archiv</span>
     <div class="top-actions">
       <button id="btn-search" class="icon-btn" aria-label="Suche" title="Suche">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
@@ -58,6 +61,14 @@
   </form>
 
   <nav id="days" class="days" aria-label="Festivaltage"></nav>
+
+  <!-- Ersetzt die Tagesleiste im Archiv-Modus. Dieselben Pillen wie die
+       Tage, damit der Kopf nicht anders aussieht als sonst. -->
+  <nav id="arch-tabs" class="days" hidden aria-label="Archiv">
+    <button type="button" class="day" data-atab="ueberblick" aria-selected="true">Überblick</button>
+    <button type="button" class="day" data-atab="nach" aria-selected="false">Nachbewertung</button>
+    <button type="button" class="day" data-atab="bericht" aria-selected="false">Bericht</button>
+  </nav>
 
   <div class="filters">
     <!-- Steht VORN und bleibt beim Scrollen der Leiste stehen: der Ausweg
@@ -173,6 +184,15 @@
     <div id="plan-body"></div>
     <div id="plan-time" class="timeline" hidden></div>
   </section>
+
+  <!-- Archiv: was vom Festival bleibt. Drei Reiter, alle drei werden bei
+       jedem Aufbau gefuellt - der Bericht muss auch dann stehen, wenn man
+       aus dem Menue heraus druckt und gerade ein anderer Reiter offen ist. -->
+  <section id="archive" class="plan archive" hidden aria-label="Archiv">
+    <div id="arch-ueberblick"></div>
+    <div id="arch-nach" hidden></div>
+    <div id="arch-bericht" hidden></div>
+  </section>
 </main>
 
 <dialog id="detail" class="detail" aria-label="Details"></dialog>
@@ -223,6 +243,22 @@
         </select>
       </label>
       <p class="menu-note">Nach dem Wischen erscheint kurz „Zurücknehmen“.</p>
+    </div>
+
+    <div class="d-section">
+      <h3>Archiv</h3>
+      <p class="menu-note">Nach dem Festival: Zahlen, eine Nachbewertung der
+      gesehenen Acts und ein druckbarer Bericht. Die Liste bleibt darunter
+      erhalten — der Schalter blendet nur um.</p>
+      <label class="opt"><input type="checkbox" id="arch-on"> Archiv-Modus</label>
+      <div class="menu-list">
+        <button type="button" id="m-arch-json">Archiv sichern (JSON)</button>
+        <button type="button" id="m-arch-xlsx">Archiv als Excel-Datei (XLSX)</button>
+        <button type="button" id="m-arch-print">Bericht als PDF drucken</button>
+      </div>
+      <p class="menu-note">Die Excel-Datei entsteht im Browser, ohne Server.
+      Für die PDF öffnet sich der Druckdialog — dort „Als PDF speichern“
+      wählen.</p>
     </div>
 
     <div class="d-section">
@@ -339,6 +375,8 @@
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/leaflet/leaflet.markercluster.js"></script>
 <script src="plan.js"></script>
+<script src="archive.js"></script>
+<script src="xlsx.js"></script>
 <script src="team.js"></script>
 <script src="app.js"></script>
 </body>

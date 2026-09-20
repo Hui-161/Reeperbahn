@@ -19,6 +19,14 @@
   Cache-Control: no-cache
 /style.css
   Cache-Control: no-cache
+/archive.js
+  Cache-Control: no-cache
+/xlsx.js
+  Cache-Control: no-cache
+/plan.js
+  Cache-Control: no-cache
+/team.js
+  Cache-Control: no-cache
 
 # Programmdaten aendern sich taeglich.
 /data/*

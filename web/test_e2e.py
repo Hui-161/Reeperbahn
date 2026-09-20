@@ -2877,6 +2877,10 @@ with sync_playwright() as p:
     }""", [linda9])
     pg9.reload(wait_until="load")
     pg9.wait_for_selector(".row", timeout=20000)
+    # Den Tag wieder waehlen: nach dem Festival startet die App mit "Alle
+    # Tage", und der Plan braucht einen Tag. Waehrend des Festivals stand
+    # der laufende Abend von selbst da - deshalb fiel das erst am 20.9. auf.
+    pg9.click(f'.day[data-day="{day7}"]'); pg9.wait_for_timeout(400)
     pg9.click("#btn-plan"); pg9.wait_for_timeout(700)
     zeitleiste(pg9, 800)
     check("Alte Partnerdaten ohne Einzelnoten zeigen keinen Schnitt",
@@ -3520,6 +3524,305 @@ with sync_playwright() as p:
           "rgba" not in farben["kopf"] or farben["kopf"].endswith(", 1)"),
           farben["kopf"])
     ctx14.close()
+
+    # --- Archiv-Modus: was vom Festival bleibt ---
+    # Ein eigenes Gesicht der App fuer die Zeit danach. Die Erwartungen
+    # werden aus dem Programm berechnet, nicht festgeschrieben - die Kennungen
+    # koennen sich mit einem Line-up-Update aendern, die Rechnung nicht.
+    import json as _json, urllib.request as _ur, zipfile as _zip, tempfile as _tf
+    import xml.etree.ElementTree as _ET
+    lineup = _json.loads(_ur.urlopen(BASE + "/data/lineup.json").read())
+    per18 = {}
+    for sh in lineup["shows"]:
+        if sh.get("tbd") or sh.get("v") is None or not sh.get("e"):
+            continue
+        per18.setdefault(sh["a"], []).append(sh)
+    doppel18 = next(ai for ai, l in sorted(per18.items())
+                    if len(l) == 2 and len({s["v"] for s in l}) == 2)
+    einzel18 = [ai for ai, l in sorted(per18.items()) if len(l) == 1]
+    single18, verpasst18 = einzel18[:3], einzel18[3]
+    seen_shows18 = [s["id"] for s in per18[doppel18]] + [per18[ai][0]["id"] for ai in single18]
+    seen_acts18 = [lineup["acts"][ai]["id"] for ai in [doppel18] + single18]
+    aid = lambda ai: lineup["acts"][ai]["id"]
+    orte18 = len({s["v"] for s in per18[doppel18]} | {per18[ai][0]["v"] for ai in single18})
+    seed18 = f"""() => {{
+      localStorage.clear();
+      localStorage.setItem('rbf26.seen', {_json.dumps(_json.dumps(seen_acts18))});
+      localStorage.setItem('rbf26.seenshow', {_json.dumps(_json.dumps(seen_shows18))});
+      localStorage.setItem('rbf26.rate', JSON.stringify({{
+        {aid(doppel18)}: 1, {aid(single18[0])}: 2.5, {aid(single18[1])}: 3 }}));
+      localStorage.setItem('rbf26.fav', JSON.stringify([{aid(doppel18)}, {aid(verpasst18)}]));
+      localStorage.setItem('rbf26.commit', JSON.stringify({{
+        {aid(single18[0])}: {{ sp: true, price: 15 }} }}));
+      localStorage.setItem('rbf26.note', JSON.stringify({{ {aid(doppel18)}: 'zweimal hin' }}));
+    }}"""
+    ctx18 = b.new_context(viewport={"width": 390, "height": 844}, locale="de-DE")
+    pg18 = ctx18.new_page()
+    err18 = []
+    pg18.on("console", lambda m: err18.append(m.text) if m.type == "error" else None)
+    pg18.on("pageerror", lambda e: err18.append(str(e)))
+    pg18.goto(BASE + "/", wait_until="load")
+    pg18.wait_for_selector(".row", timeout=20000)
+    pg18.evaluate(seed18)
+    pg18.reload(wait_until="load")
+    pg18.wait_for_selector(".row", timeout=20000)
+    check("Ohne Schalter bleibt das Archiv verborgen",
+          pg18.locator("#archive").is_hidden() and pg18.locator("#arch-tabs").is_hidden()
+          and pg18.locator("#top-archive").is_hidden())
+    pg18.click("#btn-menu"); pg18.wait_for_selector("#menu[open]")
+    check("Im Menü steht der Schalter, aus",
+          pg18.locator("#arch-on").is_visible() and not pg18.locator("#arch-on").is_checked())
+    pg18.locator("#arch-on").check(); pg18.wait_for_timeout(500)
+    check("Schalter an: das Archiv ersetzt die Liste, das Menü geht zu",
+          pg18.locator("#archive").is_visible() and pg18.locator("#list").is_hidden()
+          and not pg18.locator("#menu").evaluate("d => d.open"))
+    weg18 = ["#days", ".filters", "#btn-map", "#btn-plan", "#btn-search", "#btn-filters"]
+    check("Die Kopfzeile verliert Tage, Filter, Karte, Plan, Suche, Filterspeicher",
+          all(pg18.locator(s).first.is_hidden() for s in weg18),
+          str([s for s in weg18 if not pg18.locator(s).first.is_hidden()]))
+    check("Und bekommt Reiter und Abzeichen",
+          pg18.locator("#arch-tabs").is_visible() and pg18.locator("#top-archive").is_visible()
+          and pg18.locator("#btn-theme").is_visible() and pg18.locator("#btn-menu").is_visible())
+    tiles18 = dict(pg18.evaluate("""() => [...document.querySelectorAll('.tile')]
+      .map(t => [t.querySelector('span').textContent.trim().replace(/\\s*\\*$/, ''),
+                 t.querySelector('b').textContent.trim()])"""))
+    check("Kacheln: 5 Konzerte, 4 Acts, 1 mehrfach, Spielorte gezählt",
+          tiles18.get("Konzerte") == "5" and tiles18.get("Acts gesehen") == "4"
+          and tiles18.get("davon mehrfach") == "1" and tiles18.get("Spielorte") == str(orte18),
+          str(tiles18))
+    check("Kacheln: 3 bewertet, Favoriten 1 von 2, nachbewertet 1 von 4",
+          tiles18.get("bewertet") == "3" and tiles18.get("Favoriten gesehen") == "1/2"
+          and tiles18.get("nachbewertet") == "1/4", str(tiles18))
+    box = lambda pg_, titel: pg_.locator("#arch-ueberblick .arch-box", has_text=titel).first.inner_text()
+    check("„Mehrfach gesehen“ nennt den Act mit ×2",
+          lineup["acts"][doppel18]["n"] in box(pg18, "Mehrfach gesehen")
+          and "×2" in box(pg18, "Mehrfach gesehen"))
+    check("„Verpasste Favoriten“ nennt den Favoriten ohne Konzert",
+          lineup["acts"][verpasst18]["n"] in box(pg18, "Verpasste Favoriten"))
+    check("Entdeckung: Note 2,5 ohne Favorit",
+          lineup["acts"][single18[0]]["n"] in box(pg18, "Entdeckungen")
+          and lineup["acts"][doppel18]["n"] not in box(pg18, "Entdeckungen"))
+    check("Balken tragen ihre Breite als Attribut, nicht als style (CSP)",
+          pg18.evaluate("""() => { const r = [...document.querySelectorAll('.bar-svg rect')];
+            return r.length > 5 && r.every(x => +x.getAttribute('width') > 0)
+              && !document.querySelector('#archive [style]'); }"""))
+    check("Nichts läuft seitlich über", pg18.evaluate(
+        "() => document.documentElement.scrollWidth <= innerWidth"))
+    pg18.reload(wait_until="load")
+    pg18.wait_for_selector("#archive:not([hidden])", timeout=20000)
+    check("Der Modus bleibt über einen Neustart erhalten",
+          pg18.locator("#archive").is_visible() and pg18.locator("#list").is_hidden()
+          and pg18.evaluate("() => document.body.classList.contains('archive')"))
+
+    # Nachbewertung: Haken, Preis, Speicher
+    pg18.click('[data-atab="nach"]'); pg18.wait_for_selector(".nach")
+    check("Eine Karte je gesehenem Act", pg18.locator(".nach").count() == 4,
+          f"{pg18.locator('.nach').count()} Karten")
+    erste = pg18.locator(".nach").first
+    check("Reihenfolge: die Note 1 steht oben",
+          erste.get_attribute("data-act") == str(aid(doppel18)))
+    vor = pg18.locator(f'.nach[data-act="{aid(single18[0])}"]')
+    check("Die vorbelegte Nachbewertung steht drin: Spotify, 15 €, erledigt",
+          vor.locator('[data-commit="sp"]').is_checked()
+          and vor.locator('[data-price="15"]').get_attribute("aria-pressed") == "true"
+          and "done" in (vor.get_attribute("class") or ""))
+    gespeichert = lambda: pg18.evaluate(
+        "() => JSON.parse(localStorage.getItem('rbf26.commit') || '{}')")
+    erste.locator('[data-commit="ak"]').check(); pg18.wait_for_timeout(200)
+    check("Ein Haken landet im Speicher, und nur er",
+          gespeichert().get(str(aid(doppel18))) == {"ak": True}, str(gespeichert()))
+    check("Die Karte gilt als erledigt, der Zähler zählt mit",
+          "done" in (erste.get_attribute("class") or "")
+          and "2 von 4" in pg18.locator("#arch-nach .arch-lead").inner_text())
+    erste.locator('[data-price="30"]').click(); pg18.wait_for_timeout(200)
+    check("Ticketpreis gesetzt", gespeichert().get(str(aid(doppel18)), {}).get("price") == 30
+          and erste.locator('[data-price="30"]').get_attribute("aria-pressed") == "true")
+    erste.locator('[data-price="50"]').click(); pg18.wait_for_timeout(200)
+    check("Nur eine Preisstufe zugleich",
+          gespeichert().get(str(aid(doppel18)), {}).get("price") == 50
+          and erste.locator('[data-price="30"]').get_attribute("aria-pressed") == "false")
+    erste.locator('[data-price="50"]').click(); pg18.wait_for_timeout(200)
+    check("Nochmal tippen nimmt den Preis zurück",
+          "price" not in gespeichert().get(str(aid(doppel18)), {}))
+    erste.locator('[data-commit="ak"]').uncheck(); pg18.wait_for_timeout(200)
+    check("Ohne Haken verschwindet der Eintrag ganz",
+          str(aid(doppel18)) not in gespeichert()
+          and "done" not in (erste.get_attribute("class") or "")
+          and "1 von 4" in pg18.locator("#arch-nach .arch-lead").inner_text(), str(gespeichert()))
+    pg18.click('[data-nachfilter="offen"]'); pg18.wait_for_timeout(300)
+    check("„Noch offen“ zeigt nur die ohne Nachbewertung",
+          pg18.locator(".nach").count() == 3
+          and pg18.locator(f'.nach[data-act="{aid(single18[0])}"]').count() == 0)
+    pg18.click('[data-nachfilter="alle"]'); pg18.wait_for_timeout(300)
+    pg18.locator(".nach").first.locator(".arch-act").click()
+    pg18.wait_for_selector("#detail[open]")
+    check("Der Name öffnet die Künstlerkarte",
+          pg18.locator("#detail .d-title").inner_text().strip() == lineup["acts"][doppel18]["n"])
+    pg18.click('#detail [data-r="4"]'); pg18.wait_for_timeout(400)
+    pg18.keyboard.press("Escape"); pg18.wait_for_timeout(300)
+    check("Eine neue Note zieht die Rangfolge nach: 2,5 steht jetzt oben",
+          pg18.locator(".nach").first.get_attribute("data-act") == str(aid(single18[0])),
+          pg18.locator(".nach").first.get_attribute("data-act"))
+
+    # Sichern: JSON und Excel entstehen im Browser
+    pg18.click('[data-atab="ueberblick"]'); pg18.wait_for_timeout(200)
+    with pg18.expect_download() as dl18:
+        pg18.click("#arch-ueberblick [data-archjson]")
+    # Kopie ausserhalb des Browserkontexts: der Download verschwindet mit ihm,
+    # und weiter unten liest ein FRISCHES Geraet genau diese Datei wieder ein.
+    jpath18 = _tf.NamedTemporaryFile(suffix=".json", delete=False).name
+    dl18.value.save_as(jpath18)
+    doc18 = _json.load(open(jpath18, encoding="utf-8"))
+    check("Archiv-JSON: Kennung, ganzes Programm, eigene Daten, Zahlen",
+          dl18.value.suggested_filename.endswith(".json") and doc18.get("kind") == "rbf26-archiv"
+          and len(doc18["lineup"]["acts"]) == len(lineup["acts"])
+          and set(doc18["mine"]["seenShow"]) == set(seen_shows18)
+          and doc18["stats"]["konzerte"] == 5 and doc18["topActs"][0]["name"] == lineup["acts"][single18[0]]["n"],
+          dl18.value.suggested_filename)
+    check("Archiv-JSON trägt keine Passphrase",
+          '"pass"' not in open(jpath18, encoding="utf-8").read())
+    pg18.click('[data-atab="bericht"]'); pg18.wait_for_selector("#report")
+    with pg18.expect_download() as dx18:
+        pg18.click("#arch-bericht [data-archxlsx]")
+    xpath18 = dx18.value.path()
+    z18 = _zip.ZipFile(xpath18)
+    for n in z18.namelist():
+        _ET.fromstring(z18.read(n))
+    ns18 = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    blaetter18 = [s.get("name") for s in
+                  _ET.fromstring(z18.read("xl/workbook.xml")).findall(".//m:sheet", ns18)]
+    check("Excel: gültiges ZIP, alle Teile wohlgeformtes XML",
+          dx18.value.suggested_filename.endswith(".xlsx") and z18.testzip() is None
+          and len(z18.namelist()) == 10, f"{dx18.value.suggested_filename}, {len(z18.namelist())} Teile")
+    check("Excel: fünf Blätter in dieser Reihenfolge",
+          blaetter18 == ["Konzerte gesehen", "Acts", "Spielorte", "Statistik", "Line-up komplett"],
+          str(blaetter18))
+    try:
+        import openpyxl as _ox
+        # Der Download traegt keine Endung, openpyxl prueft die - also als Datei-Objekt.
+        wb18 = _ox.load_workbook(open(xpath18, "rb"))
+        ws18 = wb18["Konzerte gesehen"]
+        check("Excel (openpyxl): eine Zeile je Konzert, Minuten als Zahl, Kopf fett, Filter",
+              ws18.max_row == 6 and isinstance(ws18["E2"].value, int) and ws18["A1"].font.b
+              and ws18.freeze_panes == "A2" and ws18.auto_filter.ref.startswith("A1:"),
+              f"{ws18.max_row} Zeilen, E2={ws18['E2'].value!r}")
+        wa18 = wb18["Acts"]
+        kopf18 = [c.value for c in wa18[1]]
+        zeile18 = next(r for r in wa18.iter_rows(min_row=2, values_only=True)
+                       if r[1] == lineup["acts"][single18[0]]["n"])
+        check("Excel (openpyxl): Nachbewertung steht als Spalten drin",
+              zeile18[kopf18.index("Spotify folgen")] == "ja"
+              and zeile18[kopf18.index("Ticket bis (€)")] == 15
+              and zeile18[kopf18.index("Einsatz (Punkte)")] == 2, str(zeile18))
+    except ImportError:
+        print("  (openpyxl fehlt - der Inhalt der Excel-Datei wird nicht gegengelesen)")
+
+    # Druck: nur der Bericht, egal welcher Reiter offen ist
+    pg18.click('[data-atab="ueberblick"]'); pg18.wait_for_timeout(200)
+    pg18.emulate_media(media="print"); pg18.wait_for_timeout(200)
+    druck18 = pg18.evaluate("""() => { const d = (s) => getComputedStyle(document.querySelector(s)).display;
+      return { top: d('.top'), foot: d('.foot'), tabs: d('#arch-tabs'), ueber: d('#arch-ueberblick'),
+               bericht: d('#arch-bericht'), report: d('#report'), tools: d('#arch-bericht .arch-tools') }; }""")
+    check("Druck zeigt nur den Bericht - auch wenn der Überblick offen ist",
+          druck18["top"] == "none" and druck18["foot"] == "none" and druck18["tabs"] == "none"
+          and druck18["ueber"] == "none" and druck18["bericht"] == "block"
+          and druck18["report"] != "none" and druck18["tools"] == "none", str(druck18))
+    check("Der Bericht nennt Top-Acts und Top-Spielorte",
+          pg18.evaluate("""() => { const t = document.querySelector('#report').textContent;
+            return t.includes('Top-Acts') && t.includes('Top-Spielorte')
+              && t.includes('Alle besuchten Konzerte'); }"""))
+    pg18.emulate_media(media="screen"); pg18.wait_for_timeout(100)
+
+    # Heraus aus dem Archiv - zwei Wege
+    pg18.click("#arch-ueberblick [data-archoff]"); pg18.wait_for_timeout(400)
+    check("„Zurück zur Liste“ schaltet ab und merkt es sich",
+          pg18.locator("#list").is_visible() and pg18.locator("#archive").is_hidden()
+          and pg18.evaluate("() => localStorage.getItem('rbf26.archive')") == "false"
+          and pg18.locator("#days").is_visible())
+    pg18.click("#btn-menu"); pg18.wait_for_selector("#menu[open]")
+    pg18.locator("#arch-on").check(); pg18.wait_for_timeout(400)
+    pg18.click("#btn-menu"); pg18.wait_for_selector("#menu[open]")
+    pg18.click("#m-plan"); pg18.wait_for_timeout(500)
+    check("„Abendplan öffnen“ führt aus dem Archiv heraus",
+          pg18.locator("#plan").is_visible() and pg18.locator("#archive").is_hidden()
+          and pg18.locator("#arch-tabs").is_hidden())
+    # Netzfehler (Kuenstlerbilder, Kacheln) zaehlen hier nicht, wie am Ende der Datei.
+    err18 = [e for e in err18 if "ERR_" not in e]
+    check("Keine JS-Fehler im Archiv", not err18, str(err18[:2]))
+    ctx18.close()
+
+    # Aus der DUNKLEN Ansicht gedruckt muss ein weisses Blatt mit dunkler
+    # Schrift herauskommen. Beim ersten Versuch stand dunkler Text auf
+    # dunklem Grund - die Systemvorgabe greift ueber einen Selektor mit
+    # zwei Stufen, und die Druckregel hatte nur eine.
+    ctx19 = b.new_context(viewport={"width": 390, "height": 844}, locale="de-DE",
+                          color_scheme="dark")
+    pg19 = ctx19.new_page()
+    err19 = []
+    pg19.on("pageerror", lambda e: err19.append(str(e)))
+    pg19.goto(BASE + "/", wait_until="load")
+    pg19.wait_for_selector(".row", timeout=20000)
+    pg19.evaluate(seed18)
+    pg19.evaluate("() => localStorage.setItem('rbf26.archive', 'true')")
+    pg19.reload(wait_until="load")
+    pg19.wait_for_selector("#archive:not([hidden])", timeout=20000)
+    pg19.emulate_media(media="print"); pg19.wait_for_timeout(200)
+    farbe19 = pg19.evaluate("""() => {
+      const lum = (c) => { const m = c.match(/\\d+/g).map(Number);
+        return (m[0] * 299 + m[1] * 587 + m[2] * 114) / 255000; };
+      return { blatt: lum(getComputedStyle(document.querySelector('.report')).backgroundColor),
+               schrift: lum(getComputedStyle(document.querySelector('.rep-head h2')).color),
+               meta: lum(getComputedStyle(document.querySelector('.rep-sub')).color) }; }""")
+    check("Aus der dunklen Ansicht gedruckt: weißes Blatt, dunkle Schrift",
+          farbe19["blatt"] > 0.95 and farbe19["schrift"] < 0.3 and farbe19["meta"] < 0.4,
+          str(farbe19))
+    pg19.emulate_media(media="screen")
+
+    # Die Archivdatei liest sich auf einem frischen Geraet wieder ein.
+    pg19.evaluate("() => localStorage.clear()")
+    pg19.reload(wait_until="load")
+    pg19.wait_for_selector(".row", timeout=20000)
+    pg19.once("dialog", lambda d: d.accept())
+    pg19.set_input_files("#file", jpath18)
+    pg19.wait_for_timeout(900)
+    wieder19 = pg19.evaluate("""() => ({
+      shows: JSON.parse(localStorage.getItem('rbf26.seenshow') || '[]'),
+      commit: JSON.parse(localStorage.getItem('rbf26.commit') || '{}'),
+      rate: JSON.parse(localStorage.getItem('rbf26.rate') || '{}') })""")
+    check("Die Archivdatei liest sich als Sicherung ein - mit Nachbewertung",
+          set(wieder19["shows"]) == set(seen_shows18)
+          and wieder19["commit"].get(str(aid(single18[0]))) == {"sp": True, "price": 15}
+          and wieder19["rate"].get(str(aid(single18[0]))) == 2.5, str(wieder19)[:200])
+
+    # Leeres Archiv erklaert sich, statt Nullen zu zeigen.
+    pg19.evaluate("() => { localStorage.clear(); localStorage.setItem('rbf26.archive', 'true'); }")
+    pg19.reload(wait_until="load")
+    pg19.wait_for_selector("#archive:not([hidden])", timeout=20000)
+    check("Ein leeres Archiv sagt, woher es seine Daten nimmt",
+          "Noch nichts im Archiv" in pg19.locator("#arch-ueberblick").inner_text()
+          and pg19.locator("#arch-ueberblick [data-archoff]").is_visible())
+    err19 = [e for e in err19 if "ERR_" not in e]
+    check("Keine JS-Fehler (dunkel, Import, leer)", not err19, str(err19[:2]))
+    ctx19.close()
+
+    # Schmal: die Nachbewertung mit ihren Pillen darf die Seite nicht breiter
+    # machen als den Bildschirm.
+    ctx20 = b.new_context(viewport={"width": 320, "height": 700}, locale="de-DE")
+    pg20 = ctx20.new_page()
+    pg20.goto(BASE + "/", wait_until="load")
+    pg20.wait_for_selector(".row", timeout=20000)
+    pg20.evaluate(seed18)
+    pg20.evaluate("() => { localStorage.setItem('rbf26.archive', 'true');"
+                  " localStorage.setItem('rbf26.archtab', JSON.stringify('nach')); }")
+    pg20.reload(wait_until="load")
+    pg20.wait_for_selector(".nach", timeout=20000)
+    check("320 px: Nachbewertung läuft nicht seitlich über",
+          pg20.evaluate("() => document.documentElement.scrollWidth <= innerWidth"),
+          pg20.evaluate("() => document.documentElement.scrollWidth + ' > ' + innerWidth"))
+    pg20.click('[data-atab="bericht"]'); pg20.wait_for_selector("#report")
+    check("320 px: der Bericht auch nicht",
+          pg20.evaluate("() => document.documentElement.scrollWidth <= innerWidth"))
+    ctx20.close()
 
     real = [e for e in errors if "openstreetmap" not in e.lower()
             and "tile" not in e.lower() and "ERR_" not in e

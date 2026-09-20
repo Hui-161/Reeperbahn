@@ -168,6 +168,10 @@ const S = {
   // in Festivalminuten, siehe festMin().
   mapLive: true,
   mapMin: null,
+  /* Archiv-Modus: bleibt gespeichert - nach dem Festival will man ihn nicht
+     bei jedem Oeffnen neu einschalten. Siehe den Abschnitt "Archiv". */
+  archiveOn: !!store.get('archive', false),
+  archTab: store.get('archtab', 'ueberblick'),
 };
 
 const MAP_DETAIL_ZOOM = 17;
@@ -189,6 +193,7 @@ const el = {
   player: $('#player'), toast: $('#toast'),
   quick: $('#quick'), swipe: $('#swipe'), tlmenu: $('#tlmenu'),
   swapPeek: $('#swap-peek'),
+  archive: $('#archive'),
 };
 
 /* Kurze Rueckmeldung ohne Dialog - fuer Dinge, die keine Bestaetigung
@@ -1005,6 +1010,14 @@ function actShowOrdinal(sh) {
 
 function refreshAct(ai) {
   if (!Number.isFinite(ai) || !S.data) { render(); return; }
+  /* Im Archiv haengt an jeder Note eine Zahl und eine Rangfolge - also
+     neu bauen, aber die Stelle halten, an der man gerade liest. */
+  if (S.archiveOn) {
+    const y = scrollY;
+    renderArchive();
+    scrollTo({ top: y, behavior: 'instant' });
+    return;
+  }
   // Auf der Karte gibt es keine Zeilen zu flicken - dort aendert eine neue
   // Note die Farbe des Spielorts, und zwar sofort.
   if (S.mapOn) { scheduleMapColors(); return; }
@@ -1082,6 +1095,14 @@ function render() {
   $('#f-venue').classList.toggle('on', S.venues.size > 0);
   $('#f-venue').textContent = S.venues.size ? `Spielorte (${S.venues.size})` : 'Spielorte';
 
+  if (S.archiveOn) {
+    el.list.hidden = true; el.mapBox.hidden = true;
+    el.plan.hidden = true; el.news.hidden = true;
+    el.archive.hidden = false;
+    renderArchive();
+    return;
+  }
+  el.archive.hidden = true;
   if (S.newsOn) {
     el.list.hidden = true; el.mapBox.hidden = true;
     el.plan.hidden = true; el.news.hidden = false;
@@ -2247,7 +2268,7 @@ function renderNews() {
 
 function showNews(on) {
   S.newsOn = on;
-  if (on) { S.planOn = false; mapOffQuiet(); }
+  if (on) { S.planOn = false; mapOffQuiet(); archiveOff(); }
   openBox(null);
   render();
   scrollTo({ top: 0, behavior: 'instant' });
@@ -2255,7 +2276,7 @@ function showNews(on) {
 
 function showPlan(on) {
   S.planOn = on;
-  if (on) { S.newsOn = false; mapOffQuiet(); }
+  if (on) { S.newsOn = false; mapOffQuiet(); archiveOff(); }
   openBox(null);
   render();
   /* Der Abendplan geht mit der ZEITLEISTE auf, nicht mit der Liste. Die
@@ -3504,6 +3525,7 @@ $('#f-reset').addEventListener('click', () => {
    quittiert. */
 function setMap(on) {
   if (on && S.planOn) S.planOn = false;
+  if (on) archiveOff();
   S.mapOn = on;
   if (!on) clearRoute();
   $('#btn-map').setAttribute('aria-pressed', String(on));
@@ -3592,6 +3614,451 @@ el.detail.addEventListener('close', () => {
   delete el.detail.dataset.act;
 });
 
+/* ---------- Archiv ----------
+   Nach dem Festival kippt die Frage: nicht mehr "wohin heute Abend", sondern
+   "was war das eigentlich". Der Archiv-Modus ist dieselbe App mit anderem
+   Gesicht - Liste, Karte und Plan bleiben darunter erhalten, der Schalter
+   blendet nur um. Gerechnet wird in archive.js, damit jede Zahl ohne Browser
+   nachpruefbar ist; hier steht nur, wie sie aussieht. */
+
+const ARCH = window.RBFArchive || null;
+/* Was man fuer den Act zu TUN bereit ist - Abendkasse, Vorverkauf, Spotify,
+   Niedlichkeitsbonus, Konzert in Berlin, und bis zu welchem Ticketpreis.
+   Eigener Speicher neben der Note: die Note sagt "sehr gut", das hier sagt
+   "dafuer kaufe ich ein Ticket". Bewusst NICHT im Team-Abgleich - es ist die
+   persoenlichste Aussage der ganzen App. */
+let commit = store.get('commit', {}) || {};
+const saveCommit = () => store.set('commit', commit);
+const archCtx = () => ({ data: S.data, seen, seenShow, rate, fav, note, commit, partner });
+const ARCH_TABS = ['ueberblick', 'nach', 'bericht'];
+/* "Nur offene" in der Nachbewertung - Sitzungszustand, wie filterKeep. */
+let archNachOffen = false;
+
+/* Kopfzeile und Menue auf den Modus stellen, ohne zu zeichnen. */
+function syncArchiveChrome() {
+  document.body.classList.toggle('archive', S.archiveOn);
+  $('#arch-tabs').hidden = !S.archiveOn;
+  $('#top-archive').hidden = !S.archiveOn;
+  const sw = $('#arch-on');
+  if (sw) sw.checked = S.archiveOn;
+}
+
+function setArchive(on) {
+  S.archiveOn = !!on;
+  store.set('archive', S.archiveOn);
+  if (S.archiveOn) {
+    S.planOn = false; S.newsOn = false;
+    mapOffQuiet();
+    openBox(null);
+    if (!el.searchbar.hidden) setSearch(false);
+  }
+  syncArchiveChrome();
+  render();
+  scrollTo({ top: 0, behavior: 'instant' });
+}
+
+/* Liste, Karte, Plan oder Aenderungen aus dem Menue heraus oeffnen heisst:
+   raus aus dem Archiv. Sonst gewinnt der Archiv-Zweig in render() und der
+   Knopf taete scheinbar nichts. */
+function archiveOff() {
+  if (!S.archiveOn) return;
+  S.archiveOn = false;
+  store.set('archive', false);
+  syncArchiveChrome();
+}
+
+function setArchTab(tab) {
+  S.archTab = ARCH_TABS.includes(tab) ? tab : 'ueberblick';
+  store.set('archtab', S.archTab);
+  renderArchive();
+  scrollTo({ top: 0, behavior: 'instant' });
+}
+
+/* Ein Balken als SVG: die Breite steht als Attribut am Rechteck, nicht als
+   style="" - das wuerde die CSP (style-src 'self') stumm verwerfen. */
+function bar(label, n, max, cls = '') {
+  const pct = max > 0 ? Math.max(1.5, Math.round(n / max * 1000) / 10) : 0;
+  return `<div class="bar">
+    <span class="bar-l">${esc(label)}</span>
+    <svg class="bar-svg${cls ? ' ' + cls : ''}" viewBox="0 0 100 10"
+      preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0"
+      width="${pct}" height="10" rx="1.5"/></svg>
+    <span class="bar-n">${esc(String(n))}</span>
+  </div>`;
+}
+
+const gradeBadge = (r) => {
+  const rb = rateBucket(r);
+  return rb ? `<span class="grade grade-${rb}${Number.isInteger(+r) ? '' : ' grade-half'}"
+    title="Meine Note: ${rateText(r)}">${rateText(r)}</span>` : '';
+};
+const archWhen = (sh) => `${dayLabel(sh)} ${sh.tbd ? '' : hhmm(sh.t)} ${
+  sh.v != null ? esc(S.data.venues[sh.v].n) : ''}`.replace(/\s+/g, ' ').trim();
+const actLink = (ai, name) =>
+  `<button type="button" class="arch-act" data-openact="${ai}">${esc(name)}</button>`;
+const commitTags = (c) => {
+  if (!c) return '';
+  const t = ARCH.COMMITS.filter((x) => c[x.k]).map((x) =>
+    `<span class="tag tag-c" title="${esc(x.label)}">${esc(x.label)}</span>`);
+  if (c.price) t.push(`<span class="tag tag-c tag-p">bis ${c.price} €</span>`);
+  return t.join('');
+};
+
+function renderArchive() {
+  if (!S.data || !ARCH) return;
+  for (const b of document.querySelectorAll('#arch-tabs [data-atab]')) {
+    b.setAttribute('aria-selected', String(b.dataset.atab === S.archTab));
+  }
+  const st = ARCH.stats(archCtx());
+  const acts = ARCH.rankActs(archCtx());
+  const orte = ARCH.rankVenues(archCtx());
+  $('#arch-ueberblick').innerHTML = archOverviewHtml(st, acts, orte);
+  $('#arch-nach').innerHTML = archNachHtml(st, acts);
+  $('#arch-bericht').innerHTML = archReportHtml(st, acts, orte);
+  for (const t of ARCH_TABS) $(`#arch-${t}`).hidden = t !== S.archTab;
+}
+
+/* Nichts abgehakt: sagen, woher das Archiv seine Daten nimmt, statt leere
+   Kacheln mit Nullen zu zeigen. */
+function archEmptyHtml() {
+  return `<p class="empty"><b>Noch nichts im Archiv.</b>
+    Hier landet, was du als gesehen abgehakt hast — den Haken setzt du auf der
+    Künstlerkarte bei den Auftritten. Der Schalter unten bringt dich zur Liste.
+    <br><br><button type="button" class="chip" data-archoff>Zurück zur Liste</button></p>`;
+}
+
+function archOverviewHtml(st, acts, orte) {
+  if (!st.acts) return archEmptyHtml();
+  const maxTag = Math.max(...st.tage.map((t) => t.konzerte), 1);
+  const maxGenre = Math.max(...st.genres.map((g) => g.n), 1);
+  const maxNote = Math.max(...[1, 2, 3, 4, 5].map((b) => st.noten[b]), 1);
+  const maxEin = Math.max(...ARCH.COMMITS.map((x) => st.einsatz[x.k]),
+                          ...ARCH.PRICES.map((p) => st.einsatz.price[p]), 1);
+  /* Woerter statt Zahlen ("12 h 45 min") brauchen eine kleinere Schrift,
+     sonst laufen sie auf 320 px aus der Kachel. */
+  const tile = (v, l, title = '') =>
+    `<div class="tile${/[a-z]/.test(String(v)) ? ' tile-text' : ''}"${
+      title ? ` title="${esc(title)}"` : ''}><b>${v}</b><span>${l}</span></div>`;
+  const namen = (arr, extra = () => '') => arr.length
+    ? `<p class="arch-names">${arr.map((a) => actLink(a.ai, a.name) + extra(a)).join(' ')}</p>`
+    : '<p class="menu-note">—</p>';
+  return `
+    <div class="arch-tiles">
+      ${tile(st.konzerte, 'Konzerte')}
+      ${tile(st.acts, 'Acts gesehen')}
+      ${tile(st.mehrfach.length, 'davon mehrfach')}
+      ${tile(st.spielorte, 'Spielorte')}
+      ${tile(esc(st.minutenText), 'Musik' + (st.geschaetzt ? ' *' : ''),
+             st.geschaetzt ? `${st.geschaetzt} Auftritt(e) ohne Endzeit mit ${ARCH.FALLBACK_MIN} min gerechnet` : '')}
+      ${tile(st.bewertet, 'bewertet')}
+      ${tile(`${st.favGesehen}<small>/${st.favoriten}</small>`, 'Favoriten gesehen')}
+      ${tile(`${st.nachbewertet}<small>/${st.acts}</small>`, 'nachbewertet')}
+    </div>
+    ${st.geschaetzt ? `<p class="menu-note">* ${st.geschaetzt} Auftritt${st.geschaetzt > 1 ? 'e' : ''}
+      ohne Endzeit, mit ${ARCH.FALLBACK_MIN} Minuten gerechnet.</p>` : ''}
+
+    <div class="arch-grid">
+      <section class="arch-box"><h3 class="arch-h">Nach Tagen</h3>
+        ${st.tage.map((t) => bar(`${t.wd} ${t.d.slice(8)}.${t.d.slice(5, 7)}. · ${t.minutenText}`,
+                                 t.konzerte, maxTag)).join('')}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Noten der gesehenen Acts</h3>
+        ${[1, 2, 3, 4, 5].map((b) => bar(`Note ${b} — ${RATES.find((r) => r[0] === b)[1]}`,
+                                        st.noten[b], maxNote, 'r' + b)).join('')}
+        ${st.noten[0] ? `<p class="menu-note">${st.noten[0]} ohne Note.</p>` : ''}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Genres</h3>
+        ${st.genres.slice(0, 10).map((g) => bar(g.name, g.n, maxGenre)).join('')}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Spielorte</h3>
+        ${orte.slice(0, 10).map((v) => bar(v.venue.n + (v.avg != null ? ` · Ø ${rateText(v.avg)}` : ''),
+                                           v.konzerte, orte[0].konzerte)).join('')}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Länder</h3>
+        <p class="arch-names">${st.laender.map((l) =>
+          `<span class="tag">${esc(l.name)} <b>${l.n}</b></span>`).join(' ')}</p>
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Einsatz</h3>
+        ${st.nachbewertet ? ARCH.COMMITS.map((x) => bar(x.label, st.einsatz[x.k], maxEin)).join('')
+          + ARCH.PRICES.map((p) => bar(`Ticket bis ${p} €`, st.einsatz.price[p], maxEin)).join('')
+          : '<p class="menu-note">Noch keine Nachbewertung — der Reiter oben.</p>'}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Mehrfach gesehen</h3>
+        ${namen(st.mehrfach, (a) => ` <span class="multi">×${a.times}</span>`)}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Entdeckungen</h3>
+        <p class="menu-note">Kein Favorit vorher, danach Note 1 oder 2 — die Ausbeute des Festivals.</p>
+        ${namen(st.entdeckungen, (a) => gradeBadge(a.rate))}
+      </section>
+      <section class="arch-box"><h3 class="arch-h">Verpasste Favoriten</h3>
+        ${namen(st.favVerpasst)}
+      </section>
+      ${st.team ? `<section class="arch-box"><h3 class="arch-h">Team</h3>
+        <p class="menu-note">${esc(st.team.name)}: ${st.team.gesehen} Acts gesehen,
+        ${st.team.beide.length} davon habt ihr beide gesehen${st.team.nurPartner
+          ? `, ${st.team.nurPartner} nur ${esc(st.team.name)}` : ''}.</p>
+        ${namen(st.team.beide)}
+      </section>` : ''}
+    </div>
+    <div class="plan-actions arch-tools">
+      <button type="button" class="chip" data-archjson>Archiv sichern (JSON)</button>
+      <button type="button" class="chip" data-archxlsx>Excel-Datei</button>
+      <button type="button" class="chip" data-archprint>Bericht als PDF</button>
+      <button type="button" class="chip chip-ghost" data-archoff>Zurück zur Liste</button>
+    </div>`;
+}
+
+/* Die Nachbewertung: je gesehenem Act eine Karte mit den Haken. Reihenfolge
+   wie die Rangliste - wer oben steht, ist die interessantere Entscheidung. */
+function archNachHtml(st, acts) {
+  if (!st.acts) return archEmptyHtml();
+  const offen = acts.filter((a) => !a.commit);
+  const list = archNachOffen ? offen : acts;
+  return `
+    <div class="plan-head">
+      <p class="arch-lead"><b>${st.nachbewertet} von ${st.acts}</b> gesehenen Acts nachbewertet.
+        Nicht „wie gut“ — das sagt die Note —, sondern: <b>was würde ich für diesen Act tun?</b></p>
+      <div class="plan-actions">
+        <button type="button" class="chip" data-nachfilter="alle"
+          aria-pressed="${!archNachOffen}">Alle (${acts.length})</button>
+        <button type="button" class="chip" data-nachfilter="offen"
+          aria-pressed="${archNachOffen}">Noch offen (${offen.length})</button>
+      </div>
+    </div>
+    <div class="nach-list">${list.length ? list.map((a) => archNachCard(a)).join('')
+      : '<p class="empty"><b>Alles nachbewertet.</b> Der Bericht wartet im dritten Reiter.</p>'}</div>`;
+}
+
+function archNachCard(a) {
+  const c = a.commit || {};
+  const g = (a.act.g || []).map((i) => S.data.genres[i]).join(', ');
+  return `<article class="nach${a.commit ? ' done' : ''}" data-ai="${a.ai}" data-act="${a.act.id}">
+    <div class="nach-head">
+      <span class="nach-name">${actLink(a.ai, a.act.n)}${gradeBadge(a.rate)}${
+        a.times > 1 ? `<span class="multi" title="${a.times}× gesehen">×${a.times}</span>` : ''}${
+        a.fav ? '<span class="heart nach-heart" title="Favorit">♥</span>' : ''}</span>
+      <span class="nach-sub">${[a.act.c, g].filter(Boolean).map(esc).join(' · ')}</span>
+      <span class="nach-when">${a.shows.length ? a.shows.map(archWhen).join(' · ')
+        : 'ohne Termin abgehakt'}</span>
+    </div>
+    <div class="nach-opts">
+      ${ARCH.COMMITS.map((x) => `<label class="ck" title="${esc(x.hint)}">
+        <input type="checkbox" data-commit="${x.k}" data-act="${a.act.id}"${c[x.k] ? ' checked' : ''}>
+        <span>${esc(x.label)}</span></label>`).join('')}
+    </div>
+    <div class="nach-price" role="group" aria-label="Ticketpreis"
+      title="Bis zu welchem Preis kaufst du ein Ticket? Nochmal tippen nimmt es zurück.">
+      <span class="nach-price-l">Ticket bis</span>
+      ${ARCH.PRICES.map((p) => `<button type="button" class="chip chip-price"
+        data-price="${p}" data-act="${a.act.id}"
+        aria-pressed="${+c.price === p}">${p} €</button>`).join('')}
+    </div>
+  </article>`;
+}
+
+/* Eine Aenderung an den Haken: Eintrag bereinigen, speichern, nur die Karte
+   und die Kopfzeile nachziehen. Kein renderArchive() - das baute die Liste
+   neu und man verloere die Stelle, an der man gerade ist. */
+function setCommit(actId, patch) {
+  const cur = Object.assign({}, commit[actId] || {}, patch);
+  const clean = ARCH.cleanCommit(cur);
+  if (clean) commit[actId] = clean; else delete commit[actId];
+  saveCommit();
+  const card = document.querySelector(`.nach[data-act="${actId}"]`);
+  if (card) {
+    card.classList.toggle('done', !!clean);
+    for (const b of card.querySelectorAll('[data-price]')) {
+      b.setAttribute('aria-pressed', String(!!clean && +clean.price === +b.dataset.price));
+    }
+  }
+  const lead = document.querySelector('#arch-nach .arch-lead b');
+  if (lead) {
+    const st = ARCH.stats(archCtx());
+    lead.textContent = `${st.nachbewertet} von ${st.acts}`;
+    const offen = document.querySelector('[data-nachfilter="offen"]');
+    if (offen) offen.textContent = `Noch offen (${st.acts - st.nachbewertet})`;
+  }
+  // Der Bericht haengt an denselben Zahlen - still nachbauen, er ist verborgen.
+  const acts = ARCH.rankActs(archCtx());
+  $('#arch-bericht').innerHTML = archReportHtml(ARCH.stats(archCtx()), acts, ARCH.rankVenues(archCtx()));
+}
+
+/* Der Bericht: was man ausdruckt. Auf dem Bildschirm ein Blatt mit Rand,
+   im Druck dasselbe ohne den Rest der App - siehe @media print. */
+function archReportHtml(st, acts, orte) {
+  if (!st.acts) return archEmptyHtml();
+  const stand = new Date();
+  const datum = stand.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
+  const top = acts.slice(0, 10);
+  const geld = acts.filter((a) => a.einsatz > 0)
+    .sort((x, y) => (y.einsatz - x.einsatz) || ((x.rate || 6) - (y.rate || 6))).slice(0, 12);
+  const konzerte = S.data.shows.filter((sh) => seenShow.has(String(sh.id)))
+    .sort((x, y) => String(x.t || '').localeCompare(String(y.t || '')));
+  const maxGenre = Math.max(...st.genres.map((g) => g.n), 1);
+  return `
+    <div class="plan-actions arch-tools">
+      <button type="button" class="chip" data-archprint>Als PDF drucken</button>
+      <button type="button" class="chip" data-archxlsx>Excel-Datei</button>
+      <button type="button" class="chip" data-archjson>JSON</button>
+    </div>
+    <div class="report" id="report">
+      <header class="rep-head">
+        <p class="rep-kicker">Mein Archiv</p>
+        <h2>Reeperbahn Festival 2026</h2>
+        <p class="rep-sub">${st.konzerte} Konzerte · ${st.acts} Acts · ${st.spielorte} Spielorte ·
+          ${esc(st.minutenText)} Musik · ${st.tage.map((t) => t.wd).join(', ')}</p>
+      </header>
+
+      <section class="rep-sec">
+        <h3>Top-Acts</h3>
+        <ol class="rep-top">${top.map((a) => `<li>
+          <span class="rep-name">${esc(a.act.n)}${a.act.c ? ` <small>${esc(a.act.c)}</small>` : ''}</span>
+          <span class="rep-grade">${gradeBadge(a.rate) || '<span class="grade grade-0">–</span>'}</span>
+          <span class="rep-meta">${a.shows.map(archWhen).join(' · ') || 'ohne Termin'}${
+            a.times > 1 ? ` · ${a.times}× gesehen` : ''}</span>
+          ${a.commit ? `<span class="rep-commit">${commitTags(a.commit)}</span>` : ''}
+          ${a.note.trim() ? `<span class="rep-note">${esc(a.note.trim())}</span>` : ''}
+        </li>`).join('')}</ol>
+      </section>
+
+      <section class="rep-sec rep-two">
+        <div>
+          <h3>Top-Spielorte</h3>
+          <ol class="rep-list">${orte.slice(0, 8).map((v) => `<li>
+            <span class="rep-name">${esc(v.venue.n)}</span>
+            <span class="rep-meta">${v.konzerte} Konzert${v.konzerte > 1 ? 'e' : ''}${
+              v.avg != null ? ` · Ø Note ${rateText(v.avg)}` : ''}${
+              v.venue.cap ? ` · ${v.venue.cap} Plätze` : ''}</span></li>`).join('')}</ol>
+        </div>
+        <div>
+          <h3>Genres</h3>
+          ${st.genres.slice(0, 8).map((g) => bar(g.name, g.n, maxGenre)).join('')}
+        </div>
+      </section>
+
+      ${geld.length ? `<section class="rep-sec">
+        <h3>Wofür ich Geld ausgeben würde</h3>
+        <ol class="rep-list">${geld.map((a) => `<li>
+          <span class="rep-name">${esc(a.act.n)}</span>
+          <span class="rep-commit">${commitTags(a.commit)}</span></li>`).join('')}</ol>
+      </section>` : ''}
+
+      ${st.entdeckungen.length ? `<section class="rep-sec">
+        <h3>Entdeckungen</h3>
+        <p class="rep-meta">Vorher kein Favorit, danach Note 1 oder 2.</p>
+        <p class="rep-names">${st.entdeckungen.map((a) =>
+          `<span>${esc(a.name)} ${gradeBadge(a.rate)}</span>`).join(' ')}</p>
+      </section>` : ''}
+
+      <section class="rep-sec">
+        <h3>Alle besuchten Konzerte</h3>
+        <table class="rep-table">
+          <thead><tr><th>Tag</th><th>Zeit</th><th>Act</th><th>Spielort</th><th>Note</th></tr></thead>
+          <tbody>${konzerte.map((sh) => {
+            const act = S.data.acts[sh.a];
+            return `<tr><td>${dayLabel(sh)}</td><td>${sh.tbd ? '–' : timeSpan(sh)}</td>
+              <td>${esc(act.n)}</td><td>${sh.v != null ? esc(S.data.venues[sh.v].n) : '–'}</td>
+              <td>${rate[act.id] ? rateText(rate[act.id]) : ''}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+      </section>
+
+      ${st.favVerpasst.length ? `<section class="rep-sec">
+        <h3>Verpasst</h3>
+        <p class="rep-meta">Favoriten, die nicht mehr in den Abend gepasst haben:
+          ${st.favVerpasst.map((a) => esc(a.name)).join(', ')}.</p>
+      </section>` : ''}
+
+      <footer class="rep-foot">Erstellt am ${esc(datum)} mit der eigenen Reeperbahn-App ·
+        Programmstand ${esc(new Date(S.data.generated_at).toLocaleDateString('de-DE'))}</footer>
+    </div>`;
+}
+
+/* ---------- Archiv sichern ----------
+   Zwei Dateien fuer zwei Zwecke: die JSON ist vollstaendig und liest sich
+   wieder ein (auch als Umzug auf ein neues Geraet), die Excel-Datei ist zum
+   Anschauen und Weiterrechnen. Beide entstehen im Browser - der Server sieht
+   nichts davon, wie bei jeder anderen Sicherung hier. */
+function archiveExtra() {
+  const c = team && team.config;
+  return { hint, revealed: [...revealed], filters: savedFilters,
+           planPin: [...planPin], planSkip: [...planSkip],
+           team: c ? { teamId: c.teamId, memberId: c.memberId, name: c.name } : null };
+}
+
+function exportArchiveJson() {
+  if (!S.data || !ARCH) return;
+  download('reeperbahn-2026-archiv.json',
+           JSON.stringify(ARCH.archiveDoc(archCtx(), archiveExtra()), null, 1),
+           'application/json');
+}
+
+function exportArchiveXlsx() {
+  if (!S.data || !ARCH || !window.RBFXlsx) return;
+  const bytes = window.RBFXlsx.build(ARCH.sheets(archCtx()));
+  download('reeperbahn-2026-archiv.xlsx', bytes,
+           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+/* Drucken heisst: Archiv an, Bericht gebaut, Druckdialog. Der Reiter darf
+   dabei bleiben, wo er ist - @media print zeigt ohnehin nur den Bericht. */
+function printReport() {
+  if (!S.data) return;
+  if (!S.archiveOn) setArchive(true); else renderArchive();
+  if (!ARCH || !ARCH.stats(archCtx()).acts) {
+    toast('Noch nichts im Archiv — erst Konzerte abhaken, dann drucken.', 3600);
+    return;
+  }
+  setTimeout(() => window.print(), 50);
+}
+
+$('#arch-on').addEventListener('change', (e) => {
+  el.menu.close();
+  setArchive(e.target.checked);
+});
+$('#m-arch-json').addEventListener('click', () => { el.menu.close(); exportArchiveJson(); });
+$('#m-arch-xlsx').addEventListener('click', () => { el.menu.close(); exportArchiveXlsx(); });
+$('#m-arch-print').addEventListener('click', () => { el.menu.close(); printReport(); });
+
+$('#arch-tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-atab]');
+  if (b) setArchTab(b.dataset.atab);
+});
+
+el.archive.addEventListener('change', (e) => {
+  const ck = e.target.closest('[data-commit]');
+  if (!ck) return;
+  setCommit(+ck.dataset.act, { [ck.dataset.commit]: ck.checked });
+});
+
+el.archive.addEventListener('click', (e) => {
+  const t = e.target;
+  const price = t.closest('[data-price]');
+  if (price) {
+    const id = +price.dataset.act;
+    const p = +price.dataset.price;
+    const cur = commit[id] && +commit[id].price;
+    setCommit(id, { price: cur === p ? null : p });
+    return;
+  }
+  const open = t.closest('[data-openact]');
+  if (open) { openDetail(+open.dataset.openact); return; }
+  const filt = t.closest('[data-nachfilter]');
+  if (filt) {
+    archNachOffen = filt.dataset.nachfilter === 'offen';
+    const y = scrollY;
+    renderArchive();
+    scrollTo({ top: y, behavior: 'instant' });
+    return;
+  }
+  if (t.closest('[data-archjson]')) { exportArchiveJson(); return; }
+  if (t.closest('[data-archxlsx]')) { exportArchiveXlsx(); return; }
+  if (t.closest('[data-archprint]')) { printReport(); return; }
+  if (t.closest('[data-archoff]')) { setArchive(false); return; }
+});
+
+syncArchiveChrome();
+
 /* ---------- Sichern und Laden ----------
    Bewusst als Datei und nicht ueber einen Server: Geschmacksdaten sind
    persoenlich, das Repository ist oeffentlich. So bleiben sie auf dem Geraet
@@ -3599,6 +4066,7 @@ el.detail.addEventListener('close', () => {
 
 function download(name, text, type) {
   const a = document.createElement('a');
+  // text darf auch ein Uint8Array sein - Blob nimmt beides.
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name;
   a.click();
@@ -3616,12 +4084,14 @@ function download(name, text, type) {
 
    Die Passphrase ist ABSICHTLICH nicht dabei. Sie entschluesselt alles, was
    das Team austauscht; in einer Datei, die per Mail oder Cloud wandert, hat
-   sie nichts zu suchen. Beim Einlesen wird sie einmal abgefragt. */
+   sie nichts zu suchen. Beim Einlesen wird sie einmal abgefragt.
+
+   Version 6 nimmt die Nachbewertung aus dem Archiv mit (commit). */
 function exportChoice() {
   const c = team && team.config;
   download('reeperbahn-auswahl.json', JSON.stringify({
-    kind: 'rbf26-auswahl', version: 5,
-    fav: [...fav], seen: [...seen], seenShow: [...seenShow], note, rate, hint,
+    kind: 'rbf26-auswahl', version: 6,
+    fav: [...fav], seen: [...seen], seenShow: [...seenShow], note, rate, hint, commit,
     revealed: [...revealed],
     filters: savedFilters,
     planPin: [...planPin], planSkip: [...planSkip],
@@ -3705,6 +4175,13 @@ el.file.addEventListener('change', async () => {
   catch (e) { alert('Die Datei ist kein gültiges JSON.'); return; }
   el.file.value = '';
 
+  /* Die Archivdatei traegt alles Eigene unter "mine" - dieselben Felder wie
+     die Sicherung, plus das Programm obendrauf. Also auf die Sicherung
+     abbilden und denselben Weg gehen. */
+  if (data.kind === 'rbf26-archiv' && data.mine) {
+    data = { kind: 'rbf26-auswahl', ...data.mine };
+  }
+
   if (data.kind === 'rbf26-auswahl') {
     (data.fav || []).forEach((id) => fav.add(+id));
     (data.seen || []).forEach((id) => seen.add(+id));
@@ -3714,6 +4191,15 @@ el.file.addEventListener('change', async () => {
     Object.assign(note, data.note || {});
     Object.assign(rate, data.rate || {});
     Object.assign(hint, data.hint || {});
+    // Ab Version 6: die Nachbewertung aus dem Archiv. Nur bereinigte
+    // Eintraege, damit eine fremde oder alte Datei nichts Unbekanntes einschleppt.
+    if (ARCH && data.commit && typeof data.commit === 'object') {
+      for (const [id, c] of Object.entries(data.commit)) {
+        const clean = ARCH.cleanCommit(c);
+        if (clean) commit[id] = clean;
+      }
+      saveCommit();
+    }
     saveFav(); saveSeen(); saveSeenShow(); saveRevealed();
     store.set('note', note); store.set('rate', rate); store.set('hint', hint);
 
@@ -3799,6 +4285,7 @@ $('#btn-menu').addEventListener('click', () => {
   partnerInfo();
   teamInfo();
   renderSwipeOpts();
+  syncArchiveChrome();
   el.menu.showModal();
   syncDialogCount();
 });

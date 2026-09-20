@@ -311,6 +311,49 @@ python3 web/serve_local.py       # lokal ansehen, mit echten Headern
 python3 web/test_e2e.py          # Browsertest
 ```
 
+## Archiv-Modus (nach dem Festival)
+
+Im Menue der Schalter **"Archiv-Modus"**: dieselbe App mit anderem Gesicht.
+Liste, Karte und Abendplan bleiben darunter erhalten, der Schalter blendet nur
+um - und er bleibt gespeichert, damit man ihn nicht bei jedem Oeffnen neu
+setzt. Die Kopfzeile verliert Tage und Filter und bekommt drei Reiter:
+
+* **Ueberblick** - Kacheln (Konzerte, Acts, davon mehrfach, Spielorte, Minuten
+  Musik, bewertet, Favoriten gesehen, nachbewertet) und Balken nach Tagen,
+  Noten, Genres, Spielorten, Laendern und Einsatz. Dazu Listen: mehrfach
+  gesehen, Entdeckungen (vorher kein Favorit, danach Note 1-2), verpasste
+  Favoriten, und mit Team der gemeinsame Schnitt.
+* **Nachbewertung** - je gesehenem Act eine Karte mit Haken, die nicht "wie
+  gut" fragen, sondern **"was wuerde ich fuer diesen Act tun"**: Abendkasse,
+  Vorverkauf, Spotify folgen, Niedlichkeitsbonus, Konzert in Berlin, und bis
+  zu welchem Ticketpreis (15 / 20 / 30 / 50 Euro, eine Stufe). Daraus wird
+  der **Einsatz** als Zahl: jeder Haken ein Punkt, die Preisstufe ein bis vier
+  Punkte. Die Rangfolge der Acts nimmt erst die Note, dann den Einsatz, dann
+  wie oft gesehen.
+* **Bericht** - das Blatt zum Drucken: Top-Acts, Top-Spielorte, Genres,
+  "Wofuer ich Geld ausgeben wuerde", Entdeckungen, alle besuchten Konzerte.
+  **"Als PDF drucken"** oeffnet den Druckdialog des Browsers; dort "Als PDF
+  speichern". Ein Druck-Stylesheet blendet den Rest der App aus und erzwingt
+  helle Farben - auch aus der dunklen Ansicht kommt ein weisses Blatt.
+
+Zwei Sicherungen, beide entstehen im Browser, der Server sieht nichts davon:
+
+* **Archiv sichern (JSON)** - das Programm, wie es am Ende stand, plus alles
+  Eigene inklusive Nachbewertung und Statistik. Liest sich ueber "Datei laden"
+  wieder ein, auch auf einem neuen Geraet. Die Team-Passphrase steht wie in
+  jeder Sicherung nicht darin.
+* **Archiv als Excel-Datei (XLSX)** - fuenf Blaetter (Konzerte gesehen, Acts,
+  Spielorte, Statistik, Line-up komplett; mit Team ein sechstes), fette
+  Kopfzeile, eingefrorene erste Zeile, Autofilter, Zahlen als Zahlen. Die
+  Datei schreibt `web/xlsx.js` selbst - ein ZIP ohne Kompression mit ein paar
+  XML-Dateien -, weil die uebliche Bibliothek 800 KB waere und die Regel hier
+  "keine Abhaengigkeit" heisst. Der Test liest sie mit openpyxl gegen.
+
+Gerechnet wird in `web/archive.js` ohne DOM, damit jede Zahl im Archiv ohne
+Browser nachpruefbar ist (`node web/test_archive.mjs`). Die Nachbewertung
+liegt unter `rbf26.commit` im Browser-Speicher und wandert **nicht** in den
+Team-Abgleich - sie ist die persoenlichste Aussage der ganzen App.
+
 ## Nutzung
 
 ```bash
@@ -322,6 +365,8 @@ python3 rbf_core.py csv shows.json          # flache Tabelle
 python3 rbf_core.py ics shows.json --artists "shame,Lowertown"
 python3 fetch_venues.py --check             # Spielorte + Verortbarkeit pruefen
 python3 rbf_core.py selftest                # Tests
+node web/test_plan.mjs                      # Abendplan-Rechnung
+node web/test_archive.mjs                   # Archiv-Rechnung + Excel-Schreiber
 ```
 
 `sync.py` ist fuer Automatisierung gebaut: Exit-Code **0** = keine

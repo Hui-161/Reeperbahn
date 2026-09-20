@@ -27,6 +27,9 @@ jobs:
       - name: Planungsalgorithmus testen
         run: node web/test_plan.mjs
 
+      - name: Archiv-Rechnung und Excel-Schreiber testen
+        run: node web/test_archive.mjs
+
       - name: Web-Daten aus dem eingecheckten Snapshot bauen
         run: python3 build_web.py --offline || python3 build_web.py
 
@@ -35,12 +38,15 @@ jobs:
 
       - name: Browser installieren
         run: |
-          pip install --quiet playwright
+          # openpyxl liest die im Browser erzeugte Excel-Datei gegen - der
+          # Schreiber soll nicht nur sich selbst glauben.
+          pip install --quiet playwright openpyxl
           python3 -m playwright install --with-deps chromium
 
       - name: Worker-Syntax pruefen
         run: node --check worker/index.js && node --check web/app.js
              && node --check web/team.js && node --check web/sw.js
+             && node --check web/archive.js && node --check web/xlsx.js
 
       - name: Web-App im Browser testen (mit echten Headern)
         run: |
