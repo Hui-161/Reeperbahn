@@ -2173,6 +2173,7 @@ body.archive #btn-plan, body.archive #btn-filters { display: none !important; }
 .nach-heart { color: var(--accent); font-size: .9rem; }
 .nach-sub { font-size: .8rem; color: var(--ink-soft); }
 .nach-when { font-size: .8rem; color: var(--ink-faint); }
+.nach-wer { font-size: .72rem; }
 .nach-opts { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; }
 /* Ein Haken als Pille: echte Checkbox darin, damit Tastatur und
    Bildschirmleser sie als das erkennen, was sie ist. */

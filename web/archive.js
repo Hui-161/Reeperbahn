@@ -87,18 +87,37 @@ function cleanCommit(c) {
   return Object.keys(out).length ? out : null;
 }
 
+/* "Gesehen" gilt fuer das ganze Team: wer zusammen hingeht, hakt einmal ab,
+   und mal tippt die eine, mal der andere. Fuer die Rechnung zaehlt deshalb
+   die VEREINIGUNG aus eigenen Haken und denen der Gegenseite (seenAll,
+   seenShowAll) - genau wie die Liste es seit jeher mit seenShowAny haelt.
+   Die eigenen Mengen bleiben daneben getrennt stehen: die Sicherung darf
+   nur schreiben, was man selbst gesagt hat, sonst kaeme ein von der
+   Gegenseite zurueckgenommener Haken beim Wiedereinlesen zurueck. */
 function norm(ctx) {
   const toSet = (v) => (v instanceof Set ? v : new Set(v || []));
+  const p = ctx.partner || null;
+  const seen = toSet(ctx.seen);
+  const seenShow = new Set([...toSet(ctx.seenShow)].map(String));
+  const pSeen = new Set(p ? (p.seen || []) : []);
+  const pShow = new Set(p ? (p.seenShow || []).map(String) : []);
   return {
     data: ctx.data,
-    seen: toSet(ctx.seen),
-    seenShow: new Set([...toSet(ctx.seenShow)].map(String)),
+    seen, seenShow, pSeen, pShow,
+    seenAll: new Set([...seen, ...pSeen]),
+    seenShowAll: new Set([...seenShow, ...pShow]),
     rate: ctx.rate || {},
     fav: toSet(ctx.fav),
     note: ctx.note || {},
     commit: ctx.commit || {},
-    partner: ctx.partner || null,
+    partner: p,
   };
+}
+
+/* Wer hat abgehakt - fuer die Tabelle und den Bericht. */
+function wer(c, sh) {
+  const ich = c.seenShow.has(String(sh.id)), du = c.pShow.has(String(sh.id));
+  return ich && du ? 'beide' : ich ? 'ich' : du ? (c.partner && c.partner.name) || 'Partner:in' : '';
 }
 
 /* Die gesehenen Acts mit ihren abgehakten Auftritten. Ein Act zaehlt als
@@ -108,7 +127,7 @@ function norm(ctx) {
 function seenActs(c) {
   const byAct = new Map();
   for (const sh of c.data.shows) {
-    if (!c.seenShow.has(String(sh.id))) continue;
+    if (!c.seenShowAll.has(String(sh.id))) continue;
     if (!byAct.has(sh.a)) byAct.set(sh.a, []);
     byAct.get(sh.a).push(sh);
   }
@@ -116,7 +135,7 @@ function seenActs(c) {
   c.data.acts.forEach((act, ai) => {
     const shows = (byAct.get(ai) || [])
       .sort((x, y) => String(x.t || '').localeCompare(String(y.t || '')));
-    if (!shows.length && !c.seen.has(act.id)) return;
+    if (!shows.length && !c.seenAll.has(act.id)) return;
     const commit = cleanCommit(c.commit[act.id]);
     out.push({
       ai, act, shows, times: shows.length,
@@ -149,7 +168,7 @@ function rankVenues(ctx) {
   const c = norm(ctx);
   const per = new Map();
   for (const sh of c.data.shows) {
-    if (!c.seenShow.has(String(sh.id)) || sh.v == null) continue;
+    if (!c.seenShowAll.has(String(sh.id)) || sh.v == null) continue;
     if (!per.has(sh.v)) {
       per.set(sh.v, { vi: sh.v, venue: c.data.venues[sh.v], konzerte: 0,
                       acts: new Set(), minuten: 0, noten: [] });
@@ -214,14 +233,18 @@ function stats(ctx) {
   c.data.acts.forEach((act, ai) => {
     if (c.fav.has(act.id) && !acts.some((a) => a.ai === ai)) favVerpasst.push({ ai, name: act.n });
   });
+  /* Wer hat die Haken gesetzt? Gezaehlt wird ueber die KONZERTE, weil dort
+     abgehakt wird. Es ist eine Randnotiz - gesehen habt ihr sie beide. */
   let team = null;
   if (c.partner) {
-    const pSeen = new Set(c.partner.seen || []);
-    const pShows = new Set((c.partner.seenShow || []).map(String));
-    for (const sh of c.data.shows) if (pShows.has(String(sh.id))) pSeen.add(c.data.acts[sh.a].id);
-    const beide = acts.filter((a) => pSeen.has(a.act.id)).map((a) => ({ ai: a.ai, name: a.act.n }));
-    team = { name: c.partner.name || 'Partner:in', gesehen: pSeen.size, beide,
-             nurPartner: [...pSeen].filter((id) => !acts.some((a) => a.act.id === id)).length };
+    let ich = 0, du = 0, beide = 0;
+    for (const a of acts) {
+      for (const sh of a.shows) {
+        const w = wer(c, sh);
+        if (w === 'beide') beide += 1; else if (w === 'ich') ich += 1; else if (w) du += 1;
+      }
+    }
+    team = { name: c.partner.name || 'Partner:in', ich, du, beide };
   }
   return {
     konzerte, acts: acts.length,
@@ -267,15 +290,15 @@ function sheets(ctx) {
   const byAi = new Map(acts.map((a) => [a.ai, a]));
 
   const konzerte = [['Tag', 'Datum', 'Beginn', 'Ende', 'Minuten', 'Act', 'Land',
-                     'Genres', 'Spielort', 'Note', 'Wie oft gesehen', 'Notiz']];
-  const alle = c.data.shows.filter((sh) => c.seenShow.has(String(sh.id)))
+                     'Genres', 'Spielort', 'Note', 'Wie oft gesehen', 'Abgehakt von', 'Notiz']];
+  const alle = c.data.shows.filter((sh) => c.seenShowAll.has(String(sh.id)))
     .sort((x, y) => String(x.t || '').localeCompare(String(y.t || '')));
   for (const sh of alle) {
     const a = byAi.get(sh.a);
     konzerte.push([wd(sh.d), sh.d || '', sh.tbd ? '' : hhmm(sh.t),
                    sh.e ? hhmm(sh.e) : '', showLen(sh).min, a.act.n, a.act.c || '',
                    genresOf(c, a.act), venueName(c, sh), a.rate || '', a.times,
-                   a.note.replace(/\s+/g, ' ')]);
+                   wer(c, sh), a.note.replace(/\s+/g, ' ')]);
   }
 
   const actRows = [['Rang', 'Act', 'Land', 'Genres', 'Note', 'Favorit', 'Wie oft gesehen',
@@ -313,8 +336,8 @@ function sheets(ctx) {
   for (const x of COMMITS) zahlen.push([x.label, st.einsatz[x.k]]);
   for (const p of PRICES) zahlen.push([`Ticket bis ${p} €`, st.einsatz.price[p]]);
   if (st.team) {
-    zahlen.push([`${st.team.name}: Acts gesehen`, st.team.gesehen],
-                ['Beide gesehen', st.team.beide.length]);
+    zahlen.push(['Abgehakt von mir', st.team.ich], [`Abgehakt von ${st.team.name}`, st.team.du],
+                ['Abgehakt von beiden', st.team.beide]);
   }
 
   /* Das ganze Programm mit den eigenen Marken - falls man spaeter wissen
@@ -326,7 +349,7 @@ function sheets(ctx) {
     lineup.push([wd(sh.d), sh.d || '', sh.tbd ? '' : hhmm(sh.t), sh.e ? hhmm(sh.e) : '',
                  act.n, act.c || '', genresOf(c, act), venueName(c, sh),
                  c.rate[act.id] ? +c.rate[act.id] : '', jn(c.fav.has(act.id)),
-                 jn(c.seenShow.has(String(sh.id)))]);
+                 jn(c.seenShowAll.has(String(sh.id)))]);
   }
 
   const out = [
@@ -339,16 +362,14 @@ function sheets(ctx) {
   if (c.partner) {
     const pRate = c.partner.rate || {};
     const pFav = new Set(c.partner.fav || []);
-    const pSeen = new Set(c.partner.seen || []);
     const team = [['Act', 'Meine Note', `Note ${st.team.name}`, 'Mein Favorit',
-                   `Favorit ${st.team.name}`, 'Von mir gesehen', `Von ${st.team.name} gesehen`]];
-    for (const act of c.data.acts) {
-      const mine = byAi.has(c.data.acts.indexOf(act));
-      if (!mine && !pRate[act.id] && !pFav.has(act.id) && !pSeen.has(act.id)
-          && !c.rate[act.id] && !c.fav.has(act.id)) continue;
+                   `Favorit ${st.team.name}`, 'Gesehen']];
+    c.data.acts.forEach((act, ai) => {
+      const gesehen = byAi.has(ai);
+      if (!gesehen && !pRate[act.id] && !pFav.has(act.id) && !c.rate[act.id] && !c.fav.has(act.id)) return;
       team.push([act.n, c.rate[act.id] ? +c.rate[act.id] : '', pRate[act.id] ? +pRate[act.id] : '',
-                 jn(c.fav.has(act.id)), jn(pFav.has(act.id)), jn(mine), jn(pSeen.has(act.id))]);
-    }
+                 jn(c.fav.has(act.id)), jn(pFav.has(act.id)), jn(gesehen)]);
+    });
     out.push({ name: 'Team', rows: team });
   }
   return out;
@@ -385,5 +406,7 @@ function archiveDoc(ctx, extra) {
 
 window.RBFArchive = { COMMITS, PRICES, FALLBACK_MIN, einsatz, cleanCommit, fmtMin,
                       stats, rankActs, rankVenues, sheets, archiveDoc, showLen,
-                      rateText, wd, hhmm };
+                      rateText, wd, hhmm,
+                      /* von aussen mit dem rohen Zustand aufgerufen (app.js, Tests) */
+                      wer: (ctx, sh) => wer(norm(ctx), sh) };
 })();

@@ -349,6 +349,13 @@ Zwei Sicherungen, beide entstehen im Browser, der Server sieht nichts davon:
   XML-Dateien -, weil die uebliche Bibliothek 800 KB waere und die Regel hier
   "keine Abhaengigkeit" heisst. Der Test liest sie mit openpyxl gegen.
 
+**"Gesehen" gilt fuer das ganze Team.** Wer zusammen hingeht, hakt einmal ab,
+und mal tippt die eine, mal der andere - das Archiv rechnet deshalb mit der
+Vereinigung aus eigenen Haken und denen der Gegenseite (Team oder
+Partner-Datei). Wer abgehakt hat, steht als Randnotiz dran (Team-Kasten,
+Spalte "Abgehakt von" in der Excel-Datei). Die eigene Sicherung schreibt
+weiter nur die eigenen Haken.
+
 Gerechnet wird in `web/archive.js` ohne DOM, damit jede Zahl im Archiv ohne
 Browser nachpruefbar ist (`node web/test_archive.mjs`). Die Nachbewertung
 liegt unter `rbf26.commit` im Browser-Speicher und wandert **nicht** in den

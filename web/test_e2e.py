@@ -3763,9 +3763,32 @@ with sync_playwright() as p:
     pg19.goto(BASE + "/", wait_until="load")
     pg19.wait_for_selector(".row", timeout=20000)
     pg19.evaluate(seed18)
-    pg19.evaluate("() => localStorage.setItem('rbf26.archive', 'true')")
+    # "Gesehen" gilt fuer beide: einen Haken hat nur die andere Seite gesetzt
+    # (ein Konzert, das ich selbst nicht abgehakt habe) - er zaehlt trotzdem.
+    extra19 = per18[einzel18[4]][0]
+    pg19.evaluate(f"""() => {{
+      localStorage.setItem('rbf26.archive', 'true');
+      localStorage.setItem('rbf26.partner', JSON.stringify({{
+        name: 'Linda', fav: [], seen: [], seenShow: ['{extra19["id"]}'], rate: {{}} }}));
+    }}""")
     pg19.reload(wait_until="load")
     pg19.wait_for_selector("#archive:not([hidden])", timeout=20000)
+    tiles19 = dict(pg19.evaluate("""() => [...document.querySelectorAll('.tile')]
+      .map(t => [t.querySelector('span').textContent.trim().replace(/\\s*\\*$/, ''),
+                 t.querySelector('b').textContent.trim()])"""))
+    check("Der Haken der anderen Seite zählt als gesehen: 6 Konzerte, 5 Acts",
+          tiles19.get("Konzerte") == "6" and tiles19.get("Acts gesehen") == "5", str(tiles19))
+    check("Und der Team-Kasten sagt, wer abgehakt hat",
+          "Linda 1" in pg19.locator("#arch-ueberblick .arch-box", has_text="Team").inner_text()
+          and "Abgehakt hast du 5" in pg19.locator("#arch-ueberblick .arch-box", has_text="Team").inner_text(),
+          pg19.locator("#arch-ueberblick .arch-box", has_text="Team").inner_text()[:120])
+    pg19.click('[data-atab="nach"]'); pg19.wait_for_selector(".nach")
+    check("Die Karte des fremd abgehakten Acts steht da und sagt es",
+          pg19.locator(".nach").count() == 5
+          and "abgehakt von Linda" in pg19.locator(f'.nach[data-act="{aid(einzel18[4])}"]').inner_text())
+    pg19.click('[data-atab="bericht"]'); pg19.wait_for_selector("#report")
+    check("Der Bericht zählt das Konzert mit",
+          pg19.locator("#report .rep-table tbody tr").count() == 6)
     pg19.emulate_media(media="print"); pg19.wait_for_timeout(200)
     farbe19 = pg19.evaluate("""() => {
       const lum = (c) => { const m = c.match(/\\d+/g).map(Number);

@@ -3794,10 +3794,9 @@ function archOverviewHtml(st, acts, orte) {
         ${namen(st.favVerpasst)}
       </section>
       ${st.team ? `<section class="arch-box"><h3 class="arch-h">Team</h3>
-        <p class="menu-note">${esc(st.team.name)}: ${st.team.gesehen} Acts gesehen,
-        ${st.team.beide.length} davon habt ihr beide gesehen${st.team.nurPartner
-          ? `, ${st.team.nurPartner} nur ${esc(st.team.name)}` : ''}.</p>
-        ${namen(st.team.beide)}
+        <p class="menu-note">Gesehen habt ihr alles zusammen — die Haken von
+        ${esc(st.team.name)} zählen hier mit. Abgehakt hast du ${st.team.ich},
+        ${esc(st.team.name)} ${st.team.du}, beide ${st.team.beide}.</p>
       </section>` : ''}
     </div>
     <div class="plan-actions arch-tools">
@@ -3838,7 +3837,9 @@ function archNachCard(a) {
         a.times > 1 ? `<span class="multi" title="${a.times}× gesehen">×${a.times}</span>` : ''}${
         a.fav ? '<span class="heart nach-heart" title="Favorit">♥</span>' : ''}</span>
       <span class="nach-sub">${[a.act.c, g].filter(Boolean).map(esc).join(' · ')}</span>
-      <span class="nach-when">${a.shows.length ? a.shows.map(archWhen).join(' · ')
+      <span class="nach-when">${a.shows.length ? a.shows.map((sh) => archWhen(sh)
+        + (partner && ARCH.wer(archCtx(), sh) !== 'ich' && ARCH.wer(archCtx(), sh) !== 'beide'
+           ? ` <small class="nach-wer">(abgehakt von ${esc(partnerName())})</small>` : '')).join(' · ')
         : 'ohne Termin abgehakt'}</span>
     </div>
     <div class="nach-opts">
@@ -3892,8 +3893,9 @@ function archReportHtml(st, acts, orte) {
   const top = acts.slice(0, 10);
   const geld = acts.filter((a) => a.einsatz > 0)
     .sort((x, y) => (y.einsatz - x.einsatz) || ((x.rate || 6) - (y.rate || 6))).slice(0, 12);
-  const konzerte = S.data.shows.filter((sh) => seenShow.has(String(sh.id)))
-    .sort((x, y) => String(x.t || '').localeCompare(String(y.t || '')));
+  // Aus den Acts, nicht aus seenShow: gesehen gilt fuer beide, siehe norm() in archive.js.
+  const konzerte = acts.flatMap((a) => a.shows.map((sh) => [sh, a]))
+    .sort((x, y) => String(x[0].t || '').localeCompare(String(y[0].t || '')));
   const maxGenre = Math.max(...st.genres.map((g) => g.n), 1);
   return `
     <div class="plan-actions arch-tools">
@@ -3954,12 +3956,10 @@ function archReportHtml(st, acts, orte) {
         <h3>Alle besuchten Konzerte</h3>
         <table class="rep-table">
           <thead><tr><th>Tag</th><th>Zeit</th><th>Act</th><th>Spielort</th><th>Note</th></tr></thead>
-          <tbody>${konzerte.map((sh) => {
-            const act = S.data.acts[sh.a];
-            return `<tr><td>${dayLabel(sh)}</td><td>${sh.tbd ? '–' : timeSpan(sh)}</td>
-              <td>${esc(act.n)}</td><td>${sh.v != null ? esc(S.data.venues[sh.v].n) : '–'}</td>
-              <td>${rate[act.id] ? rateText(rate[act.id]) : ''}</td></tr>`;
-          }).join('')}</tbody>
+          <tbody>${konzerte.map(([sh, a]) =>
+            `<tr><td>${dayLabel(sh)}</td><td>${sh.tbd ? '–' : timeSpan(sh)}</td>
+              <td>${esc(a.act.n)}</td><td>${sh.v != null ? esc(S.data.venues[sh.v].n) : '–'}</td>
+              <td>${a.rate ? rateText(a.rate) : ''}</td></tr>`).join('')}</tbody>
         </table>
       </section>
 
